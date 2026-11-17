@@ -2429,7 +2429,7 @@ async function drawAdmin(box){
   if(!ONB) try{ const j=await api('onbList'); if(!j.ok) throw new Error(j.error||'error'); ONB=j; }
   catch(e){ box.innerHTML=links+'<div class="info-box"><span class="ico">⚠️</span><p>Could not load onboarding ('+escAct(e.message||'error')+').</p></div>'; return; }
   const q=HOME_Q.trim().toLowerCase(), items=ONB.items.filter(o=>(!q||(o.name+o.email).toLowerCase().includes(q))).sort((a,b)=>(a.status==='in progress'?0:1)-(b.status==='in progress'?0:1)||(a.createdAt<b.createdAt?1:-1));
-  box.innerHTML=links+'<div class="htabs"><strong style="font-family:\'Playfair Display\',serif;font-size:16px">New aide onboarding</strong><span style="flex:1"></span><button class="btn btn-nurse" style="padding:8px 16px" onclick="openOnboarding(\'\')">＋ New applicant</button></div>'+
+  box.innerHTML=links+'<div class="htabs"><strong style="font-family:\'Playfair Display\',serif;font-size:16px">New aide onboarding</strong><span style="flex:1"></span><select id="pkPos" title="Which job description to include" style="padding:8px;border:1px solid #bbb;border-radius:8px;font-size:13px"><option value="">Packet: both job descriptions</option><option value="Companion">Packet: Companion only</option><option value="Certified Home Health Aide">Packet: CHHA / PCA only</option></select><button class="btn btn-outline" style="padding:8px 16px" onclick="printPacket()">🖨 Print application packet</button><button class="btn btn-nurse" style="padding:8px 16px" onclick="openOnboarding(\'\')">＋ New applicant</button></div>'+
    (items.length?'<table class="htbl"><thead><tr><th>Applicant</th><th>Progress</th><th>Next step</th><th>Actions</th></tr></thead><tbody>'+items.map(o=>{
      const pill=o.status==='hired'?'<span class="pill ok">Hired</span>':o.status==='in progress'?'<span class="pill warn">'+o.done+' / '+o.total+' steps</span>':'<span class="pill">'+escAct(o.status)+'</span>';
      return '<tr><td><strong>'+escAct(o.name)+'</strong><br><span class="tmuted">'+escAct(o.position||'')+(o.position?' · ':'')+escAct(o.email||'no email')+'</span></td><td>'+pill+'</td><td>'+(o.status==='in progress'?escAct(o.next):'—')+'</td><td><button class="mini" onclick="openOnboarding(\''+o.id+'\')">Open</button></td></tr>';
@@ -2452,6 +2452,45 @@ function openOnboarding(id){
    '<div id="repMsg"></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-nurse" id="obSave" onclick="saveOnb(\''+o.id+'\')">Save</button>'+
    (o.id?'<button class="btn btn-outline" onclick="sendOnbForms(\''+o.id+'\')">Approve and send offer</button><button class="btn btn-outline" onclick="prefillTax(\''+o.id+'\')">Prefilled I-9 and W-4</button><button class="btn btn-outline" onclick="activateOnb(\''+o.id+'\')">Create aide login</button>':'')+
    '<button class="btn btn-outline" onclick="closeOnb()">Close</button></div>'+(o.formsSentAt?'<p class="tmuted" style="margin-top:8px">Offer last sent '+usDate(o.formsSentAt)+'.</p>':'')+'</div>';
+}
+/* Printable application packet for applicants without internet: sections come from the office system, the W-4 and I-9 are page images */
+function buildPacketHtml(secs, img, esc) {
+  esc = esc || function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  const list = [];
+  secs.forEach(function (s) { list.push({ title: s.title, html: s.html }); if (s.title === 'Provisional Employment Agreement') { list.push({ title: 'Form W-4, Employee’s Withholding Certificate', img: img.w4 }); list.push({ title: 'Form I-9, Employment Eligibility Verification', img: img.i9 }); } });
+  const n = list.length + 1, css = '@page{size:Letter;margin:.55in .6in .6in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111;margin:0}' +
+    'table.pgt{width:100%;border-collapse:collapse}table.pgt>thead{display:table-header-group}table.pgt>tbody>tr>td,table.pgt>thead>tr>td{padding:0;border:0;font-size:inherit}.pg{break-before:page;page-break-before:always}.pg:first-child{break-before:auto;page-break-before:auto}' +
+    '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #34182d;padding-bottom:5px;margin-bottom:8px}.top b{font-size:12px;color:#34182d}.top span{font-size:9.5px;color:#444}' +
+    '.sh{background:#34182d;color:#fff;padding:9px 12px;margin:0 0 10px;border-radius:3px}.sh small{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#e6c8f2}.sh h1{margin:2px 0 0;font-size:17px;font-weight:700}' +
+    'h2{font-size:14px;text-align:center;margin:6px 0}h3{font-size:11px;margin:12px 0 5px;padding:3px 7px;background:#f3e6f7;color:#34182d;break-after:avoid}p{margin:0 0 7px}ul{margin:0 0 7px 18px;padding:0}li{margin-bottom:3px}' +
+    '.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px}.f{break-inside:avoid}.f.w{grid-column:1/3}.lb{display:block;font-size:9px;color:#444;margin-bottom:11px}.f i{display:block;border-bottom:1px solid #333;height:15px}.f i+i{margin-top:2px}.f .lb{margin-bottom:0;order:2}.f{display:flex;flex-direction:column-reverse}' +
+    '.op{display:flex;flex-wrap:wrap;gap:3px 14px;margin:1px 0}.op span{font-size:10.5px}' +
+    '.sg{display:grid;grid-template-columns:2fr 1.5fr 1fr;gap:16px;margin-top:26px;break-inside:avoid}.sg i{display:block;border-bottom:1px solid #333;height:22px}.sg .lb{margin:2px 0 0}' +
+    'table.gx{width:100%;border-collapse:collapse;margin-top:8px}table.gx td{border:1px solid #777;padding:7px 8px;font-size:10.5px}.eeo{font-size:9.5px;color:#333;margin-top:14px}' +
+    '.im{display:block;width:100%;max-height:8.1in;object-fit:contain;margin:0 auto}.chk li{list-style:none;margin-left:-18px}' +
+    '@media screen{body{background:#eee}.pg{background:#fff;max-width:8.5in;margin:14px auto;padding:.5in .6in;box-shadow:0 1px 6px rgba(0,0,0,.25)}}';
+  const top = '<div class="top"><b>Comfort Hands Home Healthcare, LLC</b><span>Applicant name: ____________________________________ &nbsp; Date: ______________</span></div>';
+  let h = '<div class="pg cv">' + top + '<div class="sh"><small>Aide application packet</small><h1>Welcome. Please complete this packet.</h1></div>' +
+    '<p>Complete every section in ink, sign where indicated, and return the whole packet to our office. If you are unsure about a question, leave it blank and ask us. Do not leave the Social Security number or signature lines empty.</p>' +
+    '<h3>Contents</h3><ul class="chk">' + list.map(function (s, i) { return '<li>☐ &nbsp;<b>Section ' + (i + 1) + '.</b> ' + esc(s.title) + '</li>'; }).join('') + '</ul>' +
+    '<h3>Bring or send with your packet</h3><ul class="chk"><li>☐ &nbsp;One document from List A <b>or</b> one from List B plus one from List C (for Form I-9). Examples: U.S. passport; Permanent Resident Card; driver’s license or state ID; Social Security card. Bring the originals on your first day.</li><li>☐ &nbsp;A copy of your Social Security card</li><li>☐ &nbsp;A copy of your Permanent Resident Card, if you have one</li><li>☐ &nbsp;A copy of your driver’s license or state ID</li><li>☐ &nbsp;A copy of your certification or license, if you have one</li><li>☐ &nbsp;Your resume, if you have one</li><li>☐ &nbsp;Completed physical examination (Section ' + list.length + ')</li></ul>' +
+    '<h3>Return to</h3><p><b>Comfort Hands Home Healthcare, LLC</b><br>505 Hamilton Avenue, Suite 200, Linwood, NJ 08221<br>Phone 609-277-3032 &nbsp; Fax 609-479-5931</p></div>';
+  list.forEach(function (s, i) {
+    h += '<div class="pg"><table class="pgt"><thead><tr><td>' + top + '<div class="sh"><small>Section ' + (i + 1) + ' of ' + (n - 1) + '</small><h1>' + esc(s.title) + '</h1></div></td></tr></thead><tbody><tr><td>' + (s.img ? '<img class="im" src="' + s.img + '">' : s.html) + '</td></tr></tbody></table></div>';
+  });
+  return '<!doctype html><html><head><meta charset="utf-8"><title>Aide Application Packet</title><style>' + css + '</style></head><body>' + h + '</body></html>';
+}
+async function printPacket(){
+  const sel=document.getElementById('pkPos'), position=sel?sel.value:'';
+  const w=window.open('','_blank'); if(!w){ alert('Allow pop-ups for this site, then press Print application packet again.'); return; }
+  w.document.write('<p style="font:14px Arial;padding:24px">Preparing the packet…</p>'); w.document.close();
+  try{
+    const j=await api('onbPacket',{position:position}); if(!j.ok) throw new Error(j.error||'error');
+    const base=new URL('hr-pdf/',location.href).href, html=buildPacketHtml(j.sections,{i9:base+'i9.jpg',w4:base+'w4.jpg'},escAct);
+    w.document.open(); w.document.write(html); w.document.close();
+    const ready=()=>Array.prototype.every.call(w.document.images,im=>im.complete); let n=0;
+    const t=setInterval(()=>{ if(ready()||++n>40){ clearInterval(t); try{ w.focus(); w.print(); }catch(e){} } },250);
+  }catch(e){ try{ w.close(); }catch(_){} alert('Could not prepare the packet: '+(e.message||'error')); }
 }
 /* Prefilled I-9 and W-4 (built in this browser from the application answers; nothing is sent anywhere) */
 function loadJs(u){ return new Promise((res,rej)=>{ const t=document.createElement('script'); t.src=u; t.onload=res; t.onerror=()=>rej(new Error('Could not load '+u)); document.head.appendChild(t); }); }
