@@ -855,6 +855,35 @@ function purgeOld() {
 }
 
 /**
+ * ONE-TIME: bring existing patients into the portal. In the restricted Sheet open the "Import" tab (run this once to create it),
+ * type one patient per row (first, last, dob, startOfCare, lastNote; dates as yyyy-mm-dd), then select importPatients and Run.
+ * Patients are added as ACTIVE. The 60-day note is counted from lastNote (or startOfCare if blank). Rows already imported are skipped.
+ * Aides see a patient's activity sheet after the nurse publishes that patient's care plan in the portal.
+ */
+function importPatients() {
+  const ss = db_(); let imp = ss.getSheetByName('Import');
+  if (!imp) { imp = ss.insertSheet('Import'); imp.appendRow(['first', 'last', 'dob', 'startOfCare', 'lastNote']); Logger.log('Created the "Import" tab. Fill it in (dates as yyyy-mm-dd), then run importPatients again.'); return; }
+  const v = imp.getDataRange().getValues(), psh = ptSheet_(); let added = 0; const skipped = [];
+  withLock_(function () {
+    for (let i = 1; i < v.length; i++) {
+      const first = String(v[i][0] || '').trim(), last = String(v[i][1] || '').trim(); if (!first && !last) continue;
+      const dob = iso_(v[i][2]), start = iso_(v[i][3]), note = iso_(v[i][4]);
+      if (!first || !last || !validDay_(dob)) { skipped.push('row ' + (i + 1) + ': needs first, last and a valid dob'); continue; }
+      if (start && !validDay_(start)) { skipped.push('row ' + (i + 1) + ': bad startOfCare'); continue; }
+      if (note && !validDay_(note)) { skipped.push('row ' + (i + 1) + ': bad lastNote'); continue; }
+      const id = keyOf_([last, first, dob].join('_').toLowerCase().replace(/[^a-z0-9_-]/g, ''));
+      if (ptRow_(psh, id)) { skipped.push('row ' + (i + 1) + ': ' + first + ' ' + last + ' already exists'); continue; }
+      const now = new Date().toISOString(), x = []; for (let k = 0; k < PT_N_; k++) x.push('');
+      x[P_.ID] = id; x[P_.NAME] = txt_(first + ' ' + last); x[P_.DOB] = dob; x[P_.START] = start; x[P_.STATUS] = 'active';
+      x[P_.SHARED] = JSON.stringify({ firstName: first, lastName: last, dob: dob }); x[P_.FORM] = '{}'; x[P_.CREATED] = now; x[P_.UPDATED] = now; x[P_.BY] = 'import';
+      x[P_.LASTNOTE] = note; x[P_.PURGED] = false; x[P_.SUBMITTED] = start || today_(); x[P_.VER] = 1;
+      psh.appendRow(safeRow_(x)); added++;
+    }
+  });
+  Logger.log('Imported ' + added + ' patient(s).' + (skipped.length ? ' Skipped: ' + skipped.join('; ') : ''));
+}
+
+/**
  * Run ONCE from the editor after pasting this version (select upgrade, Run, read the Execution log).
  * It prepares the tabs, strengthens stored passwords, moves the Sheet out of the shared admissions folder,
  * turns off link sharing, and lists everyone who still has direct access so you can remove them.
