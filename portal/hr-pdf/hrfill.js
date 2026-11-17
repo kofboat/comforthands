@@ -13,8 +13,13 @@
     const st = s(a.state).toUpperCase(); try { if (st) f.getDropdown('State').select(st); } catch (e) {}
     T('Date of Birth mmddyyyy', dob(a.dob)); T('Employees E-mail Address', a.email); T('Telephone Number', phone(a.phone));
     if (CB[a.residency]) f.getCheckBox(CB[a.residency]).check();
-    T('Employers Business or Org Name', AGENCY.name); T('Employers Business or Org Address', AGENCY.addr);
-    f.updateFieldAppearances(await doc.embedFont(PDFLib.StandardFonts.Helvetica));
+    /* employer name and address are drawn on the page itself (not as form fields) so every viewer shows them */
+    const hf = await doc.embedFont(PDFLib.StandardFonts.Helvetica), pg = doc.getPage(0);
+    [['Employers Business or Org Name', AGENCY.name], ['Employers Business or Org Address', AGENCY.addr]].forEach(function (p) {
+      const fld = f.getTextField(p[0]), r = fld.acroField.getWidgets()[0].getRectangle(), sz = 9;
+      pg.drawText(p[1], { x: r.x + 3, y: r.y + (r.height - sz) / 2 + 1, size: sz, font: hf, maxWidth: r.width - 6 });
+    });
+    f.updateFieldAppearances(hf);
     return doc.save();
   }
   async function fillW4(PDFLib, bytes, a) {
