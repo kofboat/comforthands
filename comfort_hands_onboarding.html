@@ -2476,7 +2476,7 @@ function buildPacketHtml(secs, img, esc) {
     '<h3>Bring or send with your packet</h3><ul class="chk"><li>☐ &nbsp;One document from List A <b>or</b> one from List B plus one from List C (for Form I-9). Examples: U.S. passport; Permanent Resident Card; driver’s license or state ID; Social Security card. Bring the originals on your first day.</li><li>☐ &nbsp;A copy of your Social Security card</li><li>☐ &nbsp;A copy of your Permanent Resident Card, if you have one</li><li>☐ &nbsp;A copy of your driver’s license or state ID</li><li>☐ &nbsp;A copy of your certification or license, if you have one</li><li>☐ &nbsp;Your resume, if you have one</li><li>☐ &nbsp;Completed physical examination (Section ' + list.length + ')</li></ul>' +
     '<h3>Return to</h3><p><b>Comfort Hands Home Healthcare, LLC</b><br>505 Hamilton Avenue, Suite 200, Linwood, NJ 08221<br>Phone 609-277-3032 &nbsp; Fax 609-479-5931</p></div>';
   list.forEach(function (s, i) {
-    h += '<div class="pg"><table class="pgt"><thead><tr><td>' + top + '<div class="sh"><small>Section ' + (i + 1) + ' of ' + (n - 1) + '</small><h1>' + esc(s.title) + '</h1></div></td></tr></thead><tbody><tr><td>' + (s.img ? '<img class="im" src="' + s.img + '">' : s.html) + '</td></tr></tbody></table></div>';
+    h += '<div class="pg"><table class="pgt"><thead><tr><td>' + top + '<div class="sh"><small>Section ' + (i + 1) + ' of ' + (n - 1) + '</small><h1>' + esc(s.title) + '</h1></div></td></tr></thead><tbody><tr><td>' + (s.img ? '<img class="im" src="' + s.img + '">' : (s.html || '<p style="padding:30px;border:2px solid #a00;color:#a00;font-size:15px"><b>This form page could not be loaded.</b> Upload hr-pdf/w4.jpg and hr-pdf/i9.jpg next to the portal page, then print the packet again.</p>')) + '</td></tr></tbody></table></div>';
   });
   return '<!doctype html><html><head><meta charset="utf-8"><title>Aide Application Packet</title><style>' + css + '</style></head><body>' + h + '</body></html>';
 }
@@ -2486,7 +2486,9 @@ async function printPacket(){
   w.document.write('<p style="font:14px Arial;padding:24px">Preparing the packet…</p>'); w.document.close();
   try{
     const j=await api('onbPacket',{position:position}); if(!j.ok) throw new Error(j.error||'error');
-    const base=new URL('hr-pdf/',location.href).href, html=buildPacketHtml(j.sections,{i9:base+'i9.jpg',w4:base+'w4.jpg'},escAct);
+    const base=new URL('hr-pdf/',location.href).href, asData=async u=>{ try{ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) return ''; const b=await r.blob(); return await new Promise(res=>{ const f=new FileReader(); f.onload=()=>res(f.result); f.onerror=()=>res(''); f.readAsDataURL(b); }); }catch(e){ return ''; } };
+    const i9=await asData(base+'i9.jpg'), w4=await asData(base+'w4.jpg'); if(!i9||!w4) alert('The '+(!w4?'W-4':'')+(!w4&&!i9?' and ':'')+(!i9?'I-9':'')+' page image could not be loaded, so that page will print as a notice. Upload hr-pdf/w4.jpg and hr-pdf/i9.jpg, then print again.');
+    const html=buildPacketHtml(j.sections,{i9:i9,w4:w4},escAct);
     w.document.open(); w.document.write(html); w.document.close();
     const ready=()=>Array.prototype.every.call(w.document.images,im=>im.complete); let n=0;
     const t=setInterval(()=>{ if(ready()||++n>40){ clearInterval(t); try{ w.focus(); w.print(); }catch(e){} } },250);
