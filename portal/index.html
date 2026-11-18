@@ -1125,6 +1125,7 @@ function showPage(){
   if(document.querySelector('.page.active #cpDx')) prefillCarePlan();
   if(document.querySelector('.page.active #phLetter')){ prefillFax(); renderPhysicianLetter(); }
   if(document.querySelector('.page.active #pcPreview')) renderPatientCopy();
+  if(document.querySelector('.page.active #pcaWizStatus')) pcaWizLoad();
   if(document.querySelector('.page.active #actSheetBody')) renderActivitySheet();
   if(document.querySelector('.page.active #frAge')) frUpdate(document);
   if(role==='patient'&&page===getSteps(role).length-1) buildPatientReview();
@@ -1637,6 +1638,15 @@ function adminSteps(){return[
   <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn btn-admin" onclick="renderPhysicianLetter()">↻ Refresh from Intake</button><button class="btn btn-admin" onclick="printSheet()">🖨 Print / Save PDF</button><button class="btn btn-admin" id="faxBtn" onclick="sendFax()">📠 Send via MetroFax</button></div><div id="phFaxStatus" style="margin-top:10px"></div><div style="font-size:11.5px;color:var(--muted);margin-top:8px">No print window? Open this file directly in Chrome or Safari — printing is blocked inside previews and embedded viewers.</div>
 </div>
 <div class="card"><div id="phLetter" style="font-size:13px;line-height:1.55"></div></div>`},
+{label:'PCA Request',html:`
+<div class="rbanner ba">🖥️ <strong>Admin</strong> &nbsp;Prepare and fax the <em>initial</em> PCA prior-authorization request to the patient's insurer. Skip this step if the patient does not need PCA services.</div>
+<div class="card no-print" id="pcaWiz">
+  <div class="card-header"><div class="card-icon ci-a">📠</div><div class="card-title"><h2>Initial PCA Authorization Request</h2><p>Fills the insurer's own form from this patient's record</p></div></div>
+  <p class="tmuted" style="margin:0 0 10px">Before you start: the patient's name, date of birth, address, phone, member ID, diagnosis and insurance company should be filled in on the earlier steps. You can still change or add any of them in the next window. The form is faxed through MetroFax to the insurer's PCA fax number, and a copy is saved to the patient's folder.</p>
+  <div id="pcaWizStatus" class="info-box"><span class="ico">⏳</span><p>Checking for earlier PCA requests…</p></div>
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn bn" type="button" onclick="pcaFromWizard()" style="background:var(--teal);color:#fff;border:0;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer">📠 Prepare initial PCA request</button><button class="mini" type="button" onclick="pcaWizLoad()">↻ Check status</button></div>
+  <p id="pcaWizMsg" class="tmuted" style="margin:10px 0 0"></p>
+</div>`},
 {label:'Emergency &amp; Disaster',html:`
 <div class="rbanner ba">🖥️ <strong>Admin</strong> &nbsp;Collect emergency contacts and disaster planning information.</div>
 <div class="card">
@@ -2245,7 +2255,7 @@ async function ptSyncNow(){
   const sig=JSON.stringify(payload); if(sig===_ptLast) return;
   payload.ver=PT_ID?(PT_VER===null?0:PT_VER):null;
   _ptBusy=true;
-  try{ const j=await api('ptSave',payload); if(j.ok){ setPtId(j.id); setPtVer(j.ver); _ptLast=sig; setSyncBadge('Saved to office'); } else if(j.error==='conflict') ptConflict(j,id); else setSyncBadge(j.error==='discharged'?'Patient discharged':(j.error==='record too large'?'Not saved – record too large':'Not saved')); }
+  try{ const j=await api('ptSave',payload); if(j.ok){ if(j.id) setPtId(j.id); setPtVer(j.ver); _ptLast=sig; setSyncBadge('Saved to office'); } else if(j.error==='conflict') ptConflict(j,id); else setSyncBadge(j.error==='discharged'?'Patient discharged':(j.error==='record too large'?'Not saved – record too large':'Not saved')); }
   catch(e){ setSyncBadge('Offline – not saved'); }
   _ptBusy=false;
 }
@@ -2685,6 +2695,29 @@ function pcaBadge(q){
 }
 function localDay(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 let PCAH=null;
+async function pcaWizLoad(){
+  const box=document.getElementById('pcaWizStatus'); if(!box) return;
+  const set=(ic,h)=>{ box.innerHTML='<span class="ico">'+ic+'</span><p>'+h+'</p>'; };
+  if(!SUBMIT_URL){ set('ℹ️','PCA requests need the office connection, which is not available in this preview.'); return; }
+  try{ await ptSyncNow(); }catch(e){}
+  if(!PT_ID){ set('ℹ️','Enter the patient\'s first name, last name and date of birth on Patient Info first. The record is saved automatically.'); return; }
+  try{
+    const j=await api('pcaList',{id:PT_ID}); if(!j||!j.ok) throw new Error((j&&j.error)||'error');
+    const rows=(j.rows||[]).slice().sort((a,b)=>String(b.sentAt).localeCompare(String(a.sentAt)));
+    if(!rows.length){ set('📭','No PCA request has been sent for this patient yet.'); return; }
+    const r=rows[0], ty={new:'Initial',reauth:'Renewal',increase:'Increase',decrease:'Decrease',transfer:'Transfer',mco:'Insurer change'}[r.type]||r.type;
+    set('✅','Last request: <strong>'+escAct(ty)+'</strong> to '+escAct(r.insurer||'the insurer')+', sent '+escAct(usDate(r.sentAt))+(r.faxedAt?', faxed '+escAct(usDate(r.faxedAt)):', not faxed from here')+'. Status: '+escAct(r.status||'requested')+'.');
+  }catch(e){ set('⚠️','Could not check PCA requests ('+escAct(e.message||'error')+').'); }
+}
+async function pcaFromWizard(){
+  const msg=document.getElementById('pcaWizMsg'); if(msg) msg.textContent='';
+  if(!SUBMIT_URL){ if(msg) msg.textContent='PCA requests need the office connection.'; return; }
+  try{ await ptSyncNow(); }catch(e){}
+  if(!PT_ID){ if(msg) msg.textContent='Enter the first name, last name and date of birth on Patient Info first.'; return; }
+  let j; try{ j=await api('pcaList',{id:PT_ID}); }catch(e){ if(msg) msg.textContent=e.message||'Could not open PCA requests.'; return; }
+  if(!j||!j.ok){ if(msg) msg.textContent='Could not open PCA requests ('+((j&&j.error)||'error')+').'; return; }
+  openPca(PT_ID,null,j.rows||[],j.agency||{});
+}
 async function openPcaHub(id){
   let j; try{ j=await api('pcaList',{id:id}); }catch(e){ alert(e.message||'Could not open.'); return; }
   if(!j||!j.ok){ alert('Could not open PCA authorizations ('+((j&&j.error)||'error')+').'); return; }
