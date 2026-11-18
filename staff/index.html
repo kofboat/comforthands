@@ -54,6 +54,25 @@ canvas{width:100%;height:130px;border:1.5px dashed var(--line);border-radius:10p
 .banner.ok{background:#dcfce7;color:#166534}
 .help{text-align:center;font-size:14px;color:var(--muted);margin-top:22px}.help a{color:var(--teal);font-weight:700;text-decoration:none}
 details summary{cursor:pointer;font-weight:700;font-size:14px;padding:6px 0}
+
+/* ── NEW LAYOUT (same purple): slim top bar, accent-bar tiles ── */
+header.slim{display:flex;align-items:center;gap:10px;text-align:left;padding:10px 14px;background:#34182d}
+header.slim .lp{margin:0;padding:3px 8px;border-radius:9px}header.slim .lp img{height:26px}
+header.slim h1{font-size:15px;margin:0}header.slim p{display:none}
+header.slim .hbtn{position:static;margin-left:auto;background:rgba(255,255,255,.12)}header.slim .hbtn.l{margin:0 4px 0 0;order:-1}
+header.slim #backBtn[style*="block"]+.lp{margin-left:0}
+main{margin-top:-14px}header.slim ~ main{margin-top:14px}
+.card{border-radius:14px;box-shadow:0 1px 2px rgba(52,24,45,.05)}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tgrid .tile{flex-direction:column;align-items:flex-start;gap:8px;margin:0;position:relative;overflow:hidden;padding:12px 12px 12px 17px;box-shadow:0 1px 2px rgba(52,24,45,.05)}
+.tgrid .tile h3{font-size:14px}.tgrid .tile p{font-size:12px}.tgrid .ico{width:34px;height:34px;font-size:18px;border-radius:9px}
+.tile:before,.pt:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--teal)}
+.pt{position:relative;overflow:hidden;padding-left:19px;box-shadow:0 1px 2px rgba(52,24,45,.05)}
+.tile:hover,.pt:hover{outline:0;border-color:var(--teal);box-shadow:0 2px 8px rgba(52,24,45,.12)}
+.pt .chip{border-radius:9px;font-size:11px;letter-spacing:.02em}
+.f{letter-spacing:.06em}
+.btn{border-radius:10px}
+@media(min-width:700px){.tgrid{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
 <body>
@@ -97,9 +116,12 @@ details summary{cursor:pointer;font-weight:700;font-size:14px;padding:6px 0}
     <div class="leg">Fill in each day. Submit the sheet at the end of the week with the client's signature. The office needs it by Monday 12:00 pm.</div>
     <div id="plist"><p class="leg">Loading your clients…</p></div>
   </div>
+  <div class="tgrid">
   <a class="tile" target="_blank" rel="noopener" href="https://knowledge.hhaexchange.com/caregiver/Content/Documentation/Mobile/Mobi-CG-UW-Download-App-P.htm"><div class="ico">📍</div><div><h3>Clock In / Out (HHAeXchange)</h3><p>Get the HHAeXchange+ app and clock in and out of every visit</p></div></a>
   <a class="tile" target="_blank" rel="noopener" href="https://app.joinhomebase.com/"><div class="ico">💵</div><div><h3>Payroll &amp; Pay Stubs (Homebase)</h3><p>See your pay stubs, pay dates and tax forms</p></div></a>
   <a class="tile" target="_blank" rel="noopener" href="https://virtuallearnonline.com/wp-login.php"><div class="ico">🎓</div><div><h3>Online Training</h3><p>Take your required courses (Virtual Learning)</p></div></a>
+  <a class="tile" href="tel:6092773032"><div class="ico">☎️</div><div><h3>Call the office</h3><p>609-277-3032</p></div></a>
+  </div>
   <div class="card"><details><summary>Change my password</summary>
     <div class="err" id="cerr" style="margin-top:8px"></div>
     <label class="f" for="cpo">Current password</label><input type="password" id="cpo" autocomplete="current-password">
@@ -149,7 +171,7 @@ let AUTH={token:'',name:'',email:'',exp:0}, CUR=null, WK='', DATA={}, SUBAT='', 
 try{ const a=JSON.parse(sessionStorage.getItem('chhc_staff')||'null'); if(a&&a.exp>Date.now()) AUTH=a; }catch(e){}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function show(v){ ['vLogin','vReset','vHome','vSheet'].forEach(x=>$(x).style.display=x===v?'block':'none'); $('backBtn').style.display=v==='vSheet'?'block':'none'; $('outBtn').style.display=(v==='vLogin'||v==='vReset')?'none':'block'; window.scrollTo(0,0); }
+function show(v){ document.getElementById('hdr').classList.toggle('slim',v==='vHome'||v==='vSheet'); ['vLogin','vReset','vHome','vSheet'].forEach(x=>$(x).style.display=x===v?'block':'none'); $('backBtn').style.display=v==='vSheet'?'block':'none'; $('outBtn').style.display=(v==='vLogin'||v==='vReset')?'none':'block'; window.scrollTo(0,0); }
 async function api(body){
   const r=await fetch(SUBMIT_URL,{method:'POST',body:JSON.stringify(Object.assign({token:AUTH.token},body))});
   const j=await r.json();
