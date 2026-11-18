@@ -2537,7 +2537,7 @@ async function openPcaHub(id){
 function drawPcaHub(){
   const old=document.getElementById('pcaHub'); if(old) old.remove();
   const rows=PCAH.rows, st=PCAH.state, esc=escAct, ed=(k,l,v,ty)=>'<div class="fgroup"><label class="lbl">'+l+'</label><input type="'+(ty||'text')+'" id="pah_'+k+'" value="'+esc(v||'')+'"></div>';
-  const tr=rows.map(r=>'<tr><td>'+usDate(r.sentAt)+'</td><td>'+esc(r.insurer)+'<br><span class="tmuted">'+esc({new:'Initial',reauth:'Renewal',increase:'Increase',decrease:'Decrease',transfer:'Transfer',mco:'Insurer change'}[r.type]||r.type)+(r.hoursWeek?' · '+esc(r.hoursWeek)+' h/wk':'')+'</span></td><td>'+
+  const tr=rows.map(r=>'<tr><td>'+usDate(r.sentAt)+'</td><td>'+esc(r.insurer)+'<br><span class="tmuted">'+esc({new:'Initial',reauth:'Renewal',increase:'Increase',decrease:'Decrease',transfer:'Transfer',mco:'Insurer change'}[r.type]||r.type)+(r.hoursWeek?' · '+esc(r.hoursWeek)+' h/wk':'')+(r.faxedAt?' · faxed '+usDate(r.faxedAt):'')+'</span></td><td>'+
     (r.status==='approved'?'<span class="pill ok">Approved</span><br><span class="tmuted">#'+esc(r.authNo)+'<br>'+usDate(r.authFrom)+' – '+usDate(r.authTo)+(r.units?'<br>'+esc(r.units)+' units':'')+(r.icd10?'<br>ICD-10 '+esc(r.icd10):'')+'</span>':r.status==='denied'?'<span class="pill bad">Denied</span>':'<span class="pill warn">Sent – no answer yet</span>')+
     '</td><td><button class="mini" onclick="pcaEdit(\''+r.id+'\')">'+(r.status==='requested'?'Record insurer answer':'Edit')+'</button></td></tr>').join('');
   const m=document.createElement('div'); m.id='pcaHub'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;padding:20px';
@@ -2648,13 +2648,24 @@ async function openPca(id,last,hist,agy){
    row('ag_name','Agency name',agy.name||ag.name||'Comfort Hands Home Healthcare LLC')+row('ag_addr','Street',agy.addr||ag.addr||'505 Hamilton Ave Ste 200')+row('ag_city','City',agy.city||ag.city||'Linwood')+row('ag_state','State',agy.state||ag.state||'NJ')+row('ag_zip','ZIP',agy.zip||ag.zip||'08221')+
    row('ag_phone','Phone',agy.phone||ag.phone||'609-277-3032')+row('ag_fax','Fax',agy.fax||ag.fax||'609-479-5931')+ags('contact','Contact person')+'</div><p class="tmuted" style="margin:6px 0 0">'+(agy.npi?'NPI, TIN and each insurer\'s provider ID are filled in automatically.':'The agency NPI, TIN and provider IDs are not set up yet (add them in the script settings).')+'</p>'+
    '<label class="rbtn" style="margin-top:10px"><input type="checkbox" id="pca_log" checked> Record this request as sent on the date above, so renewals are tracked</label><p id="pcaMsg" class="tmuted" style="margin:10px 0 0"></p>'+
-   '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="mini" onclick="document.getElementById(\'pcaModal\').remove()">Cancel</button><button class="mini" style="background:#1a5d4a;color:#fff" onclick="makePca()">Download filled form</button></div></div>';
+   '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="mini" onclick="document.getElementById(\'pcaModal\').remove()">Cancel</button><button class="mini" style="background:#1a5d4a;color:#fff" onclick="makePca()">Download filled form</button><button class="mini" id="pcaFaxBtn" style="background:#2b1a2e;color:#fff" onclick="makePca(true)">📠 Fax via MetroFax</button></div></div>';
   document.body.appendChild(m);
 }
-async function makePca(){
+let _pcaFaxArm=null;
+function pcaFaxNum(ins){ const n=String(((PCA.agy||{}).faxTo||{})[ins]||'').replace(/\D/g,''); return n.length===10?'1'+n:n; }
+function pcaFaxPretty(n){ return n.length===11?'('+n.slice(1,4)+') '+n.slice(4,7)+'-'+n.slice(7):n; }
+function b64Bytes(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+async function makePca(fax){
   const g=k=>{ const e=document.getElementById('pca_'+k); return e?e.value.trim():''; }, c=k=>{ const e=document.getElementById('pca_'+k); return !!(e&&e.checked); }, msg=document.getElementById('pcaMsg'), f=PCA.f;
   const ins=g('mco'); if(!ins){ msg.textContent='Choose which insurer form to fill.'; return; }
   const mco=PCA_MAP[ins];
+  const fbtn=document.getElementById('pcaFaxBtn'); if(fbtn) fbtn.textContent='📠 Fax via MetroFax';
+  if(fax===true){
+    if(!(PCA.agy||{}).faxReady){ msg.textContent='Faxing is not set up yet. Download the form and fax it from MetroFax.'; return; }
+    const fn=pcaFaxNum(ins); if(!/^1\d{10}$/.test(fn)){ msg.textContent='No fax number is set for '+ins+'. Download the form and send it another way.'; return; }
+    if(_pcaFaxArm!==ins){ _pcaFaxArm=ins; if(fbtn) fbtn.textContent='Confirm: fax to '+ins+' '+pcaFaxPretty(fn); msg.textContent='Check the insurer and number, then press the button again to send. This faxes the filled form.'; return; }
+    _pcaFaxArm=null;
+  } else _pcaFaxArm=null;
   const ag={}; ['name','addr','city','state','zip','phone','fax','contact'].forEach(k=>ag[k]=g('ag_'+k));
   try{ localStorage.setItem(PCA_AG_KEY,JSON.stringify(ag)); }catch(e){}
   const AY=PCA.agy||{}; ag.npi=AY.npi||''; ag.tin=AY.tin||''; ag.promise=AY.promise||''; ag.providerId=(AY.providerIds||{})[mco]||'';
@@ -2671,10 +2682,15 @@ async function makePca(){
   try{
     if(!window.PDFLib) await loadJs('hr-pdf/pdf-lib.min.js'); if(!window.PCAFILL) await loadJs('hr-pdf/pcafill.js');
     const bytes=await PCAFILL.fill(PDFLib,mco,await getBytes('hr-pdf/pca/'+PCAFILL.FILE[mco]),d);
-    saveBytes(bytes,'PCA request '+ins+' - '+String(f.lastName||'')+' '+String(f.firstName||'')+'.pdf');
+    let faxedAt='';
+    if(fax===true){
+      msg.textContent='Sending fax…'; const fj=await api('pcaFax',{patientId:PCA.id,insurer:ins,pdf:b64Bytes(bytes)});
+      if(!fj.ok){ msg.textContent='The fax was not sent ('+(fj.error||'error')+'). Check MetroFax before trying again.'; return; }
+      faxedAt=localDay();
+    } else saveBytes(bytes,'PCA request '+ins+' - '+String(f.lastName||'')+' '+String(f.firstName||'')+'.pdf');
     let logged='';
-    if(c('log')){ try{ const j=await api('pcaSave',{patientId:PCA.id,insurer:ins,type:d.type,sentAt:d.today,hoursDay:d.hoursDay,daysWeek:d.daysWeek,hoursWeek:d.hoursWeek,reqFrom:d.authFrom,reqTo:d.authTo,status:'requested'}); logged=j.ok?' It is logged as sent; record the insurer\'s answer under PCA when it comes back.':' (Could not log it: '+(j.error||'error')+')'; }catch(e){ logged=' (Could not log it.)'; } }
-    msg.textContent='Downloaded. Open it, check every field, then print or fax it to the insurer.'+logged; HOME=null;
+    if(c('log')){ try{ const j=await api('pcaSave',{patientId:PCA.id,insurer:ins,type:d.type,sentAt:d.today,hoursDay:d.hoursDay,daysWeek:d.daysWeek,hoursWeek:d.hoursWeek,reqFrom:d.authFrom,reqTo:d.authTo,status:'requested',faxedAt:faxedAt}); logged=j.ok?' It is logged as sent; record the insurer\'s answer under PCA when it comes back.':' (Could not log it: '+(j.error||'error')+')'; }catch(e){ logged=' (Could not log it.)'; } }
+    msg.textContent=fax===true?'Fax submitted to MetroFax for '+ins+' ('+pcaFaxPretty(pcaFaxNum(ins))+') and a copy was saved to Drive. Check MetroFax for the delivery confirmation.'+logged:'Downloaded. Open it, check every field, then print or fax it to the insurer.'+logged; HOME=null;
   }catch(e){ msg.textContent='Could not prepare the form ('+(e.message||'error')+'). Make sure the hr-pdf/pca folder is uploaded.'; }
 }
 /* Reference checks: recorded here by the office (phone/email/fax), filed as a PDF */

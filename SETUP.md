@@ -221,3 +221,9 @@ Until you switch it on, **nothing is sent**: every text that would go out is onl
 - **aideName** now appears in TextLog (right after email), AideRecords, AideTrack and Schedule, and **patientName** in PcaAuth. They fill themselves and refresh each night and on `upgrade`.
 - **Existing PCA authorizations, one time:** in the script editor run `importPca` once to create the **PcaImport** tab, fill one patient per row (firstName, lastName, dob, insurer, authNo, authFrom, authTo; optional units, icd10, hoursWeek; dates yyyy-mm-dd), then run `importPca` again. The patient must already be in the portal (the log lists any that are not). A blank insurer is taken from the patient's record. Each patient keeps one current authorization; re-running updates it and never duplicates.
 - **One at a time:** in the portal, open a patient's **PCA** screen and choose **Add existing authorization** (authorization number, start and end date required).
+
+## Faxing PCA requests (MetroFax)
+- Works like the Physician Order fax: the filled form is emailed to `<fax number>@metrofax.com` from the script's Google account (already allowed in MetroFax). The email has no patient name; a copy of the PDF is saved in the patient's Drive folder.
+- In the portal, open a patient's **PCA** screen, start a request, fill the form, then press **Fax via MetroFax**. The button changes to "Confirm: fax to <insurer> <number>"; press it again to send. The request is logged as sent and the history shows "faxed <date>".
+- The insurer fax numbers are in `CONFIG.FAX.NUMBERS` in the script (Horizon, UnitedHealthcare, Aetna, Wellpoint filled in; HealthPartners blank, so that form is downloaded instead). Change a number there and redeploy. A blank `CONFIG.FAX.GATEWAY_DOMAIN` switches PCA faxing off.
+- The script only knows the email was handed to MetroFax. Check MetroFax's confirmation email to see whether the fax was delivered.

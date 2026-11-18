@@ -29,6 +29,12 @@ const CONFIG = {
     npi: '', tin: '', promise: '',
     providerIds: { hnjh: '', uhc: '', wellpoint: '', aetna: '', hpp: '' }   // Aetna's form says not to give a provider ID
   },
+  // Faxing PCA requests through MetroFax (email-to-fax), the same way the Physician Order Request is faxed: the form is emailed to
+  // <number>@metrofax.com from the script's Google account, which is already allowed to send in MetroFax. Blank GATEWAY_DOMAIN switches PCA faxing off.
+  FAX: {
+    GATEWAY_DOMAIN: 'metrofax.com',
+    NUMBERS: { 'Horizon': '6095833048', 'UnitedHealthcare': '8555834041', 'Aetna': '8609753293', 'Wellpoint': '8009643627', 'HealthPartners': '' }
+  },
   // Text messages through Twilio. Leave ENABLED false until you have tested with sendTestText(). Until then texts are only recorded in the TextLog tab.
   SMS: {
     ENABLED: false,
@@ -496,7 +502,7 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
@@ -535,7 +541,7 @@ function repSheet_() { return tab_('Reports', ['id', 'kind', 'patientId', 'aideE
 function draftSheet_() { return tab_('Drafts', ['id', 'kind', 'patientId', 'aideEmail', 'data', 'updatedAt', 'updatedBy']); }
 function draftId_(d) { return String(d.kind) + '|' + (d.kind === 'chha' ? String(d.aideEmail || '').toLowerCase() : keyOf_(d.patientId)); }
 // PCA authorizations: one row per request sent to an insurer. The insurer's answer (approval date, authorization number, units, dates, ICD-10) is recorded on the same row.
-const PCA_COLS_ = ['id', 'patientId', 'insurer', 'type', 'sentAt', 'hoursDay', 'daysWeek', 'hoursWeek', 'reqFrom', 'reqTo', 'status', 'approvedAt', 'authNo', 'units', 'authFrom', 'authTo', 'icd10', 'note', 'updatedAt', 'by', 'patientName'];
+const PCA_COLS_ = ['id', 'patientId', 'insurer', 'type', 'sentAt', 'hoursDay', 'daysWeek', 'hoursWeek', 'reqFrom', 'reqTo', 'status', 'approvedAt', 'authNo', 'units', 'authFrom', 'authTo', 'icd10', 'note', 'updatedAt', 'by', 'patientName', 'faxedAt'];
 function pcaTab_() { return tab_('PcaAuth', PCA_COLS_); }
 function pcaObj_(r) { const o = {}; PCA_COLS_.forEach(function (c, i) { o[c] = (/At$|From$|To$/.test(c) && c !== 'updatedAt') ? iso_(r[i]) : String(r[i] == null ? '' : r[i]); }); return o; }
 function pcaRows_(pid) { const v = pcaTab_().getDataRange().getValues(), res = []; for (let i = 1; i < v.length; i++) if (v[i][0] && (!pid || keyOf_(v[i][1]) === keyOf_(pid))) res.push(pcaObj_(v[i])); return res; }
@@ -601,6 +607,25 @@ function refreshNames_() {
   return n;
 }
 // An approval that already exists (it did not start as a request sent from the portal). One current authorization per patient: the latest approved row is updated, otherwise a row is added.
+function faxDomain_() { return String((CONFIG.FAX && CONFIG.FAX.GATEWAY_DOMAIN) || '').trim().replace(/^@/, ''); }
+// Emails the filled form to the insurer's fax number through MetroFax. The number comes from CONFIG only, never from the browser.
+// The email carries no patient name. MetroFax emails its own delivery confirmation to the sending account.
+function pcaFax_(pid, insurer, b64, who) {
+  const dom = faxDomain_(); if (!dom) return { ok: false, error: 'Faxing is not set up yet (the MetroFax address is missing from the script settings).' };
+  const num = String(((CONFIG.FAX || {}).NUMBERS || {})[insurer] || '').replace(/\D/g, '');
+  if (!num) return { ok: false, error: 'No fax number is set for ' + (insurer || 'that insurer') + '.' };
+  const full = num.length === 10 ? '1' + num : num; if (full.length !== 11) return { ok: false, error: 'The fax number for ' + insurer + ' is not valid.' };
+  if (!b64 || b64.length > 6000000) return { ok: false, error: 'The form is missing or too large to fax.' };
+  let bytes; try { bytes = Utilities.base64Decode(b64); } catch (e) { return { ok: false, error: 'The form could not be read.' }; }
+  if (!bytes || bytes.length < 100 || bytes[0] !== 37 || bytes[1] !== 80 || bytes[2] !== 68 || bytes[3] !== 70) return { ok: false, error: 'That file is not a PDF.' };
+  try {
+    MailApp.sendEmail({ to: full + '@' + dom, subject: 'PCA authorization request', body: 'From Comfort Hands Home Healthcare, LLC. Please call 609-277-3032 with questions.',
+      attachments: [Utilities.newBlob(bytes, 'application/pdf', 'PCA-request.pdf')] });
+  } catch (e) { return { ok: false, error: 'The fax could not be sent: ' + e }; }
+  // keep a copy in the patient's Drive folder (best effort; the fax has already gone)
+  let url = ''; try { const pr = ptGetRow_(ptSheet_(), ptRow_(ptSheet_(), pid)), nm = String(pr[P_.NAME] || ''); url = ptFolder_(pid, nm).createFile(Utilities.newBlob(bytes, 'application/pdf', 'PCA request - ' + insurer + ' - ' + today_() + '.pdf')).getUrl(); } catch (e) {}
+  return { ok: true, last4: full.slice(-4), to: full, url: url, rows: pcaRows_(pid).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; }) };
+}
 function pcaCheck_(f) {
   if (!String(f.authNo || '').trim()) return 'The authorization number is needed.';
   if (!validDay_(f.authFrom) || !validDay_(f.authTo)) return 'The start and end dates are needed (yyyy-mm-dd).';
@@ -839,7 +864,13 @@ function records_(act, d, u) {
     const r = ptRow_(psh, keyOf_(d.id)); if (!r) return out_({ ok: false, error: 'not found' });
     const rows = pcaRows_(d.id).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; });
     let ins = ''; try { ins = String(ptBlob_(ptGetRow_(psh, r)).shared.insCompany || ''); } catch (e) {}
-    return out_({ ok: true, rows: rows, state: pcaState_(rows), agency: CONFIG.AGENCY || {}, insurer: ins });
+    return out_({ ok: true, rows: rows, state: pcaState_(rows), agency: Object.assign({}, CONFIG.AGENCY || {}, { faxReady: !!faxDomain_(), faxTo: CONFIG.FAX ? CONFIG.FAX.NUMBERS : {} }), insurer: ins });
+  }
+  if (act === 'pcaFax') {
+    const pid = keyOf_(d.patientId); if (!pid || !ptRow_(psh, pid)) return out_({ ok: false, error: 'not found' });
+    const res = pcaFax_(pid, String(d.insurer || ''), String(d.pdf || ''), who);
+    if (res.ok) audit_(u, 'pcaFax', pid, String(d.insurer) + ' ...' + res.last4);
+    return out_(res);
   }
   if (act === 'pcaAddExisting') {
     const pid = keyOf_(d.patientId); if (!pid || !ptRow_(psh, pid)) return out_({ ok: false, error: 'not found' });
@@ -865,6 +896,7 @@ function records_(act, d, u) {
       const set = function (c, val) { x[PCA_COLS_.indexOf(c)] = val; };
       set('patientId', pid); set('insurer', txt_(String(d.insurer || '').slice(0, 40))); set('type', txt_(String(d.type || '').slice(0, 20))); set('sentAt', d.sentAt || x[4] || today_());
       ['hoursDay', 'daysWeek', 'hoursWeek'].forEach(function (c) { if (d[c] !== undefined) set(c, num(d[c])); });
+      if (d.faxedAt && validDay_(d.faxedAt)) set('faxedAt', d.faxedAt);
       set('reqFrom', d.reqFrom || ''); set('reqTo', d.reqTo || ''); set('status', d.status); set('approvedAt', d.approvedAt || '');
       set('authNo', txt_(String(d.authNo || '').slice(0, 40))); set('units', num(d.units)); set('authFrom', d.authFrom || ''); set('authTo', d.authTo || '');
       set('icd10', txt_(String(d.icd10 || '').slice(0, 80))); set('note', txt_(String(d.note || '').slice(0, 300))); set('updatedAt', new Date().toISOString()); set('by', who); set('patientName', txt_(String(ptGetRow_(psh, ptRow_(psh, pid))[P_.NAME] || '')));
