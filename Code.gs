@@ -540,6 +540,13 @@ function tab_(name, header) {
   return (TABS_[name] = sh);
 }
 function ptSheet_() { return tab_('Patients', PT_COLS_); }
+// The patient list only needs the small columns. Reading the big form columns (up to 45,000 characters per patient) made every list load slow, so skip them.
+function ptLight_() {
+  const sh = ptSheet_(), n = sh.getLastRow(); if (n < 2) return [new Array(PT_N_).fill('')];
+  const a = sh.getRange(1, 1, n, 5).getValues(), b = sh.getRange(1, 8, n, 8).getValues(), out = [];
+  for (let i = 0; i < n; i++) { const r = new Array(PT_N_).fill(''); for (let j = 0; j < 5; j++) r[j] = a[i][j]; for (let j = 0; j < 8; j++) r[7 + j] = b[i][j]; out.push(r); }
+  return out;
+}
 function repSheet_() { return tab_('Reports', ['id', 'kind', 'patientId', 'aideEmail', 'title', 'date', 'pdfUrl', 'by', 'createdAt', 'data']); }
 function draftSheet_() { return tab_('Drafts', ['id', 'kind', 'patientId', 'aideEmail', 'data', 'updatedAt', 'updatedBy']); }
 function draftId_(d) { return String(d.kind) + '|' + (d.kind === 'chha' ? String(d.aideEmail || '').toLowerCase() : keyOf_(d.patientId)); }
@@ -605,7 +612,7 @@ function refreshNames_() {
   fill(aideTab_(), 0, 5, byUser);
   fill(trkTab_(), 0, TRK_COLS_.indexOf('aideName'), byUser);
   fill(textLogTab_(), 3, 4, byUser);
-  const pv = ptSheet_().getDataRange().getValues(), pn = {}; for (let i = 1; i < pv.length; i++) if (pv[i][P_.ID]) pn[keyOf_(pv[i][P_.ID])] = String(pv[i][P_.NAME] || '');
+  const pv = ptLight_(), pn = {}; for (let i = 1; i < pv.length; i++) if (pv[i][P_.ID]) pn[keyOf_(pv[i][P_.ID])] = String(pv[i][P_.NAME] || '');
   fill(pcaTab_(), 1, PCA_COLS_.indexOf('patientName'), function (k) { return pn[keyOf_(k)]; });
   return n;
 }
@@ -805,13 +812,13 @@ function pendingSheets_(L) {
 // Text messages in the last 7 days, for the home screen. Counts only (no names or numbers).
 function weekTexts_() {
   try {
-    const v = textLogTab_().getDataRange().getValues(), cut = new Date(now_().getTime() - 7 * 86400000).toISOString(); let sent = 0, failed = 0;
+    const tl = textLogTab_(), ln = tl.getLastRow(), from = Math.max(2, ln - 1500), v = ln < 2 ? [] : [[]].concat(tl.getRange(from, 1, ln - from + 1, 8).getValues()), cut = new Date(now_().getTime() - 7 * 86400000).toISOString(); let sent = 0, failed = 0;
     for (let i = 1; i < v.length; i++) { const at = v[i][0] instanceof Date ? v[i][0].toISOString() : String(v[i][0]); if (!at || at < cut) continue; const st = String(v[i][6]); if (st === 'sent' || st === 'dry-run') sent++; else if (st === 'failed') failed++; }
     return { sent: sent, failed: failed, live: smsLive_() };
   } catch (e) { return { sent: 0, failed: 0, live: false }; }
 }
 function home_() {
-  const L = load_(), pv = ptSheet_().getDataRange().getValues(), aidesByKey = {};
+  const L = load_(), pv = ptLight_(), aidesByKey = {};
   for (let i = 1; i < L.plans.length; i++) aidesByKey[L.plans[i][0]] = emails_(L.plans[i][4]);
   const patients = [], pcaBy = {};
   pcaRows_('').forEach(function (r) { const k = keyOf_(r.patientId); (pcaBy[k] = pcaBy[k] || []).push(r); });

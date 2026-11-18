@@ -1006,7 +1006,7 @@ function switchRole(){
 const IDLE_MS=15*60*1000;
 let AUTH={token:'',name:'',roles:[],exp:0}, _idle=null;
 try{ const a=JSON.parse(sessionStorage.getItem('chhc_auth')||'null'); if(a&&a.exp>Date.now()) AUTH=a; }catch(e){}
-function authExpired(j){ if(j&&!j.ok&&(j.error==='unauthorized'||j.error==='session expired')){ AUTH={token:'',name:'',roles:[],exp:0}; try{sessionStorage.removeItem('chhc_auth');}catch(e){} return true; } return false; }
+function authExpired(j){ if(j&&!j.ok&&(j.error==='unauthorized'||j.error==='session expired')){ AUTH={token:'',name:'',roles:[],exp:0}; try{sessionStorage.removeItem('chhc_auth');sessionStorage.removeItem('chhc_home');}catch(e){} return true; } return false; }
 function showLoginState(){
   const ok=!!AUTH.token&&AUTH.exp>Date.now();
   document.getElementById('authForm').style.display=ok?'none':'block';
@@ -1062,7 +1062,7 @@ async function portalResetSet(){
 }
 function signOut(){
   try{ if(role){ switchRole(); } }catch(e){}
-  AUTH={token:'',name:'',roles:[],exp:0}; try{sessionStorage.removeItem('chhc_auth');}catch(e){}
+  AUTH={token:'',name:'',roles:[],exp:0}; HOME=null; try{sessionStorage.removeItem('chhc_auth');sessionStorage.removeItem('chhc_home');}catch(e){}
   clearTimeout(_idle); showLoginState();
   document.getElementById('loginScreen').style.display='flex'; document.getElementById('portalWrap').style.display='none';
 }
@@ -2252,9 +2252,12 @@ let HOME=null, HOME_TAB='patients', HOME_FILTER='', HOME_Q='';
 function showOnly(id){ ['loginScreen','portalWrap','homeScreen','repScreen'].forEach(x=>{ const e=document.getElementById(x); if(e) e.style.display=(x===id?(x==='loginScreen'?'flex':'block'):'none'); }); window.scrollTo(0,0); }
 async function openHome(){
   if(!isStaffNow()) return;
-  if(role){ try{ await ptSyncNow(); }catch(e){} try{ switchRole(); }catch(e){} }
+  const sp=role?ptSyncNow().catch(()=>{}):null; if(role){ try{ switchRole(); }catch(e){} }
   const src=(document.querySelector('.login-logo-img')||{}).src; if(src){ document.getElementById('homeLogo').src=src; document.getElementById('repLogo').src=src; }
-  showOnly('homeScreen'); renderHome();
+  if(!HOME){ try{ const c=sessionStorage.getItem('chhc_home'); if(c) HOME=JSON.parse(c); }catch(e){} }
+  showOnly('homeScreen'); if(HOME) drawHome();
+  if(sp){ try{ await sp; }catch(e){} }
+  renderHome();
 }
 function closeHome(){ showOnly('loginScreen'); showLoginState(); }
 function wizNav(k){ Promise.resolve(openHome()).then(()=>{ try{ navGo(k); }catch(e){} }); }
@@ -2292,7 +2295,7 @@ async function renderHome(){
   const box=document.getElementById('homeBody'); if(!box) return;
   if(HOME_TAB!=='admin') ONB=null;
   if(!HOME) box.innerHTML='<p class="tmuted">Loading…</p>';
-  try{ const j=await api('home'); if(!j.ok||!j.counts) throw new Error(j.error||'not available'); HOME=j; }
+  try{ const j=await api('home'); if(!j.ok||!j.counts) throw new Error(j.error||'not available'); HOME=j; try{ sessionStorage.setItem('chhc_home',JSON.stringify(j)); }catch(e){} }
   catch(e){ if(!HOME){ box.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>Could not load the patient list ('+escAct(e.message||'error')+'). Check your connection and press Refresh.</p></div>'; return; } }
   drawHome();
 }
