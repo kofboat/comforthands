@@ -799,6 +799,14 @@ function pendingSheets_(L) {
   return { week: wk, items: res };
 }
 
+// Text messages in the last 7 days, for the home screen. Counts only (no names or numbers).
+function weekTexts_() {
+  try {
+    const v = textLogTab_().getDataRange().getValues(), cut = new Date(now_().getTime() - 7 * 86400000).toISOString(); let sent = 0, failed = 0;
+    for (let i = 1; i < v.length; i++) { const at = v[i][0] instanceof Date ? v[i][0].toISOString() : String(v[i][0]); if (!at || at < cut) continue; const st = String(v[i][6]); if (st === 'sent' || st === 'dry-run') sent++; else if (st === 'failed') failed++; }
+    return { sent: sent, failed: failed, live: smsLive_() };
+  } catch (e) { return { sent: 0, failed: 0, live: false }; }
+}
 function home_() {
   const L = load_(), pv = ptSheet_().getDataRange().getValues(), aidesByKey = {};
   for (let i = 1; i < L.plans.length; i++) aidesByKey[L.plans[i][0]] = emails_(L.plans[i][4]);
@@ -828,7 +836,7 @@ function home_() {
     drafts: drafts.length,
     onboarding: onbAll_().filter(function (o) { return o.status === 'in progress'; }).length
   };
-  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, today: today_() };
+  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_() };
 }
 
 // Reading never takes the lock. Each change takes it only for the moment it writes.

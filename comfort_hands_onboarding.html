@@ -376,6 +376,32 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
 .home-hdr{background:linear-gradient(135deg,#34182d 0%,var(--teal) 100%);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .home-hdr h1{font-family:'Playfair Display',serif;font-size:20px;flex:1;min-width:200px}
 .home-wrap{max-width:1040px;margin:0 auto;padding:22px 18px 60px}
+/* Staff home layout: sidebar + overview (same colours as before) */
+#homeScreen .app{display:flex;min-height:100vh}
+#homeScreen .side{width:212px;flex:none;background:var(--admin);color:#fff;padding:16px 12px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+#homeScreen .side-logo{background:#fff;border-radius:12px;padding:6px 10px;margin-bottom:16px;text-align:center}#homeScreen .side-logo img{display:block;height:38px;width:auto;margin:0 auto;max-width:100%}
+#homeScreen .nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;color:#e6c8f2;margin-bottom:2px;font-size:13px;cursor:pointer;user-select:none}
+#homeScreen .nav a:hover{background:rgba(255,255,255,.08)}#homeScreen .nav a.on{background:var(--teal);color:#fff;font-weight:700}#homeScreen .nav i{width:16px;text-align:center;font-style:normal;flex:none}
+#homeScreen .nav .b{margin-left:auto;background:#fff;color:var(--admin);border-radius:9px;font-size:10px;font-weight:700;padding:1px 7px}#homeScreen .nav .b.r{background:#e74c3c;color:#fff}
+#homeScreen .side-foot{margin-top:auto;border-top:1px solid #5a3454;padding-top:10px}#homeScreen .side-foot a{display:block;padding:7px 12px;color:#e6c8f2;font-size:12.5px;cursor:pointer;border-radius:8px}#homeScreen .side-foot a:hover{background:rgba(255,255,255,.08)}
+#homeScreen .app-main{flex:1;min-width:0;padding:22px 26px 60px}#homeScreen .home-wrap{max-width:none;margin:0;padding:0}
+.app-top{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}.app-top h1{font-family:'Playfair Display',serif;font-size:24px;line-height:1.2}.app-top p{color:var(--muted);font-size:12px}
+.app-top .srch input{border:1px solid var(--border);border-radius:20px;padding:8px 16px;font-family:inherit;width:240px;background:#fff}.app-top .srch{margin-left:auto}
+.app-top .who{background:#fff;border:1px solid var(--border);border-radius:20px;padding:5px 13px 5px 6px;display:flex;gap:8px;align-items:center;font-size:13px}.app-top .av{width:26px;height:26px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.app-top .topact{display:none}
+.dash{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px;align-items:start}
+.dcard{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow)}.dcard h2{font-size:14px;margin:0 0 8px;display:flex;align-items:center}.dcard h2 span{margin-left:auto;font-size:11px;color:var(--teal);font-weight:600;cursor:pointer}
+.att{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f1e7f5;align-items:flex-start;cursor:pointer;font-size:13px}.att:last-child{border:0}.att .dot{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px}.att small{display:block;color:var(--muted);font-size:11px}
+@media(max-width:1320px){.dash{grid-template-columns:1fr}.dash-side{order:-1;display:grid;grid-template-columns:1fr 1fr;gap:14px}.dash-side .dcard{margin-bottom:0}}
+@media(max-width:700px){.dash-side{grid-template-columns:1fr}.dash-side .dcard{margin-bottom:14px}}
+@media(max-width:800px){
+ #homeScreen .app{display:block}
+ #homeScreen .side{position:fixed;bottom:0;left:0;right:0;top:auto;width:auto;height:auto;flex-direction:row;padding:6px;z-index:50;box-shadow:0 -2px 12px rgba(0,0,0,.2)}
+ #homeScreen .side-logo,#homeScreen .side-foot{display:none}#homeScreen .nav{display:flex;overflow-x:auto;width:100%;gap:2px}
+ #homeScreen .nav a{flex-direction:column;gap:2px;padding:6px 10px;font-size:10px;min-width:64px;text-align:center;margin:0;position:relative}#homeScreen .nav .b{position:absolute;top:1px;right:6px;margin:0}
+ #homeScreen .app-main{padding:14px 14px 90px}.app-top h1{font-size:20px}.app-top .srch{margin-left:0;width:100%}.app-top .srch input{width:100%}.app-top .who{display:none}
+ .app-top .topact{display:flex;gap:6px;margin-left:auto}.app-top .topact button{border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 10px;font-size:12px;font-family:inherit}
+}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
 .tile{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:13px 14px;text-align:left;cursor:pointer;font-family:inherit;box-shadow:var(--shadow)}
 .tile:hover,.tile.on{border-color:var(--teal)}
@@ -452,9 +478,17 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
 
 <!-- STAFF HOME -->
 <div id="homeScreen" style="display:none">
-  <div class="home-hdr"><div class="logo-pill"><img id="homeLogo" alt="Comfort Hands" style="height:38px;width:auto"></div><h1>Staff Home</h1>
-    <button class="switch-btn" onclick="closeHome()">Admissions portal</button><button class="switch-btn" onclick="renderHome()">&#8635; Refresh</button><button class="switch-btn" onclick="signOut()">Sign out</button></div>
-  <div class="home-wrap" id="homeBody"></div>
+  <div class="app">
+    <aside class="side">
+      <div class="side-logo"><img id="homeLogo" alt="Comfort Hands"></div>
+      <nav class="nav" id="sideNav"></nav>
+      <div class="side-foot"><a onclick="closeHome()">&#9998; Admissions portal</a><a onclick="renderHome()">&#8635; Refresh</a><a onclick="signOut()">&#8618; Log out</a></div>
+    </aside>
+    <div class="app-main">
+      <div class="app-top" id="homeTop"></div>
+      <div class="home-wrap" id="homeBody"></div>
+    </div>
+  </div>
 </div>
 <div id="repScreen" style="display:none">
   <div class="home-hdr"><div class="logo-pill"><img id="repLogo" alt="Comfort Hands" style="height:38px;width:auto"></div><h1 id="repTitle">Report</h1>
@@ -2203,8 +2237,29 @@ function dueBadge(days){
   if(days<=10) return '<span class="pill warn">Due in '+days+' d</span>';
   return '<span class="pill ok">'+days+' d</span>';
 }
+function navGo(k){ ONB=null; HOME_Q=''; if(k==='overview'){ HOME_TAB='patients'; HOME_FILTER=''; drawHome(); } else if(k==='aides'){ HOME_TAB='aides'; HOME_FILTER=''; drawHome(); } else { HOME_FILTER=''; setHomeFilter(k); } window.scrollTo(0,0); }
+function attentionItems(h){
+  const it=[], plural=n=>n+' day'+(n===1?'':'s');
+  (h.patients||[]).forEach(p=>{ if(p.status==='discharged'||p.purged) return;
+    if(p.daysToNote!==null&&p.daysToNote<0) it.push({sev:2,d:p.daysToNote,who:p.name,txt:'60-day note overdue',sub:'Overdue '+plural(-p.daysToNote),k:'noteOver'});
+    else if(p.status==='active'&&p.daysToNote!==null&&p.daysToNote<=10) it.push({sev:1,d:p.daysToNote,who:p.name,txt:'60-day note due soon',sub:'Due in '+plural(p.daysToNote),k:'noteSoon'});
+    const pc=p.pca; if(pc&&pc.daysToPca!==null&&pc.daysToPca<=45&&pc.pcaStatus!=='renewal sent') it.push({sev:pc.daysToPca<0?2:1,d:pc.daysToPca,who:p.name,txt:pc.daysToPca<0?'PCA authorization has ended':'PCA ends in '+plural(pc.daysToPca),sub:'Renewal request not sent',k:'pcaDue'}); });
+  (h.aides||[]).forEach(a=>{ ((a.trk&&a.trk.items)||[]).forEach(i=>{ if(i.status==='over') it.push({sev:2,d:i.days,who:a.name,txt:i.label+' overdue',sub:'Due '+usDate(i.due),k:'trkOver'}); else if(i.status==='soon') it.push({sev:1,d:i.days,who:a.name,txt:i.label+' due in '+plural(i.days),sub:'Due '+usDate(i.due),k:'trkSoon'}); });
+    if(a.daysToEval!==null&&a.daysToEval<0) it.push({sev:2,d:a.daysToEval,who:a.name,txt:'evaluation overdue',sub:'Overdue '+plural(-a.daysToEval),k:'evalOver'}); });
+  it.sort((x,y)=>y.sev-x.sev||x.d-y.d); return it;
+}
 function drawHome(){
-  const h=HOME, c=h.counts, box=document.getElementById('homeBody');
+  const h=HOME, c=h.counts, box=document.getElementById('homeBody'), isA=isAdminNow();
+  /* sidebar */
+  const navItems=[['overview','▦','Overview',0,'',HOME_TAB==='patients'&&!HOME_FILTER],['aides','♥','Aides',0,'',HOME_TAB==='aides'&&!HOME_FILTER],['pcaDue','✎','PCA authorizations',c.pcaDue||0,'',HOME_FILTER==='pcaDue'],['trkOver','✔','Compliance',(c.trkOver||0)+(c.trkSoon||0),(c.trkOver?'r':''),/^trk/.test(HOME_FILTER)],['sheets','▤','Activity sheets',c.sheets||0,'',HOME_TAB==='sheets'],['drafts','✉','Drafts',c.drafts||0,'',HOME_TAB==='drafts']];
+  if(isA) navItems.push(['onb','＋','New hires',c.onboarding||0,'',HOME_TAB==='admin']);
+  const sn=document.getElementById('sideNav'); if(sn) sn.innerHTML=navItems.map(n=>'<a class="'+(n[5]?'on':'')+'" onclick="navGo(\''+n[0]+'\')"><i>'+n[1]+'</i>'+n[2]+(n[3]?'<span class="b '+n[4]+'">'+n[3]+'</span>':'')+'</a>').join('');
+  /* top bar */
+  const ti=document.getElementById('homeTop'), nm=String(AUTH.name||''), ini=(nm.trim()[0]||'?').toUpperCase(), td=h.today?new Date(h.today+'T12:00:00'):new Date();
+  if(ti) ti.innerHTML='<div><h1>Overview</h1><p>'+td.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' · here is what needs attention</p></div>'+
+    '<div class="topact"><button onclick="renderHome()">↻</button><button onclick="signOut()">Log out</button></div>'+
+    '<div class="srch"><input type="text" id="homeQ" placeholder="Search patients or aides" value="'+escAct(HOME_Q)+'" oninput="HOME_Q=this.value;drawList()"></div>'+
+    '<div class="who"><div class="av">'+escAct(ini)+'</div>'+escAct(nm)+' · '+escAct((AUTH.roles||[]).map(r=>r[0].toUpperCase()+r.slice(1)).join(' / '))+'</div>';
   const tile=(key,n,label,cls)=>'<button class="tile '+(n?cls:'zero')+(HOME_FILTER===key?' on':'')+'" onclick="setHomeFilter(\''+key+'\')"><div class="n">'+n+'</div><div class="t">'+label+'</div></button>';
   let t='<div class="tiles">'+
     tile('adm',c.admissions,'Admissions in progress','warn')+
@@ -2215,11 +2270,17 @@ function drawHome(){
     tile('trkSoon',c.trkSoon||0,'Aide compliance due in 60 days','warn')+
     tile('evalOver',c.evalsOver,'Aide evaluations overdue','bad')+
     tile('evalSoon',c.evalsSoon,'Aide evaluations due in 10 days','warn')+
-    tile('sheets',c.sheets,'Activity sheets not submitted this week','warn')+tile('drafts',c.drafts||0,'Drafts in progress','warn')+(isAdminNow()?tile('onb',c.onboarding||0,'New hires onboarding','warn'):'')+'</div>';
-  t+='<div class="htabs"><button class="htab '+(HOME_TAB==='patients'?'on':'')+'" onclick="setHomeTab(\'patients\')">Patients</button><button class="htab '+(HOME_TAB==='aides'?'on':'')+'" onclick="setHomeTab(\'aides\')">Aides</button>'+(isAdminNow()?'<button class="htab '+(HOME_TAB==='admin'?'on':'')+'" onclick="setHomeTab(\'admin\')">Admin tasks</button>':'')+
-    '<input type="text" id="homeQ" placeholder="Search name…" value="'+escAct(HOME_Q)+'" oninput="HOME_Q=this.value;drawList()" style="padding:8px 11px;border:1.5px solid var(--border);border-radius:9px;font-family:inherit;min-width:170px">'+
+    tile('sheets',c.sheets,'Activity sheets not submitted this week','warn')+tile('drafts',c.drafts||0,'Drafts in progress','warn')+(isA?tile('onb',c.onboarding||0,'New hires onboarding','warn'):'')+'</div>';
+  /* right-hand cards */
+  const at=attentionItems(h), wk=h.week||{sent:0,failed:0,live:false};
+  const attHtml='<div class="dcard"><h2>Needs attention</h2>'+(at.length?at.slice(0,6).map(a=>'<div class="att" onclick="HOME_FILTER=\'\';setHomeFilter(\''+a.k+'\')"><div class="dot" style="background:'+(a.sev===2?'var(--danger)':'#b7791f')+'"></div><div><b>'+escAct(a.who)+'</b> '+escAct(a.txt)+'<small>'+escAct(a.sub)+'</small></div></div>').join('')+(at.length>6?'<p class="tmuted" style="margin-top:8px">+ '+(at.length-6)+' more. Use the cards above to see them all.</p>':''):'<p class="tmuted">Nothing is overdue or due soon.</p>')+'</div>';
+  const weekHtml='<div class="dcard"><h2>This week</h2>'+
+    '<div class="att" onclick="navGo(\'sheets\')"><div class="dot" style="background:'+(c.sheets?'#b7791f':'#15803d')+'"></div><div>Activity sheets not submitted<small>'+(c.sheets?c.sheets+' still to come in':'All submitted')+'</small></div></div>'+
+    '<div class="att" style="cursor:default"><div class="dot" style="background:'+(wk.failed?'var(--danger)':(wk.live?'#15803d':'#9a9a9a'))+'"></div><div>Text messages (last 7 days)<small>'+(wk.live?wk.sent+' sent · '+wk.failed+' failed':(wk.sent?wk.sent+' recorded, not sent (texting is not switched on)':'Texting is not switched on yet'))+'</small></div></div></div>';
+  t+='<div class="dash"><div class="dash-main"><div class="htabs"><button class="htab '+(HOME_TAB==='patients'?'on':'')+'" onclick="setHomeTab(\'patients\')">Patients</button><button class="htab '+(HOME_TAB==='aides'?'on':'')+'" onclick="setHomeTab(\'aides\')">Aides</button>'+(isA?'<button class="htab '+(HOME_TAB==='admin'?'on':'')+'" onclick="setHomeTab(\'admin\')">Admin tasks</button>':'')+
     (HOME_FILTER?'<button class="mini" onclick="setHomeFilter(\'\')">Clear filter ✕</button>':'')+
-    (HOME_TAB==='patients'?'<span style="flex:1"></span><button class="btn btn-nurse" style="padding:8px 16px" onclick="newPatient()">＋ New patient admission</button>':'')+'</div><div id="homeList"></div>';
+    (HOME_TAB==='patients'?'<span style="flex:1"></span><button class="btn btn-nurse" style="padding:8px 16px" onclick="newPatient()">＋ New patient admission</button>':'')+'</div><div id="homeList"></div></div>'+
+    '<div class="dash-side">'+attHtml+weekHtml+'</div></div>';
   box.innerHTML=t; drawList();
 }
 function setHomeFilter(k){ HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(/^(eval|trk)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
