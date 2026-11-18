@@ -402,7 +402,7 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
  #homeScreen .side-logo,#homeScreen .side-foot{display:none}#homeScreen .nav{display:flex;overflow-x:auto;width:100%;gap:2px}
  #homeScreen .nav a{flex-direction:column;gap:2px;padding:6px 10px;font-size:10px;min-width:64px;text-align:center;margin:0;position:relative}#homeScreen .nav .b{position:absolute;top:1px;right:6px;margin:0}
  #homeScreen .app-main{padding:14px 14px 90px}.app-top h1{font-size:20px}.app-top .srch{margin-left:0;width:100%}.app-top .srch input{width:100%}.app-top .who{display:none}
- .app-top .topact{display:flex;gap:6px;margin-left:auto}.app-top .topact button{border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 10px;font-size:12px;font-family:inherit}
+ .app-top .topact{display:flex;gap:6px;margin-left:auto}.app-top .topact .adm{background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700}.app-top .topact button{border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 10px;font-size:12px;font-family:inherit}
 }
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:12px;margin-bottom:20px}
 .tile{--c:#b7791f;--cl:#fdf3dc;position:relative;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 14px 12px 18px;text-align:left;cursor:pointer;font-family:inherit;box-shadow:0 1px 2px rgba(52,24,45,.05)}
@@ -432,7 +432,7 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
 #repScreen .rate label{justify-content:flex-start;text-align:left}
 #repScreen .chk-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px}
 #homeScreen .htabs input[type=text]{width:auto!important;flex:0 1 230px}
-@media(max-width:700px){.htbl th:nth-child(n+4),.htbl td:nth-child(n+4){display:none}}
+@media(max-width:700px){.htbl th:nth-child(n+3):not(:last-child),.htbl td:nth-child(n+3):not(:last-child){display:none}.htbl thead{display:none}.htbl,.htbl tbody{display:block}.htbl tr{display:block;padding:11px 12px;border-top:1px solid var(--border)}.htbl tr:first-child{border-top:0}.htbl td{display:block;border:0;padding:2px 0}.htbl td:last-child{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.htbl td:last-child .btn,.htbl td:last-child button{flex:1 1 28%;margin:0;padding:6px 8px;font-size:12px;white-space:nowrap}}
 
 /* ── NEW LAYOUT FOR THE ADMISSION / ASSESSMENT SCREENS ── */
 #portalWrap{background:var(--cream);min-height:100vh;padding-left:212px}
@@ -2322,7 +2322,7 @@ function drawHome(){
   /* top bar */
   const ti=document.getElementById('homeTop'), nm=String(AUTH.name||''), ini=(nm.trim()[0]||'?').toUpperCase(), td=h.today?new Date(h.today+'T12:00:00'):new Date();
   if(ti) ti.innerHTML='<div><h1>Overview</h1><p>'+td.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' · here is what needs attention</p></div>'+
-    '<div class="topact"><button onclick="renderHome()">↻</button><button onclick="signOut()">Log out</button></div>'+
+    '<div class="topact"><button class="adm" onclick="closeHome()">✎ Admissions</button><button onclick="renderHome()">↻</button><button onclick="signOut()">Log out</button></div>'+
     '<div class="srch"><input type="text" id="homeQ" placeholder="Search patients or aides" value="'+escAct(HOME_Q)+'" oninput="HOME_Q=this.value;drawList()"></div>'+
     '<div class="who"><div class="av">'+escAct(ini)+'</div>'+escAct(nm)+' · '+escAct((AUTH.roles||[]).map(r=>r[0].toUpperCase()+r.slice(1)).join(' / '))+'</div>';
   const TILE_IC={adm:'✎',noteOver:'▤',noteSoon:'▤',pcaDue:'✔',trkOver:'♥',trkSoon:'♥',evalOver:'☆',evalSoon:'☆',sheets:'✉',drafts:'✎',onb:'＋'};
