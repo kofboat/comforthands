@@ -14,6 +14,7 @@ const CONFIG = {
   SHARED_SECRET: 'CHANGE-ME-TO-A-LONG-RANDOM-STRING',
   PASSWORD_SALT: 'CHANGE-ME-TO-ANOTHER-RANDOM-STRING',
   SESSION_HOURS: 12,
+  TIMEZONE: 'America/New_York',   // the time zone the agency works in. Texts and due dates refuse to run if the Apps Script project is set to anything else
   // Staff who may sign in. hash = output of makeHash() below. roles: 'admin', 'nurse', 'patient' (nurse's phone needs 'patient' to collect signatures), 'aide' (employee portal: weekly activity sheets only).
   USERS: [
     // { email: 'you@comforthands.net', name: 'Your Name', hash: 'PASTE_HASH', roles: ['admin','nurse','patient'] },
@@ -1116,6 +1117,14 @@ function occurrences_(shifts, dateIso) {
   });
   return out;
 }
+// Reminders depend on the script's time zone. If it is not the agency's, send nothing and tell the office (once a day).
+function tzOk_() {
+  const want = CONFIG.TIMEZONE || 'America/New_York', have = Session.getScriptTimeZone();
+  if (have === want) return true;
+  const pr = PropertiesService.getScriptProperties(), day = iso_(new Date());
+  if (pr.getProperty('tzWarnDay') !== day) { pr.setProperty('tzWarnDay', day); try { MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Comfort Hands: text reminders are paused (time zone)', body: 'The Apps Script project time zone is ' + have + ' but ' + want + ' is required, so no reminder texts were sent. Open the script, Project Settings, and set the Time zone to ' + want + '.' }); } catch (e) {} }
+  return false;
+}
 function smsCfg_() { return CONFIG.SMS || {}; }
 function smsLive_() { const c = smsCfg_(); return !!(c.ENABLED && c.TWILIO_SID && c.TWILIO_TOKEN && c.FROM); }
 function e164_(p) { p = String(p || '').replace(/[^\d+]/g, ''); if (/^\+\d{8,15}$/.test(p)) return p; const d = p.replace(/\D/g, ''); if (d.length === 10) return '+1' + d; if (d.length === 11 && d.charAt(0) === '1') return '+' + d; return ''; }
@@ -1147,6 +1156,7 @@ function clockLink_() { const u = smsCfg_().CLOCK_URL; return u ? ' ' + u : ''; 
 function smsTail_() { return ' Reply STOP to opt out.'; }
 // Shift reminders. Run every 5 minutes by installTextReminders(). Each reminder is sent once; a missed run is caught up within 20 minutes.
 function shiftReminders() {
+  if (!tzOk_()) return 0;
   const now = now_(), sched = schedRows_(), lead = Number(smsCfg_().LEAD_MIN) || 15, WIN = 20 * 60000, idx = smsIndex_(), trk = trkMap_();
   const today = iso_(now), yest = addDays_(today, -1);
   schedCheck_(sched);
@@ -1174,6 +1184,7 @@ function shiftPreview() {
 }
 // Compliance texts to aides: at 60 days, at 30 days, on the due date, then weekly until it is recorded. Run daily at 9 am.
 function complianceTexts() {
+  if (!tzOk_()) return 0;
   const hr = now_().getHours(); if (hr < 6 || hr >= 21) return 0;
   const users = usersAll_(), idx = smsIndex_(), trk = trkMap_(), office = (CONFIG.AGENCY && CONFIG.AGENCY.phone) || 'the office'; let n = 0;
   Object.keys(users).forEach(function (email) {
@@ -1233,7 +1244,7 @@ function upgrade() {
   Logger.log(others.length ? 'These people still have direct access to the Sheet. Anyone who can edit it can create an admin login, so remove anyone who does not need it (open the Sheet, Share): ' + others.join(', ')
                            : 'Nobody else has direct access to the Sheet.');
   if (/^CHANGE-ME/.test(CONFIG.SHARED_SECRET) || /^CHANGE-ME/.test(CONFIG.PASSWORD_SALT)) Logger.log('WARNING: SHARED_SECRET / PASSWORD_SALT still have placeholder values. The portal will refuse to work until you set them.');
-  Logger.log('Time zone: ' + tz + '. Upgrade finished.');
+  Logger.log('Time zone: ' + tz + (tz === (CONFIG.TIMEZONE || 'America/New_York') ? '' : ' (WARNING: should be ' + (CONFIG.TIMEZONE || 'America/New_York') + '. Set it in Project Settings or text reminders stay paused.)') + '. Upgrade finished.');
 }
 
 // ── Text of the forms the new hire signs. Kept here (not in the web page) so the signed PDF always carries the agency's own wording. ──
