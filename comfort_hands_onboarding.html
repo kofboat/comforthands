@@ -2796,6 +2796,10 @@ async function openPca(id,last,hist,agy){
    row('mdPromise','Physician PROMISe ID (HealthPartners)','')+row('notes','Notes / reason for change','')+'</div>'+
    '<div class="fg" style="margin-top:6px"><label class="rbtn"><input type="checkbox" id="pca_lapse"> 30-day lapse in service</label><label class="rbtn"><input type="checkbox" id="pca_assisted"> Assisted living</label><label class="rbtn"><input type="checkbox" id="pca_ped"> Pediatric</label><label class="rbtn"><input type="checkbox" id="pca_grp" onchange="document.getElementById(\'pcaGrp\').style.display=this.checked?\'\':\'none\'"> Group case</label></div>'+
    '<div class="fg" id="pcaGrp" style="display:none">'+row('gname','Other member name','')+row('gid','Other member ID','')+row('gdob','Other member DOB','','date')+'</div>'+
+   '<h4 style="margin:14px 0 4px">Member details <span class="tmuted" style="font-weight:400">(from the patient record — fill in anything blank; it goes on the form)</span></h4><div class="fg">'+
+   row('mem_id','Member ID (insurance / Medicaid #)',f.insNum||f.medicaidNum||'')+row('mem_phone','Member phone',f.cell||'')+row('mem_addr','Street address',f.address||'')+row('mem_city','City',f.city||'')+row('mem_state','State',f.state||'NJ')+row('mem_zip','ZIP',f.zip||'')+row('mem_county','County',f.county||'')+row('mem_dx1','Diagnosis 1',f.dx1||'')+row('mem_dx2','Diagnosis 2',f.dx2||'')+'</div>'+
+   '<h4 style="margin:14px 0 4px">Physician <span class="tmuted" style="font-weight:400">(used by Horizon, Wellpoint and HealthPartners)</span></h4><div class="fg">'+
+   row('md_name','Physician name',f.mdName||'')+row('md_npi','Physician NPI',f.npi||'')+row('md_phone','Physician phone',f.mdPhone||'')+row('md_fax','Physician fax',f.mdFax||'')+row('md_addr','Physician address',f.mdAddress||'')+'</div>'+
    '<h4 style="margin:14px 0 4px">Agency details <span class="tmuted" style="font-weight:400">(saved in this browser)</span></h4><div class="fg">'+
    row('ag_name','Agency name',agy.name||ag.name||'Comfort Hands Home Healthcare LLC')+row('ag_addr','Street',agy.addr||ag.addr||'505 Hamilton Ave Ste 200')+row('ag_city','City',agy.city||ag.city||'Linwood')+row('ag_state','State',agy.state||ag.state||'NJ')+row('ag_zip','ZIP',agy.zip||ag.zip||'08221')+
    row('ag_phone','Phone',agy.phone||ag.phone||'609-277-3032')+row('ag_fax','Fax',agy.fax||ag.fax||'609-479-5931')+ags('contact','Contact person')+'</div><p class="tmuted" style="margin:6px 0 0">'+(agy.npi?'NPI, TIN and each insurer\'s provider ID are filled in automatically.':'The agency NPI, TIN and provider IDs are not set up yet (add them in the script settings).')+'</p>'+
@@ -2821,14 +2825,14 @@ async function makePca(fax){
   const ag={}; ['name','addr','city','state','zip','phone','fax','contact'].forEach(k=>ag[k]=g('ag_'+k));
   try{ localStorage.setItem(PCA_AG_KEY,JSON.stringify(ag)); }catch(e){}
   const AY=PCA.agy||{}; ag.npi=AY.npi||''; ag.tin=AY.tin||''; ag.promise=AY.promise||''; ag.providerId=(AY.providerIds||{})[mco]||'';
-  const mdA=f.mdAddress||'';
-  const d={today:g('today'),type:g('type'),first:f.firstName,last:f.lastName,dob:f.dob,memberId:(mco==='uhc'||mco==='aetna'||mco==='hnjh'||mco==='wellpoint'||mco==='hpp')?(f.insNum||f.medicaidNum||''):'',
-    addr:f.address,city:f.city,state:f.state,zip:f.zip,county:f.county,phone:f.cell,altPhone:g('altPhone'),email:f.ptEmail,lang:f.language,caregiver:g('caregiver'),
+  const mdA=g('md_addr');
+  const d={today:g('today'),type:g('type'),first:f.firstName,last:f.lastName,dob:f.dob,memberId:g('mem_id'),
+    addr:g('mem_addr'),city:g('mem_city'),state:g('mem_state'),zip:g('mem_zip'),county:g('mem_county'),phone:g('mem_phone'),altPhone:g('altPhone'),email:f.ptEmail,lang:f.language,caregiver:g('caregiver'),
     hoursDay:g('hoursDay'),daysWeek:g('daysWeek'),hoursWeek:g('hoursWeek'),authFrom:g('authFrom'),authTo:g('authTo'),authExpires:g('authExpires'),curHours:g('curHours'),socDate:g('socDate'),priorMco:g('priorMco'),
     lapse:c('lapse'),assisted:c('assisted'),ageGroup:c('ped')?'pediatric':'adult',notes:g('notes'),
     group:c('grp')?{yes:true,name:g('gname'),id:g('gid'),dob:g('gdob')}:null,
-    dx:[{t:f.dx1,icd:g('icd1')},{t:f.dx2,icd:g('icd2')}],
-    mdName:f.mdName,mdNpi:f.npi,mdPhone:f.mdPhone,mdFax:f.mdFax,mdAddr:mdA,mdPromise:g('mdPromise'),ag:ag};
+    dx:[{t:g('mem_dx1'),icd:g('icd1')},{t:g('mem_dx2'),icd:g('icd2')}],
+    mdName:g('md_name'),mdNpi:g('md_npi'),mdPhone:g('md_phone'),mdFax:g('md_fax'),mdAddr:mdA,mdPromise:g('mdPromise'),ag:ag};
   if(!d.hoursDay&&!d.daysWeek&&!d.hoursWeek){ msg.textContent='Enter the hours per day and days per week (or hours per week).'; return; }
   msg.textContent='Preparing the form…';
   try{
