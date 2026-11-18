@@ -1926,7 +1926,7 @@ function buildHtml_(d) {
     'h2{font-size:14px;margin:0 0 6px;padding:5px 7px;background:#34182d;color:#fff}' +
     'h3,.sh{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d;font-weight:bold}' +
     '.tag{font-size:9px;color:#555;text-transform:uppercase;margin-bottom:2px}' +
-    '.brk{page-break-before:always}' +
+    '.brk{page-break-before:always}tr,.rights-box,.act-card,.chk-item,.sig{page-break-inside:avoid}h2,h3,.sh{page-break-after:avoid}' +
     'table{width:100%;border-collapse:collapse}' +
     'table.gt td{vertical-align:top;padding:2px 6px 4px 0}' +
     'table.atable td,table.atable th,table.mtable td,table.mtable th{border:1px solid #bbb;padding:3px 4px;vertical-align:top;font-size:9.5px}' +
@@ -1948,8 +1948,9 @@ function buildHtml_(d) {
   const forms = d.forms || [];
   if (forms.length) {
     forms.forEach(function (f, i) {
+      // every section starts on its own page; a section is never begun part-way down a page another section is using
       const newRole = i > 0 && f.tag !== forms[i - 1].tag;
-      body += '<div class="' + (newRole ? 'brk' : '') + '">' + (i === 0 || newRole ? '<div class="tag">' + esc_(f.tag) + '</div>' : '') + safeHtml_(f.html) + '</div>';
+      body += '<div class="' + (i > 0 ? 'brk' : '') + '">' + (i === 0 || newRole ? '<div class="tag">' + esc_(f.tag) + '</div>' : '') + safeHtml_(f.html) + '</div>';
     });
   } else {
     // Fallback (older portal): simple label/value tables.
