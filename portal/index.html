@@ -404,12 +404,16 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
  #homeScreen .app-main{padding:14px 14px 90px}.app-top h1{font-size:20px}.app-top .srch{margin-left:0;width:100%}.app-top .srch input{width:100%}.app-top .who{display:none}
  .app-top .topact{display:flex;gap:6px;margin-left:auto}.app-top .topact button{border:1px solid var(--border);background:#fff;border-radius:9px;padding:5px 10px;font-size:12px;font-family:inherit}
 }
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
-.tile{background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:13px 14px;text-align:left;cursor:pointer;font-family:inherit;box-shadow:var(--shadow)}
-.tile:hover,.tile.on{border-color:var(--teal)}
-.tile .n{font-size:28px;font-weight:700;line-height:1.1;color:var(--charcoal)}
-.tile .t{font-size:12px;color:var(--muted);margin-top:3px}
-.tile.bad .n{color:var(--danger)}.tile.warn .n{color:#b7791f}.tile.zero .n{color:#9a9a9a}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:12px;margin-bottom:20px}
+.tile{--c:#b7791f;--cl:#fdf3dc;position:relative;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 14px 12px 18px;text-align:left;cursor:pointer;font-family:inherit;box-shadow:0 1px 2px rgba(52,24,45,.05)}
+.tile:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}
+.tile.bad{--c:var(--danger);--cl:#fdeceb}.tile.zero{--c:#15803d;--cl:#e7f6ec}
+.tile:hover,.tile.on{border-color:var(--c);box-shadow:0 2px 8px rgba(52,24,45,.12)}
+.tile .ic{position:absolute;right:12px;top:12px;width:28px;height:28px;border-radius:8px;background:var(--cl);color:var(--c);display:flex;align-items:center;justify-content:center;font-size:14px}
+.tile .n{font-size:30px;font-weight:700;line-height:1;color:var(--charcoal);margin-bottom:6px}
+.tile .t{font-size:11.5px;color:var(--muted);line-height:1.3}
+.tile .go{margin-top:8px;font-size:11px;color:var(--teal);font-weight:700}
+@media(max-width:800px){.tiles{grid-template-columns:1fr 1fr;gap:10px}.tile{padding:12px 10px 10px 14px}.tile .n{font-size:26px}.tile .go{display:none}.tile .ic{right:8px;top:8px;width:24px;height:24px;font-size:12px}}
 .htabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
 .htab{padding:8px 16px;border-radius:9px;border:1.5px solid var(--border);background:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
 .htab.on{background:var(--teal);color:#fff;border-color:var(--teal)}
@@ -2265,7 +2269,8 @@ function drawHome(){
     '<div class="topact"><button onclick="renderHome()">↻</button><button onclick="signOut()">Log out</button></div>'+
     '<div class="srch"><input type="text" id="homeQ" placeholder="Search patients or aides" value="'+escAct(HOME_Q)+'" oninput="HOME_Q=this.value;drawList()"></div>'+
     '<div class="who"><div class="av">'+escAct(ini)+'</div>'+escAct(nm)+' · '+escAct((AUTH.roles||[]).map(r=>r[0].toUpperCase()+r.slice(1)).join(' / '))+'</div>';
-  const tile=(key,n,label,cls)=>'<button class="tile '+(n?cls:'zero')+(HOME_FILTER===key?' on':'')+'" onclick="setHomeFilter(\''+key+'\')"><div class="n">'+n+'</div><div class="t">'+label+'</div></button>';
+  const TILE_IC={adm:'✎',noteOver:'▤',noteSoon:'▤',pcaDue:'✔',trkOver:'♥',trkSoon:'♥',evalOver:'☆',evalSoon:'☆',sheets:'✉',drafts:'✎',onb:'＋'};
+  const tile=(key,n,label,cls)=>'<button class="tile '+(n?cls:'zero')+(HOME_FILTER===key?' on':'')+'" onclick="setHomeFilter(\''+key+'\')"><div class="ic">'+(TILE_IC[key]||'•')+'</div><div class="n">'+n+'</div><div class="t">'+label+'</div><div class="go">View →</div></button>';
   let t='<div class="tiles">'+
     tile('adm',c.admissions,'Admissions in progress','warn')+
     tile('noteOver',c.notesOver,'60-day notes overdue','bad')+
