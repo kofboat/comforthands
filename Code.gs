@@ -478,8 +478,8 @@ function packet_(d) {
 // RECORDS: patient list, 60-day progress notes, discharge, aide evaluations
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
-const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30 };
-const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45 };
+const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
@@ -499,6 +499,19 @@ function ptSheet_() { return tab_('Patients', PT_COLS_); }
 function repSheet_() { return tab_('Reports', ['id', 'kind', 'patientId', 'aideEmail', 'title', 'date', 'pdfUrl', 'by', 'createdAt', 'data']); }
 function draftSheet_() { return tab_('Drafts', ['id', 'kind', 'patientId', 'aideEmail', 'data', 'updatedAt', 'updatedBy']); }
 function draftId_(d) { return String(d.kind) + '|' + (d.kind === 'chha' ? String(d.aideEmail || '').toLowerCase() : keyOf_(d.patientId)); }
+// PCA authorizations: one row per request sent to an insurer. The insurer's answer (approval date, authorization number, units, dates, ICD-10) is recorded on the same row.
+const PCA_COLS_ = ['id', 'patientId', 'insurer', 'type', 'sentAt', 'hoursDay', 'daysWeek', 'hoursWeek', 'reqFrom', 'reqTo', 'status', 'approvedAt', 'authNo', 'units', 'authFrom', 'authTo', 'icd10', 'note', 'updatedAt', 'by'];
+function pcaTab_() { return tab_('PcaAuth', PCA_COLS_); }
+function pcaObj_(r) { const o = {}; PCA_COLS_.forEach(function (c, i) { o[c] = (/At$|From$|To$/.test(c) && c !== 'updatedAt') ? iso_(r[i]) : String(r[i] == null ? '' : r[i]); }); return o; }
+function pcaRows_(pid) { const v = pcaTab_().getDataRange().getValues(), res = []; for (let i = 1; i < v.length; i++) if (v[i][0] && (!pid || keyOf_(v[i][1]) === keyOf_(pid))) res.push(pcaObj_(v[i])); return res; }
+// What the office needs to see for one patient: the current approval, any request still waiting for an answer, and days to the end date.
+function pcaState_(rows) {
+  const appr = rows.filter(function (r) { return r.status === 'approved' && r.authTo; }).sort(function (a, b) { return a.authTo < b.authTo ? 1 : -1; })[0];
+  const pend = rows.filter(function (r) { return r.status === 'requested'; }).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; })[0];
+  const days = appr ? daysUntil_(appr.authTo) : null;
+  const st = !rows.length ? 'none' : (pend ? (appr ? 'renewal sent' : 'awaiting insurer') : (appr ? 'approved' : 'denied'));
+  return { pcaStatus: st, pcaInsurer: (appr || pend || {}).insurer || '', pcaEnd: appr ? appr.authTo : '', daysToPca: days, pcaAuthNo: appr ? appr.authNo : '', pcaSent: pend ? pend.sentAt : '' };
+}
 function aideTab_() { return tab_('AideRecords', ['email', 'firstCase', 'lastEvalAt', 'lastEvalType', 'updatedAt']); }
 function iso_(v) { if (!v) return ''; if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd'); return String(v).slice(0, 10); }
 function dparse_(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null; }
@@ -556,12 +569,12 @@ function ptFolder_(pid, fallbackName) {
   return folder;
 }
 
-function ptSummary_(x, aidesByKey) {
+function ptSummary_(x, aidesByKey, pcaBy) {
   const status = String(x[P_.STATUS] || 'admission');
   const anchor = iso_(x[P_.LASTNOTE]) || iso_(x[P_.START]) || iso_(x[P_.SUBMITTED]) || iso_(x[P_.CREATED]);
   const due = status === 'active' ? addDays_(anchor, REC_.PN_DAYS) : '';
   return { id: x[P_.ID], name: x[P_.NAME], dob: iso_(x[P_.DOB]), start: iso_(x[P_.START]), status: status, lastNote: iso_(x[P_.LASTNOTE]), dischargedAt: iso_(x[P_.DISCHARGED]), submittedAt: iso_(x[P_.SUBMITTED]),
-           updatedAt: String(x[P_.UPDATED] || ''), updatedBy: x[P_.BY] || '', ver: Number(x[P_.VER] || 0), purged: isTrue_(x[P_.PURGED]), nextNoteDue: due, daysToNote: due ? daysUntil_(due) : null, aides: (aidesByKey || {})[x[P_.ID]] || [] };
+           updatedAt: String(x[P_.UPDATED] || ''), updatedBy: x[P_.BY] || '', ver: Number(x[P_.VER] || 0), purged: isTrue_(x[P_.PURGED]), nextNoteDue: due, daysToNote: due ? daysUntil_(due) : null, aides: (aidesByKey || {})[x[P_.ID]] || [], pca: pcaState_((pcaBy || {})[keyOf_(x[P_.ID])] || []) };
 }
 
 function usersAll_() {
@@ -630,8 +643,9 @@ function pendingSheets_(L) {
 function home_() {
   const L = load_(), pv = ptSheet_().getDataRange().getValues(), aidesByKey = {};
   for (let i = 1; i < L.plans.length; i++) aidesByKey[L.plans[i][0]] = emails_(L.plans[i][4]);
-  const patients = [];
-  for (let i = 1; i < pv.length; i++) if (pv[i][0]) patients.push(ptSummary_(pv[i], aidesByKey));
+  const patients = [], pcaBy = {};
+  pcaRows_('').forEach(function (r) { const k = keyOf_(r.patientId); (pcaBy[k] = pcaBy[k] || []).push(r); });
+  for (let i = 1; i < pv.length; i++) if (pv[i][0]) patients.push(ptSummary_(pv[i], aidesByKey, pcaBy));
   const users = usersAll_(), aides = Object.keys(users).filter(function (e) { return users[e].roles.indexOf('aide') >= 0; }).map(function (e) { return aideSummary_(users[e], L); });
   const sheets = pendingSheets_(L);
   const names = {}; patients.forEach(function (p) { names[p.id] = p.name; });
@@ -646,6 +660,7 @@ function home_() {
     admissions: patients.filter(function (p) { return p.status === 'admission'; }).length,
     notesSoon: patients.filter(function (p) { return soon(p.daysToNote); }).length,
     notesOver: patients.filter(function (p) { return over(p.daysToNote); }).length,
+    pcaDue: patients.filter(function (p) { return p.status !== 'discharged' && !p.purged && p.pca.daysToPca !== null && p.pca.daysToPca <= REC_.PCA_WARN_DAYS && p.pca.pcaStatus !== 'renewal sent'; }).length,
     evalsSoon: aides.filter(function (a) { return soon(a.daysToEval); }).length,
     evalsOver: aides.filter(function (a) { return over(a.daysToEval); }).length,
     sheets: sheets.items.length,
@@ -668,6 +683,35 @@ function records_(act, d, u) {
     const r = ptRow_(psh, keyOf_(d.id)); if (!r) return out_({ ok: false, error: 'not found' });
     const x = ptGetRow_(psh, r), b = ptBlob_(x);
     return out_({ ok: true, patient: ptSummary_(x, {}), shared: b.shared, form: b.form });
+  }
+  if (act === 'pcaList') {
+    const r = ptRow_(psh, keyOf_(d.id)); if (!r) return out_({ ok: false, error: 'not found' });
+    const rows = pcaRows_(d.id).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; });
+    return out_({ ok: true, rows: rows, state: pcaState_(rows) });
+  }
+  if (act === 'pcaSave') {
+    const pid = keyOf_(d.patientId); if (!pid || !ptRow_(psh, pid)) return out_({ ok: false, error: 'not found' });
+    const dayOk = function (v) { return !v || validDay_(v); };
+    if (!['requested', 'approved', 'denied'].includes(d.status)) return out_({ ok: false, error: 'bad status' });
+    if (![d.sentAt, d.reqFrom, d.reqTo, d.approvedAt, d.authFrom, d.authTo].every(dayOk)) return out_({ ok: false, error: 'bad date' });
+    if (d.status === 'approved' && !(d.authNo && d.authFrom && d.authTo)) return out_({ ok: false, error: 'An approval needs the authorization number, start date and end date.' });
+    if (d.authFrom && d.authTo && d.authTo < d.authFrom) return out_({ ok: false, error: 'The end date is before the start date.' });
+    const num = function (v) { const n = parseFloat(v); return isFinite(n) && n >= 0 ? String(n) : ''; };
+    return withLock_(function () {
+      const sh = pcaTab_(), v = sh.getDataRange().getValues(); let r = 0;
+      if (d.id) for (let i = 1; i < v.length; i++) if (String(v[i][0]) === String(d.id) && keyOf_(v[i][1]) === pid) { r = i + 1; break; }
+      if (d.id && !r) return out_({ ok: false, error: 'not found' });
+      const x = r ? v[r - 1].slice() : PCA_COLS_.map(function () { return ''; }); if (!r) x[0] = 'a' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+      const set = function (c, val) { x[PCA_COLS_.indexOf(c)] = val; };
+      set('patientId', pid); set('insurer', txt_(String(d.insurer || '').slice(0, 40))); set('type', txt_(String(d.type || '').slice(0, 20))); set('sentAt', d.sentAt || x[4] || today_());
+      ['hoursDay', 'daysWeek', 'hoursWeek'].forEach(function (c) { if (d[c] !== undefined) set(c, num(d[c])); });
+      set('reqFrom', d.reqFrom || ''); set('reqTo', d.reqTo || ''); set('status', d.status); set('approvedAt', d.approvedAt || '');
+      set('authNo', txt_(String(d.authNo || '').slice(0, 40))); set('units', num(d.units)); set('authFrom', d.authFrom || ''); set('authTo', d.authTo || '');
+      set('icd10', txt_(String(d.icd10 || '').slice(0, 80))); set('note', txt_(String(d.note || '').slice(0, 300))); set('updatedAt', new Date().toISOString()); set('by', who);
+      if (r) sh.getRange(r, 1, 1, PCA_COLS_.length).setValues([x]); else sh.appendRow(x);
+      audit_(u, 'pcaSave', pid, d.status + (x[PCA_COLS_.indexOf('authNo')] ? ' ' + x[PCA_COLS_.indexOf('authNo')] : ''));
+      const rows = pcaRows_(pid); return out_({ ok: true, id: x[0], rows: rows.sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; }), state: pcaState_(rows) });
+    });
   }
   if (act === 'ptSave') {
     const id = keyOf_(d.id); if (!id || !d.name) return out_({ ok: false, error: 'missing name' });
@@ -817,6 +861,7 @@ function dueDigest() {
   h.patients.forEach(function (p) { if (p.daysToNote !== null && p.daysToNote <= REC_.WARN_DAYS) lines.push('60-day progress note ' + (p.daysToNote < 0 ? 'OVERDUE ' + (-p.daysToNote) + ' days' : 'due in ' + p.daysToNote + ' days') + ': ' + p.name); });
   h.aides.forEach(function (a) { if (a.daysToEval !== null && a.daysToEval <= REC_.WARN_DAYS) lines.push('Aide evaluation ' + (a.daysToEval < 0 ? 'OVERDUE ' + (-a.daysToEval) + ' days' : 'due in ' + a.daysToEval + ' days') + ': ' + a.name); });
   onbAll_().forEach(function (o) { if (o.status === 'in progress' && o.createdAt && (Date.now() - new Date(o.createdAt).getTime()) > 7 * 86400000) lines.push('New hire still onboarding: ' + o.name + ' (' + o.done + '/' + o.total + ' steps; next: ' + o.next + ')'); });
+  h.patients.forEach(function (p) { if (p.status === 'discharged' || p.purged) return; const q = p.pca; if (q.pcaStatus === 'awaiting insurer' && q.pcaSent && (Date.now() - new Date(q.pcaSent + 'T12:00:00').getTime()) > 14 * 86400000) lines.push('PCA request sent ' + q.pcaSent + ', no insurer answer recorded: ' + p.name); if (q.daysToPca !== null && q.pcaStatus !== 'renewal sent' && q.daysToPca <= REC_.PCA_WARN_DAYS) lines.push('PCA authorization ' + (q.daysToPca < 0 ? 'EXPIRED ' + (-q.daysToPca) + ' days ago' : 'ends in ' + q.daysToPca + ' days') + ', renewal not yet sent: ' + p.name); if (p.status === 'active' && q.pcaStatus === 'none') lines.push('No PCA authorization on file: ' + p.name); });
   h.patients.forEach(function (p) { if (p.status === 'admission') lines.push('Admission still in progress: ' + p.name); });
   h.drafts.forEach(function (x) { if (x.updatedAt && (Date.now() - new Date(x.updatedAt).getTime()) > 3 * 86400000) lines.push('Draft not finished (' + x.label + '): ' + x.subject); });
   if (!lines.length) return;
@@ -849,6 +894,7 @@ function purgeOld() {
     delRows_(draftSheet_(), function (row) { return gone[row[2]]; });
     delRows_(ss.getSheetByName('Weeks'), function (row) { return gone[row[1]]; });
     delRows_(ss.getSheetByName('Plans'), function (row) { return gone[row[0]]; });
+    delRows_(pcaTab_(), function (row) { return gone[row[1]]; });
     const rsh = repSheet_(), rv = rsh.getDataRange().getValues();
     for (let i = 1; i < rv.length; i++) if (gone[rv[i][2]] && rv[i][9]) rsh.getRange(i + 1, 10).setValue('');
   });

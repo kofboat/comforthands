@@ -2188,6 +2188,7 @@ function drawHome(){
     tile('adm',c.admissions,'Admissions in progress','warn')+
     tile('noteOver',c.notesOver,'60-day notes overdue','bad')+
     tile('noteSoon',c.notesSoon,'60-day notes due in 10 days','warn')+
+    tile('pcaDue',c.pcaDue||0,'PCA authorizations ending in 45 days','warn')+
     tile('evalOver',c.evalsOver,'Aide evaluations overdue','bad')+
     tile('evalSoon',c.evalsSoon,'Aide evaluations due in 10 days','warn')+
     tile('sheets',c.sheets,'Activity sheets not submitted this week','warn')+tile('drafts',c.drafts||0,'Drafts in progress','warn')+(isAdminNow()?tile('onb',c.onboarding||0,'New hires onboarding','warn'):'')+'</div>';
@@ -2213,6 +2214,7 @@ function drawList(){
   if(HOME_TAB==='patients'){
     let rows=h.patients.filter(p=>p.status!=='discharged'||!HOME_FILTER).slice();
     if(HOME_FILTER==='adm') rows=rows.filter(p=>p.status==='admission');
+    if(HOME_FILTER==='pcaDue') rows=rows.filter(p=>p.status!=='discharged'&&!p.purged&&p.pca&&p.pca.daysToPca!==null&&p.pca.daysToPca<=45&&p.pca.pcaStatus!=='renewal sent');
     if(HOME_FILTER==='noteOver') rows=rows.filter(p=>p.daysToNote!==null&&p.daysToNote<0);
     if(HOME_FILTER==='noteSoon') rows=rows.filter(p=>p.daysToNote!==null&&p.daysToNote>=0&&p.daysToNote<=10);
     if(q) rows=rows.filter(p=>p.name.toLowerCase().includes(q));
@@ -2221,14 +2223,14 @@ function drawList(){
     box.innerHTML=rows.length?'<table class="htbl"><thead><tr><th>Patient</th><th>Status</th><th>Next 60-day note</th><th>Actions</th></tr></thead><tbody>'+rows.map(p=>{
       const st=p.status==='admission'?'<span class="pill warn">Admission in progress</span>':p.status==='active'?'<span class="pill ok">Active</span>':'<span class="pill">Discharged '+usDate(p.dischargedAt)+'</span>';
       const dis=p.status==='discharged'||p.purged; const dr=(h.drafts||[]).filter(x=>x.patientId===p.id).map(x=>'<br><span class="pill warn">Draft: '+escAct(x.label)+'</span>').join('');
-      return '<tr><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">DOB '+usDate(p.dob)+(p.start?' · SOC '+usDate(p.start):'')+'</span></td><td>'+st+dr+'</td><td>'+(p.status==='active'?dueBadge(p.daysToNote)+'<br><span class="tmuted">'+(p.lastNote?'last '+usDate(p.lastNote):'none yet')+'</span>':'—')+'</td><td>'+
+      return '<tr><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">DOB '+usDate(p.dob)+(p.start?' · SOC '+usDate(p.start):'')+'</span></td><td>'+st+dr+(dis?'':pcaBadge(p.pca))+'</td><td>'+(p.status==='active'?dueBadge(p.daysToNote)+'<br><span class="tmuted">'+(p.lastNote?'last '+usDate(p.lastNote):'none yet')+'</span>':'—')+'</td><td>'+
         (hasN?'<button class="mini" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\'nurse\')">Open as Nurse</button>':'')+
         (hasA?'<button class="mini" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\'admin\')">Open as Admin</button>':'')+
         '<button class="mini" '+(p.status!=='active'?'disabled':'')+' onclick="openReport(\'pn\',\''+p.id+'\')">Progress note</button>'+
         '<button class="mini" '+(dis?'disabled':'')+' onclick="openReport(\'dc\',\''+p.id+'\')">Discharge</button>'+
         (p.status==='admission'?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'active\')">Mark active</button>':'')+
         ((p.status==='discharged'&&!p.purged&&hasA)?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'reopen\')">Reopen</button>':'')+
-        '<button class="mini" onclick="openPca(\''+p.id+'\')">PCA request</button>'+'<button class="mini" onclick="openReport(\'hist\',\''+p.id+'\')">History</button></td></tr>';
+        '<button class="mini" onclick="openPcaHub(\''+p.id+'\')" '+(dis?'disabled':'')+'>PCA</button>'+'<button class="mini" onclick="openReport(\'hist\',\''+p.id+'\')">History</button></td></tr>';
     }).join('')+'</tbody></table>':'<p class="tmuted">No patients match.</p>';
     return;
   }
@@ -2511,37 +2513,82 @@ async function prefillTax(id){
   }catch(e){ repMsg('⚠️','Could not prepare the forms ('+escAct(e.message||'error')+'). Make sure the hr-pdf folder is uploaded next to this page.'); }
 }
 
+
+function pcaBadge(q){
+  if(!q) return '';
+  const ins=q.pcaInsurer?' · '+escAct(q.pcaInsurer):'';
+  if(q.pcaStatus==='none') return '<br><span class="pill">No PCA request yet</span>';
+  if(q.pcaStatus==='awaiting insurer') return '<br><span class="pill warn">PCA sent '+usDate(q.pcaSent)+' – awaiting insurer</span>';
+  if(q.pcaStatus==='denied') return '<br><span class="pill bad">PCA denied</span>';
+  const d=q.daysToPca, c=d===null?'':(d<0?'bad':(d<=45?'warn':'ok'));
+  return '<br><span class="pill '+c+'">PCA auth '+(d===null?'':(d<0?'ended '+usDate(q.pcaEnd):'to '+usDate(q.pcaEnd)+' ('+d+' d)'))+ins+'</span>'+(q.pcaStatus==='renewal sent'?'<br><span class="pill warn">Renewal sent '+usDate(q.pcaSent)+'</span>':'');
+}
+function localDay(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+let PCAH=null;
+async function openPcaHub(id){
+  let j; try{ j=await api('pcaList',{id:id}); }catch(e){ alert(e.message||'Could not open.'); return; }
+  if(!j||!j.ok){ alert('Could not open PCA authorizations ('+((j&&j.error)||'error')+').'); return; }
+  PCAH={id:id,rows:j.rows,state:j.state}; drawPcaHub();
+}
+function drawPcaHub(){
+  const old=document.getElementById('pcaHub'); if(old) old.remove();
+  const rows=PCAH.rows, st=PCAH.state, esc=escAct, ed=(k,l,v,ty)=>'<div class="fgroup"><label class="lbl">'+l+'</label><input type="'+(ty||'text')+'" id="pah_'+k+'" value="'+esc(v||'')+'"></div>';
+  const tr=rows.map(r=>'<tr><td>'+usDate(r.sentAt)+'</td><td>'+esc(r.insurer)+'<br><span class="tmuted">'+esc({new:'Initial',reauth:'Renewal',increase:'Increase',decrease:'Decrease',transfer:'Transfer',mco:'Insurer change'}[r.type]||r.type)+(r.hoursWeek?' · '+esc(r.hoursWeek)+' h/wk':'')+'</span></td><td>'+
+    (r.status==='approved'?'<span class="pill ok">Approved</span><br><span class="tmuted">#'+esc(r.authNo)+'<br>'+usDate(r.authFrom)+' – '+usDate(r.authTo)+(r.units?'<br>'+esc(r.units)+' units':'')+(r.icd10?'<br>ICD-10 '+esc(r.icd10):'')+'</span>':r.status==='denied'?'<span class="pill bad">Denied</span>':'<span class="pill warn">Sent – no answer yet</span>')+
+    '</td><td><button class="mini" onclick="pcaEdit(\''+r.id+'\')">'+(r.status==='requested'?'Record insurer answer':'Edit')+'</button></td></tr>').join('');
+  const m=document.createElement('div'); m.id='pcaHub'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;padding:20px';
+  m.innerHTML='<div style="background:#fff;max-width:780px;margin:0 auto;border-radius:12px;padding:20px 22px"><h3 style="margin:0 0 4px">PCA authorization</h3>'+
+   '<p class="tmuted" style="margin:0 0 10px">'+(st.pcaStatus==='none'?'No request recorded yet. Start one at admission: fill the insurer\'s form and it is logged as sent.':'Current: '+esc(st.pcaStatus)+(st.pcaEnd?' · authorization ends '+usDate(st.pcaEnd)+' ('+st.daysToPca+' days)':''))+'</p>'+
+   '<div style="margin-bottom:10px"><button class="mini" style="background:#1a5d4a;color:#fff" onclick="pcaNew()">＋ '+(st.pcaStatus==='approved'||st.pcaStatus==='renewal sent'?'Renewal request':'New request')+' (fills the insurer\'s form)</button></div>'+
+   (rows.length?'<table class="htbl"><thead><tr><th>Sent</th><th>Insurer</th><th>Insurer answer</th><th></th></tr></thead><tbody>'+tr+'</tbody></table>':'')+
+   '<div id="pcaEdit"></div><div style="margin-top:12px;text-align:right"><button class="mini" onclick="document.getElementById(\'pcaHub\').remove();HOME=null;renderHome()">Close</button></div></div>';
+  document.body.appendChild(m);
+}
+function pcaNew(){ const id=PCAH.id, last=PCAH.rows.filter(r=>r.status==='approved').sort((a,b)=>a.authTo<b.authTo?1:-1)[0]; const rows=PCAH.rows; document.getElementById('pcaHub').remove(); openPca(id,last,rows); }
+function pcaEdit(rid){
+  const r=PCAH.rows.find(x=>x.id===rid); if(!r) return; const e=(k,l,v,ty)=>'<div class="fgroup"><label class="lbl">'+l+'</label><input type="'+(ty||'text')+'" id="pah_'+k+'" value="'+escAct(v||'')+'"></div>';
+  document.getElementById('pcaEdit').innerHTML='<div style="border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-top:12px"><h4 style="margin:0 0 6px">Insurer answer — '+escAct(r.insurer)+', sent '+usDate(r.sentAt)+'</h4><div class="fg">'+
+   '<div class="fgroup"><label class="lbl">Result</label><select id="pah_status"><option value="requested"'+(r.status==='requested'?' selected':'')+'>No answer yet</option><option value="approved"'+(r.status==='approved'?' selected':'')+'>Approved</option><option value="denied"'+(r.status==='denied'?' selected':'')+'>Denied</option></select></div>'+
+   e('approvedAt','Approval date',r.approvedAt||localDay(),'date')+e('authNo','Authorization number',r.authNo)+e('units','Total units approved',r.units)+e('authFrom','Start date',r.authFrom,'date')+e('authTo','End date',r.authTo,'date')+e('icd10','ICD-10 code(s)',r.icd10)+e('note','Note',r.note)+'</div>'+
+   '<p id="pahMsg" class="tmuted"></p><div style="text-align:right"><button class="mini" style="background:#1a5d4a;color:#fff" onclick="pcaSaveAns(\''+rid+'\')">Save</button></div></div>';
+}
+async function pcaSaveAns(rid){
+  const r=PCAH.rows.find(x=>x.id===rid), g=k=>document.getElementById('pah_'+k).value.trim(), msg=document.getElementById('pahMsg');
+  try{ const j=await api('pcaSave',{id:rid,patientId:PCAH.id,insurer:r.insurer,type:r.type,sentAt:r.sentAt,hoursDay:r.hoursDay,daysWeek:r.daysWeek,hoursWeek:r.hoursWeek,reqFrom:r.reqFrom,reqTo:r.reqTo,status:g('status'),approvedAt:g('approvedAt'),authNo:g('authNo'),units:g('units'),authFrom:g('authFrom'),authTo:g('authTo'),icd10:g('icd10'),note:g('note')});
+    if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; } PCAH.rows=j.rows; PCAH.state=j.state; drawPcaHub();
+  }catch(e){ msg.textContent=e.message||'Could not save.'; }
+}
 /* ── PCA authorization request: fills the insurer's own form from the patient record ── */
 const PCA_AG_KEY='chhc_pca_agency';
 const PCA_MAP={Horizon:'hnjh',UnitedHealthcare:'uhc',Aetna:'aetna',Wellpoint:'wellpoint',HealthPartners:'hpp'};
 let PCA=null;
-async function openPca(id){
+async function openPca(id,last,hist){
   let j; try{ j=await api('ptGet',{id:id}); }catch(e){ alert(e.message||'Could not open the patient.'); return; }
   if(!j||!j.ok){ alert('Could not open this patient ('+((j&&j.error)||'error')+').'); return; }
-  const f=Object.assign({},j.form||{},j.shared||{}); let ag={}; try{ ag=JSON.parse(localStorage.getItem(PCA_AG_KEY)||'{}'); }catch(e){}
-  PCA={id:id,f:f,ag:ag};
+  const fm=j.form||{}, sh=j.shared||{}, f={}; ['firstName','lastName','dob','address','city','state','zip','county','cell','ptEmail','language','dx1','dx2','icd1','icd2','mdName','npi','mdPhone','mdFax','mdAddress','insCompany','insNum','medicaidNum','medicareNum','ec1Name','ec1Cell'].forEach(k=>{ const v=sh[k]!=null&&sh[k]!==''?sh[k]:((fm[k]||{}).v!=null?fm[k].v:((fm['n_'+k]||{}).v||'')); f[k]=String(v==null?'':v).trim(); }); let ag={}; try{ ag=JSON.parse(localStorage.getItem(PCA_AG_KEY)||'{}'); }catch(e){}
+  PCA={id:id,f:f,ag:ag,hist:hist||[]}; last=last||null;
   const old=document.getElementById('pcaModal'); if(old) old.remove();
   const ic=String(f.insCompany||''), cur=PCA_MAP[ic]?ic:'';
   const row=(k,l,v,t)=>'<div class="fgroup"><label class="lbl">'+l+'</label><input type="'+(t||'text')+'" id="pca_'+k+'" value="'+escAct(v==null?'':v)+'"></div>';
   const ags=(k,l)=>row('ag_'+k,l,ag[k]||'');
-  const today=new Date().toISOString().slice(0,10);
+  const today=localDay();
   const m=document.createElement('div'); m.id='pcaModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;overflow:auto;padding:20px';
   m.innerHTML='<div style="background:#fff;max-width:760px;margin:0 auto;border-radius:12px;padding:20px 22px">'+
    '<h3 style="margin:0 0 4px">PCA authorization request</h3><p class="tmuted" style="margin:0 0 12px">'+escAct((f.firstName||'')+' '+(f.lastName||''))+' — fills the insurer\'s own form from the patient record. Check everything before faxing.</p>'+
    '<div class="fg"><div class="fgroup"><label class="lbl">Insurer form</label><select id="pca_mco"><option value="">— Select —</option>'+Object.keys(PCA_MAP).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+(k==='Horizon'?'Horizon NJ Health':k)+'</option>').join('')+'</select></div>'+
-   '<div class="fgroup"><label class="lbl">Type of request</label><select id="pca_type"><option value="new">Initial / new</option><option value="reauth" selected>Re-authorization</option><option value="increase">Increase hours</option><option value="decrease">Decrease hours</option><option value="transfer">Agency transfer</option><option value="mco">Change of insurer (MCO)</option></select></div>'+
-   row('today','Date submitted',today,'date')+row('hoursDay','Hours per day','')+row('daysWeek','Days per week','')+row('hoursWeek','Hours per week (blank = day × days)','')+
-   row('authFrom','Requested from','','date')+row('authTo','Requested to','','date')+row('authExpires','Current authorization expires','','date')+row('curHours','Current hours (e.g. 20 hrs/week)','')+
+   '<div class="fgroup"><label class="lbl">Type of request</label><select id="pca_type"><option value="new"'+(last?'':' selected')+'>Initial / new</option><option value="reauth"'+(last?' selected':'')+'>Re-authorization</option><option value="increase">Increase hours</option><option value="decrease">Decrease hours</option><option value="transfer">Agency transfer</option><option value="mco">Change of insurer (MCO)</option></select></div>'+
+   row('today','Date submitted',today,'date')+row('hoursDay','Hours per day','')+row('daysWeek','Days per week','')+row('hoursWeek','Hours per week (blank = day × days)',last&&last.hoursWeek||'')+
+   row('authFrom','Requested from','','date')+row('authTo','Requested to','','date')+row('authExpires','Current authorization expires',last?last.authTo:'','date')+row('curHours','Current hours (e.g. 20 hrs/week)',last&&last.hoursWeek?last.hoursWeek+' hrs/week':'')+
    row('socDate','Start of care date','','date')+row('priorMco','Previous insurer (if changing)','')+
    row('caregiver','Caregiver / contact name',f.ec1Name||'')+row('altPhone','Alternate phone',f.ec1Cell||'')+
-   row('icd1','ICD-10 for primary diagnosis',f.icd1||'')+row('icd2','ICD-10 for second diagnosis',f.icd2||'')+
+   row('icd1','ICD-10 for primary diagnosis',(last&&last.icd10?last.icd10.split(/[,;]\s*/)[0]:'')||f.icd1||'')+row('icd2','ICD-10 for second diagnosis',(last&&last.icd10?last.icd10.split(/[,;]\s*/)[1]:'')||f.icd2||'')+
    row('mdPromise','Physician PROMISe ID (HealthPartners)','')+row('notes','Notes / reason for change','')+'</div>'+
    '<div class="fg" style="margin-top:6px"><label class="rbtn"><input type="checkbox" id="pca_lapse"> 30-day lapse in service</label><label class="rbtn"><input type="checkbox" id="pca_assisted"> Assisted living</label><label class="rbtn"><input type="checkbox" id="pca_ped"> Pediatric</label><label class="rbtn"><input type="checkbox" id="pca_grp" onchange="document.getElementById(\'pcaGrp\').style.display=this.checked?\'\':\'none\'"> Group case</label></div>'+
    '<div class="fg" id="pcaGrp" style="display:none">'+row('gname','Other member name','')+row('gid','Other member ID','')+row('gdob','Other member DOB','','date')+'</div>'+
    '<h4 style="margin:14px 0 4px">Agency details <span class="tmuted" style="font-weight:400">(saved in this browser)</span></h4><div class="fg">'+
    row('ag_name','Agency name',ag.name||'Comfort Hands Home Healthcare LLC')+row('ag_addr','Street',ag.addr||'505 Hamilton Ave Ste 200')+row('ag_city','City',ag.city||'Linwood')+row('ag_state','State',ag.state||'NJ')+row('ag_zip','ZIP',ag.zip||'08221')+
    row('ag_phone','Phone',ag.phone||'609-277-3032')+row('ag_fax','Fax',ag.fax||'609-479-5931')+ags('contact','Contact person')+ags('npi','Agency NPI')+ags('providerId','Provider ID')+ags('tin','TIN')+ags('promise','PROMISe ID')+'</div>'+
-   '<p id="pcaMsg" class="tmuted" style="margin:10px 0 0"></p>'+
+   '<label class="rbtn" style="margin-top:10px"><input type="checkbox" id="pca_log" checked> Record this request as sent on the date above, so renewals are tracked</label><p id="pcaMsg" class="tmuted" style="margin:10px 0 0"></p>'+
    '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="mini" onclick="document.getElementById(\'pcaModal\').remove()">Cancel</button><button class="mini" style="background:#1a5d4a;color:#fff" onclick="makePca()">Download filled form</button></div></div>';
   document.body.appendChild(m);
 }
@@ -2565,7 +2612,9 @@ async function makePca(){
     if(!window.PDFLib) await loadJs('hr-pdf/pdf-lib.min.js'); if(!window.PCAFILL) await loadJs('hr-pdf/pcafill.js');
     const bytes=await PCAFILL.fill(PDFLib,mco,await getBytes('hr-pdf/pca/'+PCAFILL.FILE[mco]),d);
     saveBytes(bytes,'PCA request '+ins+' - '+String(f.lastName||'')+' '+String(f.firstName||'')+'.pdf');
-    msg.textContent='Downloaded. Open it, check every field, then print or fax it to the insurer. Nothing is stored or sent from here.';
+    let logged='';
+    if(c('log')){ try{ const j=await api('pcaSave',{patientId:PCA.id,insurer:ins,type:d.type,sentAt:d.today,hoursDay:d.hoursDay,daysWeek:d.daysWeek,hoursWeek:d.hoursWeek,reqFrom:d.authFrom,reqTo:d.authTo,status:'requested'}); logged=j.ok?' It is logged as sent; record the insurer\'s answer under PCA when it comes back.':' (Could not log it: '+(j.error||'error')+')'; }catch(e){ logged=' (Could not log it.)'; } }
+    msg.textContent='Downloaded. Open it, check every field, then print or fax it to the insurer.'+logged; HOME=null;
   }catch(e){ msg.textContent='Could not prepare the form ('+(e.message||'error')+'). Make sure the hr-pdf/pca folder is uploaded.'; }
 }
 /* Reference checks: recorded here by the office (phone/email/fax), filed as a PDF */
