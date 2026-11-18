@@ -360,6 +360,8 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
   body.print-sheet{font-family:Arial,Helvetica,sans-serif!important;color:#111!important}
   body.print-sheet .page.sheet-page{padding:.15in .2in!important}
   body.print-sheet .print-only{display:block!important}
+  body.print-sheet.print-one .page.sheet-page:not(.print-target){display:none!important}
+  body.print-sheet .page{animation:none!important;opacity:1!important}
   body.print-sheet #pcPreview .card,body.print-sheet #pcPreview .rights-box{break-inside:auto!important;page-break-inside:auto!important}
   body.print-sheet #actSheet .sh-title{display:none!important}
   body.print-sheet #phLetter,body.print-sheet #pcPreview,body.print-sheet #actSheet{font-family:Arial,Helvetica,sans-serif!important;color:#111!important}
@@ -1434,8 +1436,11 @@ function prefillCarePlan(){
 }
 function printSheet(){
   renderActivitySheet(); renderPhysicianLetter();
+  /* print only the page you are on (not every printable page at once) */
+  const cur=document.querySelector('.page.active'); document.querySelectorAll('.page.print-target').forEach(x=>x.classList.remove('print-target'));
+  if(cur&&cur.classList.contains('sheet-page')){ cur.classList.add('print-target'); document.body.classList.add('print-one'); }
   document.body.classList.add('print-sheet');
-  const done=()=>{document.body.classList.remove('print-sheet');window.removeEventListener('afterprint',done);};
+  const done=()=>{document.body.classList.remove('print-sheet','print-one');document.querySelectorAll('.page.print-target').forEach(x=>x.classList.remove('print-target'));window.removeEventListener('afterprint',done);};
   window.addEventListener('afterprint',done);
   try{ window.print(); }catch(e){ done(); alert('Printing is blocked here. Open this file directly in Chrome or Safari (not inside a preview window) and try again.'); }
 }
