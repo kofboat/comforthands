@@ -22,6 +22,22 @@ const CONFIG = {
   ONBOARDING_FORMS: [
     { id: '', name: 'Onboarding Form 1.pdf' }
   ],
+  // Agency details used on the insurers' PCA authorization forms. Served to the portal only after sign-in.
+  AGENCY: {
+    name: 'Comfort Hands Home Healthcare LLC', addr: '505 Hamilton Ave Ste 200', city: 'Linwood', state: 'NJ', zip: '08221', phone: '609-277-3032', fax: '609-479-5931',
+    npi: '', tin: '', promise: '',
+    providerIds: { hnjh: '', uhc: '', wellpoint: '', aetna: '', hpp: '' }   // Aetna's form says not to give a provider ID
+  },
+  // Text messages through Twilio. Leave ENABLED false until you have tested with sendTestText(). Until then texts are only recorded in the TextLog tab.
+  SMS: {
+    ENABLED: false,
+    TWILIO_SID: '', TWILIO_TOKEN: '',          // from your Twilio console. Keep them only here
+    FROM: '',                                   // your Twilio number (+1...) or a Messaging Service SID (MG...)
+    CLOCK_URL: '',                              // link aides open to clock in/out (Homebase or HHAeXchange)
+    LEAD_MIN: 15,                               // clock-in reminder this many minutes before the shift
+    TEST_TO: '',                                // your own mobile number, for sendTestText()
+    OFFICE_PHONES: []                           // optional: numbers that get the weekly counts-only text
+  },
   ONBOARDING_NOTE: '',          // optional extra line added to the applicant email
   STAFF_PORTAL_URL: '',         // optional: the employee portal address, included in the new-aide login email
   APPLY_URL: '',                // web address of the Apply page on your site, e.g. https://comforthands.net/apply/
@@ -478,8 +494,8 @@ function packet_(d) {
 // RECORDS: patient list, 60-day progress notes, discharge, aide evaluations
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
-const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45 };
-const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
+const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
@@ -512,11 +528,51 @@ function pcaState_(rows) {
   const st = !rows.length ? 'none' : (pend ? (appr ? 'renewal sent' : 'awaiting insurer') : (appr ? 'approved' : 'denied'));
   return { pcaStatus: st, pcaInsurer: (appr || pend || {}).insurer || '', pcaEnd: appr ? appr.authTo : '', daysToPca: days, pcaAuthNo: appr ? appr.authNo : '', pcaSent: pend ? pend.sentAt : '' };
 }
+// Aide compliance trackers. Dates only: no documents are stored. One row per aide.
+const TRK_COLS_ = ['email', 'position', 'phone', 'smsOk', 'hireDate', 'certExpiry', 'bgLast', 'physLast', 'ceuDoneAt', 'updatedAt', 'by'];
+function trkTab_() { return tab_('AideTrack', TRK_COLS_); }
+let TRK_MEMO_ = null;
+function trkMap_() {
+  if (TRK_MEMO_) return TRK_MEMO_;
+  const v = trkTab_().getDataRange().getValues(), m = {};
+  for (let i = 1; i < v.length; i++) { const e = String(v[i][0]).trim().toLowerCase(); if (!e) continue; const o = {}; TRK_COLS_.forEach(function (c, j) { o[c] = /Expiry$|Last$|Date$|DoneAt$/.test(c) ? iso_(v[i][j]) : (c === 'smsOk' ? isTrue_(v[i][j]) : String(v[i][j] == null ? '' : v[i][j])); }); o.row = i + 1; m[e] = o; }
+  TRK_MEMO_ = m; return m;
+}
+function isChha_(pos) { return /home health aide|chha/i.test(String(pos || '')); }
+function trkFlag_(due) { if (!due) return { due: '', days: null, status: 'unset' }; const d = daysUntil_(due); return { due: due, days: d, status: d < 0 ? 'over' : (d <= REC_.TRK_WARN_DAYS ? 'soon' : 'ok') }; }
+// The CEU year runs from the hire date. All assigned training is due 11 months into each year. Once done in a year, the next due date is the following year's; if no year has been completed, the first one counts.
+function ceuDue_(hire, doneAt) {
+  if (!hire) return '';
+  let m = -1; if (doneAt) while (addMonths_(hire, 12 * (m + 1)) <= doneAt) m++;
+  return addMonths_(hire, 11 + 12 * (m + 1));
+}
+function trkItems_(o) {
+  const items = [];
+  if (isChha_(o.position)) items.push(Object.assign({ k: 'cert', label: 'CHHA certification', note: 'expires' }, trkFlag_(o.certExpiry)));
+  items.push(Object.assign({ k: 'bg', label: 'Background check', last: o.bgLast }, trkFlag_(o.bgLast ? addMonths_(o.bgLast, 12) : '')));
+  items.push(Object.assign({ k: 'phys', label: 'Physical exam', last: o.physLast }, trkFlag_(o.physLast ? addMonths_(o.physLast, 12) : '')));
+  items.push(Object.assign({ k: 'ceu', label: 'Annual CEU training', last: o.ceuDoneAt }, trkFlag_(ceuDue_(o.hireDate, o.ceuDoneAt))));
+  return items;
+}
+function trkFor_(email) {
+  const o = trkMap_()[String(email).toLowerCase()] || { position: '', hireDate: '', certExpiry: '', bgLast: '', physLast: '', ceuDoneAt: '', phone: '', smsOk: false };
+  return { position: o.position, phone: o.phone, smsOk: !!o.smsOk, hireDate: o.hireDate, certExpiry: o.certExpiry, bgLast: o.bgLast, physLast: o.physLast, ceuDoneAt: o.ceuDoneAt, chha: isChha_(o.position), items: trkItems_(o) };
+}
+function trkUpsert_(email, fields, who) {
+  email = String(email).trim().toLowerCase(); const sh = trkTab_(), m = trkMap_(), cur = m[email];
+  const x = TRK_COLS_.map(function (c) { return cur ? (c === 'smsOk' ? (cur.smsOk ? true : false) : cur[c]) : (c === 'smsOk' ? false : ''); }); x[0] = email;
+  Object.keys(fields).forEach(function (c) { const i = TRK_COLS_.indexOf(c); if (i > 0 && fields[c] !== undefined) x[i] = c === 'smsOk' ? !!fields[c] : fields[c]; });
+  x[TRK_COLS_.indexOf('updatedAt')] = new Date().toISOString(); x[TRK_COLS_.indexOf('by')] = who || '';
+  const row = x.map(function (v) { return typeof v === 'string' ? txt_(v) : v; });
+  if (cur) sh.getRange(cur.row, 1, 1, TRK_COLS_.length).setValues([row]); else sh.appendRow(row);
+  TRK_MEMO_ = null;
+}
 function aideTab_() { return tab_('AideRecords', ['email', 'firstCase', 'lastEvalAt', 'lastEvalType', 'updatedAt']); }
 function iso_(v) { if (!v) return ''; if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd'); return String(v).slice(0, 10); }
 function dparse_(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null; }
+function addMonths_(s, n) { const d = dparse_(s); if (!d) return ''; const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(day, last)); return iso_(d); }
 function addDays_(s, n) { const d = dparse_(s); if (!d) return ''; d.setDate(d.getDate() + n); return iso_(d); }
-function today_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+function today_() { return Utilities.formatDate(now_(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
 function daysUntil_(s) { const d = dparse_(s), t = dparse_(today_()); return d ? Math.round((d - t) / 86400000) : null; }
 function ptRow_(sh, id) { return findRow_(sh, 0, id); }
 function isTrue_(v) { return v === true || String(v).toLowerCase() === 'true'; }
@@ -627,7 +683,7 @@ function aideSummary_(aide, L) {
   if (!first) first = f.firstCase;
   const due = !lastEval ? (first ? addDays_(first, REC_.EVAL_FIRST_DAYS) : '')
     : (/^60/.test(lastType) && first ? addDays_(first, REC_.EVAL_SECOND_DAYS) : addDays_(lastEval, REC_.EVAL_REPEAT_DAYS));
-  return { email: aide.email, name: aide.name, patients: f.patients, firstCase: first, lastEval: lastEval, lastType: lastType, nextEvalDue: due, daysToEval: due ? daysUntil_(due) : null };
+  return { email: aide.email, name: aide.name, patients: f.patients, firstCase: first, lastEval: lastEval, lastType: lastType, nextEvalDue: due, daysToEval: due ? daysUntil_(due) : null, trk: trkFor_(aide.email) };
 }
 
 function pendingSheets_(L) {
@@ -661,13 +717,15 @@ function home_() {
     notesSoon: patients.filter(function (p) { return soon(p.daysToNote); }).length,
     notesOver: patients.filter(function (p) { return over(p.daysToNote); }).length,
     pcaDue: patients.filter(function (p) { return p.status !== 'discharged' && !p.purged && p.pca.daysToPca !== null && p.pca.daysToPca <= REC_.PCA_WARN_DAYS && p.pca.pcaStatus !== 'renewal sent'; }).length,
+    trkSoon: aides.filter(function (a) { return a.trk.items.some(function (i) { return i.status === 'soon'; }); }).length,
+    trkOver: aides.filter(function (a) { return a.trk.items.some(function (i) { return i.status === 'over'; }); }).length,
     evalsSoon: aides.filter(function (a) { return soon(a.daysToEval); }).length,
     evalsOver: aides.filter(function (a) { return over(a.daysToEval); }).length,
     sheets: sheets.items.length,
     drafts: drafts.length,
     onboarding: onbAll_().filter(function (o) { return o.status === 'in progress'; }).length
   };
-  return { ok: true, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, today: today_() };
+  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, today: today_() };
 }
 
 // Reading never takes the lock. Each change takes it only for the moment it writes.
@@ -684,10 +742,25 @@ function records_(act, d, u) {
     const x = ptGetRow_(psh, r), b = ptBlob_(x);
     return out_({ ok: true, patient: ptSummary_(x, {}), shared: b.shared, form: b.form });
   }
+  if (act === 'trkSave') {
+    const email = String(d.email || '').trim().toLowerCase(), us = usersAll_();
+    if (!us[email] || us[email].roles.indexOf('aide') < 0) return out_({ ok: false, error: 'No aide with that email.' });
+    const dayOk = function (v) { return v === undefined || v === '' || validDay_(v); };
+    if (![d.hireDate, d.certExpiry, d.bgLast, d.physLast, d.ceuDoneAt].every(dayOk)) return out_({ ok: false, error: 'bad date' });
+    if (d.position !== undefined && d.position !== '' && HR_POSITIONS_.indexOf(String(d.position)) < 0) return out_({ ok: false, error: 'bad position' });
+    const f = {}; ['position', 'hireDate', 'certExpiry', 'bgLast', 'physLast', 'ceuDoneAt'].forEach(function (c) { if (d[c] !== undefined) f[c] = String(d[c]); });
+    if (d.phone !== undefined) f.phone = String(d.phone).replace(/[^\d+]/g, '').slice(0, 16);
+    if (d.smsOk !== undefined) f.smsOk = !!d.smsOk;
+    if (d.ceu === 'done') f.ceuDoneAt = validDay_(d.ceuDoneAt) ? d.ceuDoneAt : today_(); else if (d.ceu === 'notdone') f.ceuDoneAt = '';
+    return withLock_(function () {
+      trkUpsert_(email, f, who); audit_(u, 'trkSave', email, Object.keys(f).join(','));
+      return out_({ ok: true, trk: trkFor_(email) });
+    });
+  }
   if (act === 'pcaList') {
     const r = ptRow_(psh, keyOf_(d.id)); if (!r) return out_({ ok: false, error: 'not found' });
     const rows = pcaRows_(d.id).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; });
-    return out_({ ok: true, rows: rows, state: pcaState_(rows) });
+    return out_({ ok: true, rows: rows, state: pcaState_(rows), agency: CONFIG.AGENCY || {} });
   }
   if (act === 'pcaSave') {
     const pid = keyOf_(d.patientId); if (!pid || !ptRow_(psh, pid)) return out_({ ok: false, error: 'not found' });
@@ -861,9 +934,11 @@ function dueDigest() {
   h.patients.forEach(function (p) { if (p.daysToNote !== null && p.daysToNote <= REC_.WARN_DAYS) lines.push('60-day progress note ' + (p.daysToNote < 0 ? 'OVERDUE ' + (-p.daysToNote) + ' days' : 'due in ' + p.daysToNote + ' days') + ': ' + p.name); });
   h.aides.forEach(function (a) { if (a.daysToEval !== null && a.daysToEval <= REC_.WARN_DAYS) lines.push('Aide evaluation ' + (a.daysToEval < 0 ? 'OVERDUE ' + (-a.daysToEval) + ' days' : 'due in ' + a.daysToEval + ' days') + ': ' + a.name); });
   onbAll_().forEach(function (o) { if (o.status === 'in progress' && o.createdAt && (Date.now() - new Date(o.createdAt).getTime()) > 7 * 86400000) lines.push('New hire still onboarding: ' + o.name + ' (' + o.done + '/' + o.total + ' steps; next: ' + o.next + ')'); });
+  h.aides.forEach(function (a) { a.trk.items.forEach(function (i) { if (i.status === 'over') lines.push('Aide ' + i.label + ' OVERDUE ' + (-i.days) + ' days: ' + a.name); else if (i.status === 'soon') lines.push('Aide ' + i.label + (i.k === 'cert' ? ' expires in ' : ' due in ') + i.days + ' days' + (i.k === 'cert' ? ' (renewal window open)' : '') + ': ' + a.name); else if (i.status === 'unset') lines.push('Aide ' + i.label + ' date not entered: ' + a.name); }); });
   h.patients.forEach(function (p) { if (p.status === 'discharged' || p.purged) return; const q = p.pca; if (q.pcaStatus === 'awaiting insurer' && q.pcaSent && (Date.now() - new Date(q.pcaSent + 'T12:00:00').getTime()) > 14 * 86400000) lines.push('PCA request sent ' + q.pcaSent + ', no insurer answer recorded: ' + p.name); if (q.daysToPca !== null && q.pcaStatus !== 'renewal sent' && q.daysToPca <= REC_.PCA_WARN_DAYS) lines.push('PCA authorization ' + (q.daysToPca < 0 ? 'EXPIRED ' + (-q.daysToPca) + ' days ago' : 'ends in ' + q.daysToPca + ' days') + ', renewal not yet sent: ' + p.name); if (p.status === 'active' && q.pcaStatus === 'none') lines.push('No PCA authorization on file: ' + p.name); });
   h.patients.forEach(function (p) { if (p.status === 'admission') lines.push('Admission still in progress: ' + p.name); });
   h.drafts.forEach(function (x) { if (x.updatedAt && (Date.now() - new Date(x.updatedAt).getTime()) > 3 * 86400000) lines.push('Draft not finished (' + x.label + '): ' + x.subject); });
+  try { officeSummaryText_(h); } catch (e) {}
   if (!lines.length) return;
   MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Comfort Hands: pending nurse tasks', body: lines.join('\n') + '\n\nOpen the staff portal home screen for details. This email lists names only, with no clinical details.' });
 }
@@ -930,6 +1005,216 @@ function importPatients() {
 }
 
 /**
+ * ONE-TIME: load the compliance dates for your existing aides. Run it once to create the "AideImport" tab, fill one aide per row
+ * (email, position, hireDate, certExpiry, bgLast, physLast, ceuDoneAt, phone, smsOk; dates yyyy-mm-dd; smsOk yes/no), then run it again.
+ * The aide must already have an aide login (Users tab). Rows already imported are updated, never duplicated.
+ */
+function importAides() {
+  const ss = db_(); let imp = ss.getSheetByName('AideImport');
+  if (!imp) { imp = ss.insertSheet('AideImport'); imp.appendRow(['email', 'position', 'hireDate', 'certExpiry', 'bgLast', 'physLast', 'ceuDoneAt', 'phone', 'smsOk']); Logger.log('Created the "AideImport" tab. Fill it in (dates as yyyy-mm-dd), then run importAides again.'); return; }
+  const v = imp.getDataRange().getValues(), users = usersAll_(); let n = 0; const bad = [];
+  withLock_(function () {
+    for (let i = 1; i < v.length; i++) {
+      const email = String(v[i][0] || '').trim().toLowerCase(); if (!email) continue;
+      const pos = String(v[i][1] || '').trim(), dts = [2, 3, 4, 5, 6].map(function (j) { return iso_(v[i][j]); });
+      if (!users[email] || users[email].roles.indexOf('aide') < 0) { bad.push('row ' + (i + 1) + ': no aide login for ' + email); continue; }
+      if (pos && HR_POSITIONS_.indexOf(pos) < 0) { bad.push('row ' + (i + 1) + ': position must be one of ' + HR_POSITIONS_.join(' | ')); continue; }
+      if (!dts.every(function (x) { return !x || validDay_(x); })) { bad.push('row ' + (i + 1) + ': dates must be yyyy-mm-dd'); continue; }
+      trkUpsert_(email, { position: pos, hireDate: dts[0], certExpiry: dts[1], bgLast: dts[2], physLast: dts[3], ceuDoneAt: dts[4], phone: String(v[i][7] || '').replace(/[^\d+]/g, ''), smsOk: /^(y|yes|true|1)$/i.test(String(v[i][8] || '').trim()) }, 'import'); n++;
+    }
+  });
+  Logger.log('Imported ' + n + ' aide(s).' + (bad.length ? ' Skipped:\n' + bad.join('\n') : ''));
+}
+
+// ═══════════════════════════ SHIFT REMINDERS AND TEXT MESSAGES ═══════════════════════════
+// The office keeps a standing weekly schedule in the "Schedule" tab (one row per shift). Aides get a text shortly before a shift starts and when it ends.
+// Texts never contain a patient's name or address. Reminders go only to active aides with a phone number and SMS consent (AideTrack tab).
+// Until CONFIG.SMS is filled in and ENABLED is true, nothing is sent: each text that WOULD be sent is only recorded in the "TextLog" tab as dry-run.
+const SCHED_COLS_ = ['aideEmail', 'patient', 'days', 'start', 'end', 'active', 'skipDates'];
+const DAYNAMES_ = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+function now_() { return new Date(); }
+function schedTab_() {
+  const fresh = !db_().getSheetByName('Schedule'), sh = tab_('Schedule', SCHED_COLS_);
+  if (fresh) { try { schedFormat_(sh); } catch (e) {} }
+  return sh;
+}
+function schedFormat_(sh) {
+  sh.setFrozenRows(1);
+  sh.getRange('C2:E1000').setNumberFormat('@'); sh.getRange('G2:G1000').setNumberFormat('@');
+  sh.getRange('F2:F1000').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['yes', 'no'], true).setAllowInvalid(true).build());
+  const t = '=OR(D2="",REGEXMATCH(TO_TEXT(D2),"^\\s*\\d{1,2}:\\d{2}\\s*([AaPp][Mm])?\\s*$"))';
+  sh.getRange('D2:D1000').setDataValidation(SpreadsheetApp.newDataValidation().requireFormulaSatisfied(t).setAllowInvalid(false).setHelpText('Type a time like 9:00 AM or 14:30').build());
+  sh.getRange('E2:E1000').setDataValidation(SpreadsheetApp.newDataValidation().requireFormulaSatisfied(t.replace(/D2/g, 'E2')).setAllowInvalid(false).setHelpText('Type a time like 1:00 PM or 17:30').build());
+  sh.getRange('A1').setNote('The aide\'s sign-in email (must be an active aide).');
+  sh.getRange('B1').setNote('For the office only. Never put in a text message.');
+  sh.getRange('C1').setNote('Days of the week, e.g. Mon, Wed, Fri  or  Mon-Fri  or  daily.');
+  sh.getRange('D1').setNote('Shift start, e.g. 9:00 AM or 14:30.');
+  sh.getRange('E1').setNote('Shift end. An end earlier than the start means an overnight shift.');
+  sh.getRange('F1').setNote('yes (or blank) = send reminders. no = pause this row.');
+  sh.getRange('G1').setNote('One-off days with no shift, e.g. 2026-12-25, 12/31/2026.');
+}
+function textLogTab_() { return tab_('TextLog', ['at', 'key', 'kind', 'email', 'phoneEnd', 'status', 'detail']); }
+function fmt12_(min) { const h = Math.floor(min / 60), m = min % 60, ap = h >= 12 ? 'PM' : 'AM', h12 = h % 12 === 0 ? 12 : h % 12; return h12 + ':' + String(m).padStart(2, '0') + ' ' + ap; }
+function parseTime_(v) {
+  if (v instanceof Date) return v.getHours() * 60 + v.getMinutes();
+  if (typeof v === 'number') return v >= 0 && v < 1 ? Math.round(v * 1440) : -1;
+  const m = /^\s*(\d{1,2}):(\d{2})\s*([AaPp][Mm])?\s*$/.exec(String(v == null ? '' : v)); if (!m) return -1;
+  let h = Number(m[1]); const mi = Number(m[2]), ap = m[3] && m[3].toLowerCase(); if (mi > 59) return -1;
+  if (ap) { if (h < 1 || h > 12) return -1; if (ap === 'pm' && h < 12) h += 12; if (ap === 'am' && h === 12) h = 0; } else if (h > 23) return -1;
+  return h * 60 + mi;
+}
+function dayIdx_(w) { if (w.length < 3) return -1; for (let i = 0; i < 7; i++) if (DAYNAMES_[i].indexOf(w) === 0) return i; return -1; }
+function parseDays_(s) {
+  s = String(s == null ? '' : s).toLowerCase().replace(/[–—]/g, '-'); const out = {};
+  if (/^\s*(daily|every ?day)\s*$/.test(s)) return [0, 1, 2, 3, 4, 5, 6];
+  const parts = s.split(/[,;\/\s]+/).filter(Boolean); if (!parts.length) return null;
+  for (let k = 0; k < parts.length; k++) {
+    const m = /^([a-z]+)(?:-([a-z]+))?$/.exec(parts[k]); if (!m) return null;
+    const a = dayIdx_(m[1]); if (a < 0) return null;
+    if (m[2]) { const b = dayIdx_(m[2]); if (b < 0) return null; for (let i = a; ; i = (i + 1) % 7) { out[i] = true; if (i === b) break; } } else out[a] = true;
+  }
+  return Object.keys(out).map(Number);
+}
+function parseSkip_(v) {
+  const res = {}; if (v instanceof Date) { res[iso_(v)] = true; return res; }
+  const parts = String(v == null ? '' : v).split(/[,;\s]+/).filter(Boolean);
+  for (let i = 0; i < parts.length; i++) {
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(parts[i]), y, mo, d;
+    if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; } else { m = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(parts[i]); if (!m) return null; mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000; }
+    const dt = new Date(y, mo - 1, d); if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    res[iso_(dt)] = true;
+  }
+  return res;
+}
+// Reads the Schedule tab. Returns the usable shifts and a list of rows that cannot be used (with the reason). No patient names in the reasons.
+function schedRows_() {
+  const v = schedTab_().getDataRange().getValues(), users = usersAll_(), trk = trkMap_(), shifts = [], bad = [];
+  for (let i = 1; i < v.length; i++) {
+    const r = v[i], email = String(r[0] || '').trim().toLowerCase(), row = i + 1;
+    if (!email && !String(r[2] || '').trim() && !String(r[3] || '').trim()) continue;
+    const act = String(r[5] == null ? '' : r[5]).trim().toLowerCase(); if (act === 'no' || act === 'false' || act === 'n') continue;
+    if (!email) { bad.push({ row: row, msg: 'no aide email' }); continue; }
+    if (!users[email] || users[email].roles.indexOf('aide') < 0) { bad.push({ row: row, msg: 'no active aide with the email ' + email }); continue; }
+    const days = parseDays_(r[2]); if (!days) { bad.push({ row: row, msg: 'days not understood (use e.g. Mon, Wed, Fri or Mon-Fri)' }); continue; }
+    const st = parseTime_(r[3]), en = parseTime_(r[4]); if (st < 0 || en < 0) { bad.push({ row: row, msg: 'start or end time not understood (use e.g. 9:00 AM or 14:30)' }); continue; }
+    if (st === en) { bad.push({ row: row, msg: 'start and end are the same time' }); continue; }
+    const skip = parseSkip_(r[6]); if (!skip) { bad.push({ row: row, msg: 'skip dates not understood (use e.g. 2026-12-25)' }); continue; }
+    const o = trk[email];
+    if (!o || !o.phone) { bad.push({ row: row, msg: email + ' has no mobile phone on file, so no texts will be sent' }); continue; }
+    if (!o.smsOk) { bad.push({ row: row, msg: email + ' has not agreed to text messages, so no texts will be sent' }); continue; }
+    shifts.push({ row: row, email: email, days: days, st: st, en: en, skip: skip });
+  }
+  return { shifts: shifts, bad: bad };
+}
+// Every shift that begins on the given date (yyyy-mm-dd), with its real start and end times.
+function occurrences_(shifts, dateIso) {
+  const d0 = dparse_(dateIso), wd = d0.getDay(), out = [];
+  shifts.forEach(function (s) {
+    if (s.days.indexOf(wd) < 0 || s.skip[dateIso]) return;
+    const a = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), 0, s.st), b = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), 0, s.en + (s.en < s.st ? 1440 : 0));
+    out.push({ shift: s, date: dateIso, start: a, end: b });
+  });
+  return out;
+}
+function smsCfg_() { return CONFIG.SMS || {}; }
+function smsLive_() { const c = smsCfg_(); return !!(c.ENABLED && c.TWILIO_SID && c.TWILIO_TOKEN && c.FROM); }
+function e164_(p) { p = String(p || '').replace(/[^\d+]/g, ''); if (/^\+\d{8,15}$/.test(p)) return p; const d = p.replace(/\D/g, ''); if (d.length === 10) return '+1' + d; if (d.length === 11 && d.charAt(0) === '1') return '+' + d; return ''; }
+function smsIndex_() {
+  const v = textLogTab_().getDataRange().getValues(), live = smsLive_(), m = {};
+  for (let i = 1; i < v.length; i++) { if (String(v[i][5]) !== (live ? 'sent' : 'dry-run')) continue; const k = String(v[i][1]); const at = String(v[i][0]); if (!m[k] || at > m[k]) m[k] = at; }
+  return m;
+}
+function smsLast_(idx, prefix) { let best = ''; Object.keys(idx).forEach(function (k) { if (k.indexOf(prefix) === 0 && idx[k] > best) best = idx[k]; }); return best; }
+// Sends (or, in dry-run, only records) one text. Never throws. The log keeps the last 4 digits of the number and a status, never the message.
+function sendSms_(to, body, key, kind, email, idx) {
+  const num = e164_(to); if (!num) return 'no-number';
+  const live = smsLive_(); if (idx && idx[key]) return 'already';
+  let status = live ? 'sent' : 'dry-run', detail = '';
+  if (live) {
+    try {
+      const c = smsCfg_(), payload = { To: num, Body: body }; if (/^MG/.test(c.FROM)) payload.MessagingServiceSid = c.FROM; else payload.From = c.FROM;
+      const res = UrlFetchApp.fetch('https://api.twilio.com/2010-04-01/Accounts/' + encodeURIComponent(c.TWILIO_SID) + '/Messages.json',
+        { method: 'post', payload: payload, headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.TWILIO_SID + ':' + c.TWILIO_TOKEN) }, muteHttpExceptions: true });
+      const code = res.getResponseCode();
+      if (code < 200 || code >= 300) { status = 'failed'; let ec = ''; try { ec = String(JSON.parse(res.getContentText()).code || ''); } catch (e) {} detail = 'HTTP ' + code + (ec ? ' Twilio ' + ec : ''); }
+    } catch (e) { status = 'failed'; detail = 'send error'; }
+  }
+  try { textLogTab_().appendRow([now_().toISOString(), txt_(key), kind, email || '', num.slice(-4), status, detail]); } catch (e) {}
+  if (idx && status !== 'failed') idx[key] = now_().toISOString();
+  return status;
+}
+function clockLink_() { const u = smsCfg_().CLOCK_URL; return u ? ' ' + u : ''; }
+function smsTail_() { return ' Reply STOP to opt out.'; }
+// Shift reminders. Run every 5 minutes by installTextReminders(). Each reminder is sent once; a missed run is caught up within 20 minutes.
+function shiftReminders() {
+  const now = now_(), sched = schedRows_(), lead = Number(smsCfg_().LEAD_MIN) || 15, WIN = 20 * 60000, idx = smsIndex_(), trk = trkMap_();
+  const today = iso_(now), yest = addDays_(today, -1);
+  schedCheck_(sched);
+  const occ = occurrences_(sched.shifts, yest).concat(occurrences_(sched.shifts, today)); let sent = 0;
+  occ.forEach(function (o) {
+    const ph = trk[o.shift.email].phone, inAt = o.start.getTime() - lead * 60000, outAt = o.end.getTime(), t = now.getTime();
+    if (t >= inAt && t < inAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift starts at ' + fmt12_(o.shift.st) + '. Please clock in when you arrive.' + clockLink_() + smsTail_(), 'in|' + o.date + '|' + o.shift.email + '|' + o.shift.st, 'shift-in', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
+    if (t >= outAt && t < outAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift ends at ' + fmt12_(o.shift.en) + '. Please clock out.' + clockLink_() + smsTail_(), 'out|' + o.date + '|' + o.shift.email + '|' + o.shift.en, 'shift-out', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
+  });
+  return sent;
+}
+// Once a day, email the office the Schedule rows that cannot be used.
+function schedCheck_(sched) {
+  const day = today_(), pr = PropertiesService.getScriptProperties();
+  if (pr.getProperty('schedCheckDay') === day) return; pr.setProperty('schedCheckDay', day);
+  if (!sched.bad.length) return;
+  try { MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Comfort Hands: Schedule rows that cannot be used', body: 'These rows in the Schedule tab are being skipped, so no reminders will go out for them:\n\n' + sched.bad.map(function (b) { return 'Row ' + b.row + ': ' + b.msg; }).join('\n') + '\n\nFix the rows in the Schedule tab. This check runs once a day.' }); } catch (e) {}
+}
+function checkSchedule() { const s = schedRows_(); Logger.log(s.shifts.length + ' usable shift row(s).' + (s.bad.length ? ' Problems:\n' + s.bad.map(function (b) { return 'Row ' + b.row + ': ' + b.msg; }).join('\n') : ' No problems found.')); return s; }
+// Shows today's reminders without sending or recording anything.
+function shiftPreview() {
+  const s = schedRows_(), lead = Number(smsCfg_().LEAD_MIN) || 15, lines = [];
+  occurrences_(s.shifts, today_()).forEach(function (o) { lines.push(fmt12_(Math.max(0, o.shift.st - lead)) + ' clock-in reminder, ' + fmt12_(o.shift.en) + ' clock-out reminder -> ' + o.shift.email); });
+  Logger.log((lines.length ? lines.join('\n') : 'No shifts today.') + (s.bad.length ? '\nRows with problems: ' + s.bad.length : '') + '\nTexting is ' + (smsLive_() ? 'LIVE' : 'OFF (dry-run only)') + '.');
+}
+// Compliance texts to aides: at 60 days, at 30 days, on the due date, then weekly until it is recorded. Run daily at 9 am.
+function complianceTexts() {
+  const hr = now_().getHours(); if (hr < 6 || hr >= 21) return 0;
+  const users = usersAll_(), idx = smsIndex_(), trk = trkMap_(), office = (CONFIG.AGENCY && CONFIG.AGENCY.phone) || 'the office'; let n = 0;
+  Object.keys(users).forEach(function (email) {
+    if (users[email].roles.indexOf('aide') < 0) return; const o = trk[email]; if (!o || !o.phone || !o.smsOk) return;
+    trkItems_(o).forEach(function (i) {
+      if (i.status === 'ok' || i.status === 'unset') return;
+      const base = 'trk|' + email + '|' + i.k + '|' + i.due + '|', us = usDate_(i.due); let key = '', body = '';
+      if (i.days <= 0) {
+        if (!idx[base + '0']) key = base + '0';
+        else if (i.days < 0) { const last = smsLast_(idx, base + 'over|') || idx[base + '0']; if (daysUntil_(iso_(new Date(last))) <= -7) key = base + 'over|' + today_(); }
+        if (key) body = 'Comfort Hands: your ' + i.label.toLowerCase() + (i.days < 0 ? ' is overdue (was due ' : (i.k === 'cert' ? ' expires today (' : ' is due today (')) + us + '). Please contact the office at ' + office + '.';
+      } else if (i.days <= 30) { if (!idx[base + '30']) key = base + '30'; } else if (i.days <= 60) { if (!idx[base + '60']) key = base + '60'; }
+      if (key && !body) body = 'Comfort Hands: your ' + i.label.toLowerCase() + (i.k === 'cert' ? ' expires ' + us + '. Your renewal window is open: please renew and tell the office.' : ' is due ' + us + ' (' + i.days + ' days).') + (i.k === 'cert' ? '' : ' Please contact the office at ' + office + ' to arrange it.');
+      if (key) { const s = sendSms_(o.phone, body + smsTail_(), key, 'compliance', email, idx); if (s === 'sent' || s === 'dry-run') n++; }
+    });
+  });
+  try { const cut = new Date(now_().getTime() - 120 * 86400000).toISOString(); delRows_(textLogTab_(), function (row) { return String(row[0]) < cut; }); } catch (e) {}
+  return n;
+}
+function usDate_(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? m[2] + '/' + m[3] + '/' + m[1] : String(s || ''); }
+// A counts-only text to the office phones (no names), sent with the Monday digest.
+function officeSummaryText_(h) {
+  const ph = smsCfg_().OFFICE_PHONES || []; if (!ph.length) return;
+  const c = h.counts, body = 'Comfort Hands weekly: ' + (c.trkOver || 0) + ' aide(s) with overdue compliance items, ' + (c.trkSoon || 0) + ' due within 60 days, ' + (c.pcaDue || 0) + ' PCA authorization(s) ending within 45 days. Open the staff portal for details.';
+  const idx = smsIndex_(); ph.forEach(function (p, i) { sendSms_(p, body, 'office|' + today_() + '|' + i, 'office-summary', '', idx); });
+}
+// Run ONCE after texting is set up (and again if you ever change it).
+function installTextReminders() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (['shiftReminders', 'complianceTexts'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('shiftReminders').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('complianceTexts').timeBased().everyDays(1).atHour(9).create();
+  schedTab_(); textLogTab_();
+  Logger.log('Installed: shift reminders every 5 minutes and compliance texts daily at 9 am (script time zone ' + Session.getScriptTimeZone() + '). Texting is ' + (smsLive_() ? 'LIVE.' : 'OFF: set CONFIG.SMS and ENABLED to true. Until then texts are only recorded in the TextLog tab as dry-run.'));
+}
+// Sends one real text to CONFIG.SMS.TEST_TO to prove the Twilio details work.
+function sendTestText() {
+  const c = smsCfg_(); if (!smsLive_()) { Logger.log('Texting is not switched on: fill in CONFIG.SMS (TWILIO_SID, TWILIO_TOKEN, FROM) and set ENABLED: true.'); return; }
+  Logger.log('Result: ' + sendSms_(c.TEST_TO, 'Comfort Hands: test message. Reply STOP to opt out.', 'test|' + Date.now(), 'test', '', null));
+}
+
+/**
  * Run ONCE from the editor after pasting this version (select upgrade, Run, read the Execution log).
  * It prepares the tabs, strengthens stored passwords, moves the Sheet out of the shared admissions folder,
  * turns off link sharing, and lists everyone who still has direct access so you can remove them.
@@ -937,7 +1222,7 @@ function importPatients() {
 function upgrade() {
   const ss = db_(), tz = Session.getScriptTimeZone();
   try { ss.setSpreadsheetTimeZone(tz); } catch (e) {}
-  ptSheet_(); repSheet_(); draftSheet_(); aideTab_(); onbSheet_(); auditSheet_(); hrRoot_();
+  ptSheet_(); repSheet_(); draftSheet_(); aideTab_(); pcaTab_(); trkTab_(); schedTab_(); textLogTab_(); onbSheet_(); auditSheet_(); hrRoot_();
   const us = usersSheet_(), v = us.getDataRange().getValues(); let n = 0;
   for (let i = 1; i < v.length; i++) if (/^[0-9a-f]{64}$/.test(String(v[i][2]))) { us.getRange(i + 1, 3).setValue(stretch_(String(v[i][2]))); n++; }
   Logger.log('Passwords strengthened for ' + n + ' account(s). Everyone signs in again once; passwords are unchanged.');
@@ -1340,6 +1625,7 @@ function onb_(act, d, u) {
     else { const roles = String(us.getRange(ur, 4).getValue() || '').toLowerCase().split(/[\s,;]+/).filter(Boolean); if (roles.indexOf('aide') < 0) { roles.push('aide'); us.getRange(ur, 4).setValue(roles.join(',')); } }
     try { MailApp.sendEmail({ to: email, replyTo: String(CONFIG.OFFICE_EMAIL).split(/[,;\s]+/)[0], subject: 'Your Comfort Hands employee portal account',
       body: 'Hello ' + String(x[O_.NAME]).split(/\s+/)[0] + ',\n\nYour employee portal account is ready. Open the employee portal' + (CONFIG.STAFF_PORTAL_URL ? ' (' + CONFIG.STAFF_PORTAL_URL + ')' : '') + ', choose "Forgot password", enter this email address, and use the 6-digit code we send you to choose your password.\n\nComfort Hands Home Healthcare, LLC  609-277-3032' }); } catch (e) {}
+    try { const ap = onbObj_(x).app || {}; if (!trkMap_()[email.toLowerCase()]) trkUpsert_(email, { position: String(x[O_.POS] || ''), phone: String(x[O_.PHONE] || '').replace(/[^\d+]/g, ''), smsOk: ap.consentSms === 'Yes', hireDate: today_() }, who); } catch (e) {}
     mark('portal'); if (onbAllDone_(steps)) x[O_.STATUS] = 'hired';
     sh.getRange(r, 1, 1, ONB_N_).setValues([safeRow_(x)]); return out_({ ok: true, item: onbObj_(x) });
   }
