@@ -22,7 +22,7 @@ textarea{min-height:80px}input:focus,select:focus,textarea:focus{outline:2px sol
 .pill{font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px;background:#fff3d6;color:#8a5a00}.pill.ok{background:#e4f6ea;color:#1c6b3a}
 .doc{border:1px solid var(--bd);border-radius:10px;padding:14px 16px;max-height:55vh;overflow:auto;font-size:14px;background:#fff}.doc p{margin:0 0 9px}
 .sig{border:2px dashed #c9a2dc;border-radius:10px;background:#fff;overflow:hidden}.sig canvas{display:block;width:100%;height:130px;touch-action:none;cursor:crosshair}
-.hp{position:absolute;left:-5000px;height:1px;overflow:hidden}.foot{font-size:12px;color:var(--mut);margin-top:16px}
+.hp{position:absolute;left:-5000px;height:1px;overflow:hidden}.grecaptcha-badge{visibility:hidden}.foot{font-size:12px;color:var(--mut);margin-top:16px}
 @media(max-width:640px){.g{grid-template-columns:1fr}.s2{grid-column:auto}}
 
 /* ── NEW LAYOUT (same purple): flat sticky top bar, softer cards, accent-bar sections ── */
@@ -94,7 +94,7 @@ function renderApply(){
    '<h3>Consent and Authorizations</h3>'+consentHTML('employer',CONSENT.employer)+consentHTML('background',CONSENT.background)+'<div class="g"><div><label class="l" for="c_date">Date <span class="req">*</span></label><input type="date" id="c_date"></div></div>'+
    '<h3>Consent to SMS Messaging</h3>'+consentHTML('sms',CONSENT.sms)+
    '<div class="hp" aria-hidden="true"><label>Website<input type="text" id="website" tabindex="-1" autocomplete="off"></label></div>'+
-   '<div id="amsg"></div><p style="margin-top:14px"><button class="btn" id="abtn" onclick="submitApp()">Submit Application</button></p><p class="foot">'+esc(CONSENT.eeo)+'</p></div>';
+   '<div id="amsg"></div><p style="margin-top:14px"><button class="btn" id="abtn" onclick="submitApp()">Submit Application</button></p><p class="foot">'+esc(CONSENT.eeo)+'</p>'+(RECAPTCHA_SITE?'<p class="foot">This site is protected by reCAPTCHA. The Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.</p>':'')+'</div>';
   $('main').innerHTML='<div id="aprog" class="aprog"><div class="ap-t"><b id="apN"></b><span id="apS"></span></div><div class="ap-bar" id="apBar"></div></div>'+h; setupProg(); const d=new Date(); $('c_date').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function setupProg(){
@@ -117,6 +117,10 @@ function readFile(file){ return new Promise((res,rej)=>{
   fr.onload=()=>{ if(!/^image\//.test(file.type)) return done(file.type||'application/pdf',fr.result);
     const im=new Image(); im.onerror=()=>rej(new Error('Could not read that picture.')); im.onload=()=>{ const m=2000, k=Math.min(1,m/Math.max(im.width,im.height)), c=document.createElement('canvas'); c.width=Math.round(im.width*k); c.height=Math.round(im.height*k); c.getContext('2d').drawImage(im,0,0,c.width,c.height); done('image/jpeg',c.toDataURL('image/jpeg',.85)); }; im.src=fr.result; };
   fr.readAsDataURL(file); }); }
+const RECAPTCHA_SITE=''; // paste your reCAPTCHA v3 SITE key here (the public one)
+function captchaToken(){ return new Promise(res=>{ if(!RECAPTCHA_SITE) return res(''); let done=false; const fin=v=>{ if(!done){ done=true; res(v); } }; setTimeout(()=>fin(''),8000);
+  try{ grecaptcha.ready(()=>grecaptcha.execute(RECAPTCHA_SITE,{action:'apply'}).then(fin,()=>fin(''))); }catch(e){ fin(''); } }); }
+if(RECAPTCHA_SITE){ const s=document.createElement('script'); s.src='https://www.google.com/recaptcha/api.js?render='+RECAPTCHA_SITE; s.async=true; document.head.appendChild(s); }
 async function submitApp(){
   const app={}; let miss='';
   SECTIONS.forEach(s=>s[2].forEach(f=>{ const v=val(f); app[f[0]]=v; if(f[4]&&!(Array.isArray(v)?v.length:String(v).trim())&&!miss) miss=f[1]; }));
@@ -127,7 +131,7 @@ async function submitApp(){
   if(!app.consentDate) return say('amsg','bad','Please enter the date.');
   const file=$('resume').files[0]; if(file&&file.size>6*1024*1024&&!/^image\//.test(file.type)) return say('amsg','bad','The resume file is larger than 6 MB.');
   $('abtn').disabled=true; say('amsg','','Sending your application…');
-  try{ const resume=await readFile(file); const j=await api({action:'applySubmit',app:app,resume:resume,website:$('website').value});
+  try{ const resume=await readFile(file); const j=await api({action:'applySubmit',app:app,resume:resume,website:$('website').value,captcha:await captchaToken()});
     if(j.ok){ $('main').innerHTML='<div class="card"><h2>Thank you, '+esc(app.firstName)+'.</h2><p>We received your application for '+esc(app.position)+'. We will review it and contact you by email or phone.</p><p class="sub">Questions? Call 609-277-3032.</p></div>'; window.scrollTo(0,0); return; }
     say('amsg','bad',esc(j.error||'Could not send the application.'));
   }catch(e){ say('amsg','bad','Could not reach our office system. Check your connection and try again.'); }

@@ -227,3 +227,13 @@ Until you switch it on, **nothing is sent**: every text that would go out is onl
 - In the portal, open a patient's **PCA** screen, start a request, fill the form, then press **Fax via MetroFax**. The button changes to "Confirm: fax to <insurer> <number>"; press it again to send. The request is logged as sent and the history shows "faxed <date>".
 - The insurer fax numbers are in `CONFIG.FAX.NUMBERS` in the script (Horizon, UnitedHealthcare, Aetna, Wellpoint filled in; HealthPartners blank, so that form is downloaded instead). Change a number there and redeploy. A blank `CONFIG.FAX.GATEWAY_DOMAIN` switches PCA faxing off.
 - The script only knows the email was handed to MetroFax. Check MetroFax's confirmation email to see whether the fax was delivered.
+
+## reCAPTCHA on the Apply page (optional, recommended)
+
+1. Go to https://www.google.com/recaptcha/admin/create . Label: Comfort Hands Apply. Type: **reCAPTCHA v3**. Domain: `comforthands.net`. Submit.
+2. Google shows two keys. The **Site key** is public; the **Secret key** is private.
+3. Paste the **Secret key** into `CONFIG.RECAPTCHA_SECRET` in `Code.gs` (Apps Script), then deploy a new version.
+4. Paste the **Site key** into `const RECAPTCHA_SITE=''` near the top of the script in `apply/index.html`, and upload the file.
+5. Test: submit an application. If real applicants are blocked, lower `RECAPTCHA_MIN_SCORE` (0.5 to 0.3).
+
+Until the secret is set, no check is made. The first time a verification runs, Google may ask you to authorize the script's "connect to an external service" permission (it already does this for texts).

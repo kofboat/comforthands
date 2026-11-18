@@ -35,6 +35,9 @@ const CONFIG = {
     GATEWAY_DOMAIN: 'metrofax.com',
     NUMBERS: { 'Horizon': '6095833048', 'UnitedHealthcare': '8555834041', 'Aetna': '8609753293', 'Wellpoint': '8009643627', 'HealthPartners': '' }
   },
+  // Google reCAPTCHA v3 on the public Apply page. Paste the SECRET key here (never in the web page). Blank = no check, so nothing breaks until you set it up.
+  RECAPTCHA_SECRET: '',
+  RECAPTCHA_MIN_SCORE: 0.5,   // 0 to 1. Google scores each visitor; below this the application is refused. Lower it (0.3) if real applicants get blocked
   // Text messages through Twilio. Leave ENABLED false until you have tested with sendTestText(). Until then texts are only recorded in the TextLog tab.
   SMS: {
     ENABLED: false,
@@ -1703,8 +1706,24 @@ function hr_(d) {
   return out_({ ok: false, error: 'unknown action' });
 }
 
+// reCAPTCHA v3: Google checks the visitor's token. Off (always true) until CONFIG.RECAPTCHA_SECRET is set. If Google cannot be reached the application is refused rather than let through.
+function captchaOk_(token) {
+  const secret = CONFIG.RECAPTCHA_SECRET; if (!secret) return true;
+  if (!token || String(token).length > 4000) return false;
+  try {
+    const r = UrlFetchApp.fetch('https://www.google.com/recaptcha/api/siteverify', { method: 'post', payload: { secret: secret, response: String(token) }, muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) return false;
+    const j = JSON.parse(r.getContentText());
+    if (!j.success) return false;
+    if (j.action && j.action !== 'apply') return false;
+    if (typeof j.score === 'number' && j.score < (Number(CONFIG.RECAPTCHA_MIN_SCORE) || 0.5)) return false;
+    return true;
+  } catch (e) { return false; }
+}
+
 function applySubmit_(d) {
   if (d.website) return out_({ ok: true }); // hidden field that only automated senders fill in
+  if (!captchaOk_(d.captcha)) return out_({ ok: false, error: 'We could not confirm you are not a robot. Please reload the page and try again, or call the office at 609-277-3032.' });
   const a = d.app || {}, app = {};
   APP_FIELDS_.forEach(function (f) { let v = a[f[0]]; if (Array.isArray(v)) v = v.map(String).join(', '); if (v === true) v = 'Yes'; app[f[0]] = String(v == null || v === false ? '' : v).trim().slice(0, f[0].slice(-4) === 'Resp' || /Explain$/.test(f[0]) ? 1500 : 200); });
   const email = app.email.toLowerCase(), bad = function (m) { return out_({ ok: false, error: m }); };
