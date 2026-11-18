@@ -374,10 +374,10 @@ function aide_(act, d, u) {
 }
 
 function sheetHtml_(plan, data, weekStart, sub) {
-  const css = 'body{font-family:Arial,sans-serif;font-size:10px;color:#111}h1{font-size:16px;text-align:center;margin:0 0 2px}.c{text-align:center}' +
-    'table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #777;padding:3px 4px;vertical-align:top;font-size:9.5px}th{background:#eee}' +
+  const css = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111}h1{font-size:16px;text-align:center;margin:0 0 2px}.c{text-align:center}' +
+    'table{width:100%;border-collapse:collapse;margin:6px 0}td,th{border:1px solid #777;padding:3px 4px;vertical-align:top;font-size:9.5px}th{background:#f3e6f7;color:#34182d}' +
     '.ck{text-align:center;font-weight:bold;width:7.5%}.off{background:#ddd}.n{border:none}';
-  let h = '<h1>Home Health Aide Activity Sheet</h1><div class="c">&radic; = CHHA Performed &nbsp; R = Client Refused &nbsp;|&nbsp; Agency Phone #: 609-277-3032</div>' +
+  let h = pdfHdr_('Home Health Aide Activity Sheet', 'patient', { name: plan.name, date: weekStart }) + '<div class="c">&radic; = CHHA Performed &nbsp; R = Client Refused &nbsp;|&nbsp; Agency Phone #: 609-277-3032</div>' +
     '<div class="c"><b>Notice:</b> Activity Sheet must reach our office by Monday, 12:00 pm, after each week ending for payroll processing.</div>' +
     '<p><b>Client:</b> ' + esc_(plan.name) + ' &mdash; ' + esc_(plan.address) + '<br><b>Week of:</b> ' + esc_(weekStart) + '</p>';
   h += '<table><tr><th>Day</th><th>Date</th><th>Time In</th><th>Time Out</th><th># Hours</th><th>Aide</th></tr>';
@@ -979,13 +979,29 @@ function records_(act, d, u) {
   return out_({ ok: false, error: 'unknown action' });
 }
 
-function repHtml_(title, sub, body) {
-  const css = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.4}h1{font-size:17px;margin:0;color:#34182d}h2{font-size:14px;margin:8px 0;text-align:center}' +
+// ── Shared PDF style (same look as the printed packet) ──
+// Header (agency name, then name/date on a rule) and the purple banner, as a table so Google's PDF converter handles it.
+// kind: 'patient' (Patient name, DOB, Date) | 'staff' (Applicant name, Date) | 'office' (agency name only).
+function pdfHdr_(title, kind, o) {
+  o = o || {};
+  const u = function (v, w) { return v ? '<u>&nbsp;' + esc_(v) + '&nbsp;</u>' : '<span style="display:inline-block;border-bottom:1px solid #444;width:' + w + 'px">&nbsp;</span>'; };
+  const right = kind === 'patient' ? 'Patient name: ' + u(o.name, 130) + (o.dob !== undefined ? ' &nbsp; DOB: ' + u(o.dob, 70) : '') + ' &nbsp; Date: ' + u(o.date, 70)
+    : kind === 'staff' ? esc_(o.label || 'Applicant name') + ': ' + u(o.name, 150) + ' &nbsp; Date: ' + u(o.date, 70) : '';
+  return '<table style="width:100%;border-collapse:collapse;border-bottom:2px solid #34182d;margin:0 0 8px"><tr><td style="font-size:12px;font-weight:bold;color:#34182d;padding:0 0 5px;border:0">Comfort Hands Home Healthcare, LLC</td>' +
+    '<td style="text-align:right;font-size:9.5px;color:#444;padding:0 0 5px;border:0">' + right + '</td></tr></table>' +
+    '<div style="background:#34182d;color:#fff;padding:9px 12px;margin:0 0 10px"><div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#e6c8f2">' +
+    (kind === 'patient' ? 'Patient document' : kind === 'staff' ? 'Staff document' : 'Document') + '</div><div style="font-size:17px;font-weight:bold;margin-top:2px">' + esc_(title) + '</div></div>';
+}
+const PDF_CSS_ = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111}' +
+  'h2{font-size:14px;margin:8px 0 5px;color:#34182d}h3{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d}' +
+  '.psl{color:#555;font-weight:bold;font-size:9px}.psv{margin-bottom:6px}ul,ol{padding-left:18px}p{margin:0 0 7px}table{border-collapse:collapse}';
+function repHtml_(title, sub, body, kind, label) {
+  const css = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.42}h1{font-size:17px;margin:0;color:#34182d}h2{font-size:14px;margin:8px 0;text-align:center}' +
     'h3{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d}table{width:100%;border-collapse:collapse}' +
     'table.g td,table.g th{border:1px solid #888;padding:4px 5px;vertical-align:top;font-size:10px}table.g th{background:#eee;text-align:left}' +
     '.c{text-align:center}.ln{border-bottom:1px solid #444;display:inline-block;min-width:120px}.cb{font-family:Courier New,monospace;font-weight:bold}' +
     '.sig img{height:60px}.k{font-size:8.5px;color:#555;text-transform:uppercase;font-weight:bold}.box{border:1px solid #888;padding:5px 7px;margin:4px 0;white-space:pre-wrap}';
-  const head = '<table><tr><td><h1>Comfort Hands Home Healthcare, LLC</h1><div>505 Hamilton Ave, Ste 200, Linwood, NJ 08221 &middot; 609-277-3032</div></td><td style="text-align:right"><b>' + esc_(title) + '</b><br>' + esc_(sub) + '</td></tr></table>';
+  const bits = String(sub || '').split(' \u00b7 '), head = pdfHdr_(title, kind || 'staff', { name: bits[0], date: bits[bits.length - 1], label: label });
   return '<html><head><meta charset="utf-8"><style>' + css + '</style></head><body>' + head + safeHtml_(body) + '</body></html>';
 }
 
@@ -1010,7 +1026,7 @@ function reportSave_(d, u) {
     fname = label + ' - ' + fn + ' - ' + day + '.pdf';
   }
   // PDF and Drive work happen before the lock is taken.
-  const pdf = Utilities.newBlob(repHtml_(label, sub + ' · ' + day, d.html), 'text/html', 'r.html').getAs('application/pdf').setName(fname);
+  const pdf = Utilities.newBlob(repHtml_(label, sub + ' · ' + day, d.html, kind === 'chha' ? 'staff' : 'patient', kind === 'chha' ? 'Aide name' : ''), 'text/html', 'r.html').getAs('application/pdf').setName(fname);
   const file = folder.createFile(pdf), now = new Date().toISOString();
   withLock_(function () {
     repSheet_().appendRow([Utilities.getUuid(), kind, pid, aideEmail, label, day, file.getUrl(), who, now, JSON.stringify(stripSensitive_(d.data || {})).slice(0, 4000)]);
@@ -1905,7 +1921,7 @@ function esc_(s) {
 
 function buildHtml_(d) {
   const css =
-    'body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#111;line-height:1.35}' +
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.42}' +
     'h1{font-size:17px;margin:0;color:#34182d}' +
     'h2{font-size:14px;margin:0 0 6px;padding:5px 7px;background:#34182d;color:#fff}' +
     'h3,.sh{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d;font-weight:bold}' +
@@ -1927,11 +1943,7 @@ function buildHtml_(d) {
     'ul,ol{padding-left:16px;margin:3px 0}p{margin:3px 0}' +
     '.sig td{vertical-align:top;padding:6px;width:50%}.sk{color:#555;font-weight:bold;font-size:9px;text-transform:uppercase;margin-bottom:3px}';
 
-  let body =
-    '<table><tr><td><h1>Comfort Hands Home Healthcare, LLC</h1>' +
-    '<div>505 Hamilton Ave, Ste 200, Linwood, NJ 08221 &middot; 609-277-3032</div></td>' +
-    '<td style="text-align:right"><b>Signed Admission Packet</b><br>' + esc_(d.patientFirst) + ' ' + esc_(d.patientLast) +
-    '<br>' + esc_(d.signDate || '') + '</td></tr></table>';
+  let body = pdfHdr_('Signed Admission Packet', 'patient', { name: String(d.patientFirst || '') + ' ' + String(d.patientLast || ''), dob: d.dob || d.patientDob || '', date: d.signDate || '' });
 
   const forms = d.forms || [];
   if (forms.length) {
@@ -1966,9 +1978,8 @@ function sendCopy_(d) {
   if (!/^\S+@\S+\.\S+$/.test(String(d.to || ''))) return { ok: false, error: 'bad email' };
   const last = clean_(d.patientLast) || 'Unknown', first = clean_(d.patientFirst) || 'Patient';
   const day = Utilities.formatDate(new Date(d.submittedAt || Date.now()), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const html = '<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:11px;color:#111}' +
-    'h2,h3{font-size:13px;margin:10px 0 3px}.psl{color:#555;font-weight:bold;font-size:10px}.psv{margin-bottom:6px}ul,ol{padding-left:18px}' +
-    '</style></head><body>' + safeHtml_(d.html) + '</body></html>';
+  const html = '<html><head><meta charset="utf-8"><style>' + PDF_CSS_ + '</style></head><body>' +
+    pdfHdr_('Admission Documents \u2014 Copy for Your Records', 'patient', { name: String(d.patientFirst || '') + ' ' + String(d.patientLast || ''), dob: d.dob || d.patientDob || '', date: day }) + safeHtml_(d.html) + '</body></html>';
   const fileName = 'Pre-visit copy - ' + last + ', ' + first + ' - ' + day + '.pdf';
   const pdf = Utilities.newBlob(html, 'text/html', 'copy.html').getAs('application/pdf').setName(fileName);
   const folder = ptFolder_(d.patientId, last + ', ' + first);
@@ -1998,9 +2009,8 @@ function sendWelcome_(d, first, last, day, folder) {
     (d.relationship ? ' (' + esc_(d.relationship) + ')' : '') + ' &nbsp; <b>Date:</b> ' + esc_(d.signDate) + '<br>' +
     (sig_(d.patientSignature) ? '<img src="' + sig_(d.patientSignature) + '" style="height:70px">' : '') +
     (sig_(d.nurseSignature) ? '<div><b>Nurse witness:</b><br><img src="' + sig_(d.nurseSignature) + '" style="height:60px"></div>' : '') + '</div>';
-  const html = '<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:11px;color:#111}' +
-    'h2,h3{font-size:13px;margin:10px 0 3px}.psl{color:#555;font-weight:bold;font-size:10px}.psv{margin-bottom:6px}ul,ol{padding-left:18px}' +
-    '</style></head><body>' + safeHtml_(agreement) + sigBlock + '</body></html>';
+  const html = '<html><head><meta charset="utf-8"><style>' + PDF_CSS_ + '</style></head><body>' +
+    pdfHdr_('Client Service Agreement', 'patient', { name: String(d.patientFirst || '') + ' ' + String(d.patientLast || ''), dob: d.dob || d.patientDob || '', date: String(d.signDate || day) }) + safeHtml_(agreement) + sigBlock + '</body></html>';
   const pdf = Utilities.newBlob(html, 'text/html', 'agreement.html').getAs('application/pdf')
     .setName('Signed Service Agreement - ' + last + ', ' + first + ' - ' + day + '.pdf');
   folder.createFile(pdf);
@@ -2064,8 +2074,7 @@ function sendFax_(d) {
   if (!/^1\d{10}$/.test(num)) return { ok: false, error: 'bad fax number' };
   const last = clean_(d.patientLast) || 'Unknown', first = clean_(d.patientFirst) || 'Patient';
   const day = Utilities.formatDate(new Date(d.submittedAt || Date.now()), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const html = '<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:11px;color:#111}' +
-    'table{width:100%;border-collapse:collapse}td,th{vertical-align:top;padding:2px 4px}ul,ol{padding-left:18px}</style></head><body>' + safeHtml_(d.html) + '</body></html>';
+  const html = '<html><head><meta charset="utf-8"><style>' + PDF_CSS_ + 'table{width:100%}td,th{vertical-align:top;padding:2px 4px}</style></head><body>' + safeHtml_(d.html) + '</body></html>';
   const pdf = Utilities.newBlob(html, 'text/html', 'fax.html').getAs('application/pdf').setName('Physician Order - ' + last + ', ' + first + ' - ' + day + '.pdf');
   const folder = ptFolder_(d.patientId, last + ', ' + first);
   const file = folder.createFile(pdf);
