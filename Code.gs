@@ -224,7 +224,7 @@ function logCall_(d, user, res) {
 
 // ═══════════════════════════ AIDE WEEKLY ACTIVITY SHEETS ═══════════════════════════
 // Data lives in a Google Sheet that this script creates in your admissions Drive folder the first time it is needed.
-// Tabs: "Plans" (one row per patient: activities + assigned aide emails) and "Weeks" (one row per patient per week).
+// Tabs: "CarePlan" (one row per patient: activities + assigned aide emails) and "Weeks" (one row per patient per week).
 const DAYS_ = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function hasRole_(u, roles) { return (u.roles || []).some(function (r) { return roles.indexOf(r) >= 0; }); }
@@ -235,10 +235,10 @@ function db_() {
   const sid = props.getProperty('SHEET_ID');
   if (sid) return (DB_ = SpreadsheetApp.openById(sid));
   // Created in the owner's own My Drive (not the shared admissions folder): whoever can edit this Sheet controls the accounts.
-  const ss = SpreadsheetApp.create('Comfort Hands Activity Sheets (restricted)');
+  const ss = SpreadsheetApp.create(SHEET_NAME_);
   props.setProperty('SHEET_ID', ss.getId());
   try { ss.setSpreadsheetTimeZone(Session.getScriptTimeZone()); } catch (e) {}
-  const p = ss.getSheets()[0]; p.setName('Plans');
+  const p = ss.getSheets()[0]; p.setName('CarePlan');
   p.appendRow(['key', 'name', 'address', 'activities', 'aides', 'active', 'updatedAt']);
   const w = ss.insertSheet('Weeks');
   w.appendRow(['id', 'planKey', 'weekStart', 'data', 'submittedAt', 'pdfUrl']);
@@ -279,7 +279,7 @@ function weekCtx_(plans, weeks, key, weekStart, u) {
 }
 
 function aide_(act, d, u) {
-  const ss = db_(), plans = ss.getSheetByName('Plans'), weeks = ss.getSheetByName('Weeks');
+  const ss = db_(), plans = carePlanTab_(), weeks = ss.getSheetByName('Weeks');
   const who = u.name || u.email, me = String(u.email).toLowerCase();
   if (act === 'publishPlan') {
     if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
@@ -496,13 +496,31 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
 const PT_N_ = PT_COLS_.length;
 const CELL_MAX_ = 45000; // a Sheet cell holds 50,000 characters; stay under it
 let DB_ = null; const TABS_ = {};
+const SHEET_NAME_ = 'Comfort Hands Operations Data (restricted)';
+// The care plan tab used to be called "Plans". An existing one is renamed in place, so nothing is lost.
+function carePlanTab_() {
+  if (TABS_['CarePlan']) return TABS_['CarePlan'];
+  const ss = db_(); let sh = ss.getSheetByName('CarePlan');
+  if (!sh) { const old = ss.getSheetByName('Plans'); if (old) { old.setName('CarePlan'); sh = old; } else { sh = ss.insertSheet('CarePlan'); sh.appendRow(['key', 'name', 'address', 'activities', 'aides', 'active', 'updatedAt']); } }
+  return (TABS_['CarePlan'] = sh);
+}
+// Names for the name columns. Includes deactivated users so old rows keep a name.
+let USERNAMES_ = null;
+function userNames_() {
+  if (USERNAMES_) return USERNAMES_;
+  const m = {}, v = usersSheet_().getDataRange().getValues();
+  CONFIG.USERS.forEach(function (u) { m[u.email.toLowerCase()] = u.name || u.email; });
+  for (let i = 1; i < v.length; i++) { const e = String(v[i][0]).trim().toLowerCase(); if (e) m[e] = String(v[i][1] || e); }
+  return (USERNAMES_ = m);
+}
+function userName_(email) { return userNames_()[String(email || '').trim().toLowerCase()] || ''; }
 
 // Opens a tab, creating it (or adding newly introduced header columns) when needed.
 function tab_(name, header) {
@@ -517,7 +535,7 @@ function repSheet_() { return tab_('Reports', ['id', 'kind', 'patientId', 'aideE
 function draftSheet_() { return tab_('Drafts', ['id', 'kind', 'patientId', 'aideEmail', 'data', 'updatedAt', 'updatedBy']); }
 function draftId_(d) { return String(d.kind) + '|' + (d.kind === 'chha' ? String(d.aideEmail || '').toLowerCase() : keyOf_(d.patientId)); }
 // PCA authorizations: one row per request sent to an insurer. The insurer's answer (approval date, authorization number, units, dates, ICD-10) is recorded on the same row.
-const PCA_COLS_ = ['id', 'patientId', 'insurer', 'type', 'sentAt', 'hoursDay', 'daysWeek', 'hoursWeek', 'reqFrom', 'reqTo', 'status', 'approvedAt', 'authNo', 'units', 'authFrom', 'authTo', 'icd10', 'note', 'updatedAt', 'by'];
+const PCA_COLS_ = ['id', 'patientId', 'insurer', 'type', 'sentAt', 'hoursDay', 'daysWeek', 'hoursWeek', 'reqFrom', 'reqTo', 'status', 'approvedAt', 'authNo', 'units', 'authFrom', 'authTo', 'icd10', 'note', 'updatedAt', 'by', 'patientName'];
 function pcaTab_() { return tab_('PcaAuth', PCA_COLS_); }
 function pcaObj_(r) { const o = {}; PCA_COLS_.forEach(function (c, i) { o[c] = (/At$|From$|To$/.test(c) && c !== 'updatedAt') ? iso_(r[i]) : String(r[i] == null ? '' : r[i]); }); return o; }
 function pcaRows_(pid) { const v = pcaTab_().getDataRange().getValues(), res = []; for (let i = 1; i < v.length; i++) if (v[i][0] && (!pid || keyOf_(v[i][1]) === keyOf_(pid))) res.push(pcaObj_(v[i])); return res; }
@@ -530,7 +548,7 @@ function pcaState_(rows) {
   return { pcaStatus: st, pcaInsurer: (appr || pend || {}).insurer || '', pcaEnd: appr ? appr.authTo : '', daysToPca: days, pcaAuthNo: appr ? appr.authNo : '', pcaSent: pend ? pend.sentAt : '' };
 }
 // Aide compliance trackers. Dates only: no documents are stored. One row per aide.
-const TRK_COLS_ = ['email', 'position', 'phone', 'smsOk', 'hireDate', 'certExpiry', 'bgLast', 'physLast', 'ceuDoneAt', 'updatedAt', 'by'];
+const TRK_COLS_ = ['email', 'position', 'phone', 'smsOk', 'hireDate', 'certExpiry', 'bgLast', 'physLast', 'ceuDoneAt', 'updatedAt', 'by', 'aideName'];
 function trkTab_() { return tab_('AideTrack', TRK_COLS_); }
 let TRK_MEMO_ = null;
 function trkMap_() {
@@ -563,12 +581,71 @@ function trkUpsert_(email, fields, who) {
   email = String(email).trim().toLowerCase(); const sh = trkTab_(), m = trkMap_(), cur = m[email];
   const x = TRK_COLS_.map(function (c) { return cur ? (c === 'smsOk' ? (cur.smsOk ? true : false) : cur[c]) : (c === 'smsOk' ? false : ''); }); x[0] = email;
   Object.keys(fields).forEach(function (c) { const i = TRK_COLS_.indexOf(c); if (i > 0 && fields[c] !== undefined) x[i] = c === 'smsOk' ? !!fields[c] : fields[c]; });
-  x[TRK_COLS_.indexOf('updatedAt')] = new Date().toISOString(); x[TRK_COLS_.indexOf('by')] = who || '';
+  x[TRK_COLS_.indexOf('updatedAt')] = new Date().toISOString(); x[TRK_COLS_.indexOf('by')] = who || ''; x[TRK_COLS_.indexOf('aideName')] = userName_(email);
   const row = x.map(function (v) { return typeof v === 'string' ? txt_(v) : v; });
   if (cur) sh.getRange(cur.row, 1, 1, TRK_COLS_.length).setValues([row]); else sh.appendRow(row);
   TRK_MEMO_ = null;
 }
-function aideTab_() { return tab_('AideRecords', ['email', 'firstCase', 'lastEvalAt', 'lastEvalType', 'updatedAt']); }
+// Keeps the name columns in step with the Users tab and the patient records. Runs in upgrade() and in the daily maintenance run.
+function refreshNames_() {
+  USERNAMES_ = null; const names = userNames_(); let n = 0;
+  const fill = function (sh, keyCol, nameCol, lookup) {
+    const v = sh.getDataRange().getValues();
+    for (let i = 1; i < v.length; i++) { const k = String(v[i][keyCol] || '').trim(); if (!k) continue; const nm = lookup(k); if (nm && String(v[i][nameCol] || '') !== nm) { sh.getRange(i + 1, nameCol + 1).setValue(txt_(nm)); n++; } }
+  }, byUser = function (e) { return names[e.toLowerCase()]; };
+  fill(aideTab_(), 0, 5, byUser);
+  fill(trkTab_(), 0, TRK_COLS_.indexOf('aideName'), byUser);
+  fill(textLogTab_(), 3, 4, byUser);
+  const pv = ptSheet_().getDataRange().getValues(), pn = {}; for (let i = 1; i < pv.length; i++) if (pv[i][P_.ID]) pn[keyOf_(pv[i][P_.ID])] = String(pv[i][P_.NAME] || '');
+  fill(pcaTab_(), 1, PCA_COLS_.indexOf('patientName'), function (k) { return pn[keyOf_(k)]; });
+  return n;
+}
+// An approval that already exists (it did not start as a request sent from the portal). One current authorization per patient: the latest approved row is updated, otherwise a row is added.
+function pcaCheck_(f) {
+  if (!String(f.authNo || '').trim()) return 'The authorization number is needed.';
+  if (!validDay_(f.authFrom) || !validDay_(f.authTo)) return 'The start and end dates are needed (yyyy-mm-dd).';
+  if (f.authTo < f.authFrom) return 'The end date is before the start date.';
+  return '';
+}
+function pcaApprove_(pid, f, who, psh) {
+  const sh = pcaTab_(), v = sh.getDataRange().getValues(), I = function (c) { return PCA_COLS_.indexOf(c); }; let r = 0, best = '';
+  for (let i = 1; i < v.length; i++) if (v[i][0] && keyOf_(v[i][1]) === pid && String(v[i][I('status')]) === 'approved') { const to = iso_(v[i][I('authTo')]); if (!r || to > best) { r = i + 1; best = to; } }
+  const x = r ? v[r - 1].slice() : PCA_COLS_.map(function () { return ''; }); while (x.length < PCA_COLS_.length) x.push('');
+  const set = function (c, val) { x[I(c)] = val; }, num = function (q) { const n = parseFloat(q); return isFinite(n) && n >= 0 ? String(n) : ''; };
+  if (!r) { set('id', 'a' + Utilities.getUuid().replace(/-/g, '').slice(0, 12)); set('patientId', pid); set('type', 'existing'); set('sentAt', f.authFrom); }
+  if (String(f.insurer || '').trim()) set('insurer', txt_(String(f.insurer).trim().slice(0, 40)));
+  set('status', 'approved'); if (!x[I('approvedAt')]) set('approvedAt', f.authFrom);
+  set('authNo', txt_(String(f.authNo).trim().slice(0, 40))); set('authFrom', f.authFrom); set('authTo', f.authTo);
+  if (f.units !== undefined && String(f.units).trim() !== '') set('units', num(f.units)); if (f.icd10 !== undefined && String(f.icd10).trim() !== '') set('icd10', txt_(String(f.icd10).slice(0, 80)));
+  if (f.hoursWeek !== undefined && String(f.hoursWeek).trim() !== '') set('hoursWeek', num(f.hoursWeek));
+  set('updatedAt', new Date().toISOString()); set('by', who || ''); set('patientName', txt_(String(ptGetRow_(psh, ptRow_(psh, pid))[P_.NAME] || '')));
+  if (r) sh.getRange(r, 1, 1, PCA_COLS_.length).setValues([x]); else sh.appendRow(x);
+  return x[0];
+}
+/**
+ * ONE-TIME: load your patients' current PCA authorizations. Run it once to create the "PcaImport" tab, fill one patient per row
+ * (firstName, lastName, dob, insurer, authNo, authFrom, authTo; optional units, icd10, hoursWeek; dates yyyy-mm-dd), then run it again.
+ * The patient must already be in the portal. A blank insurer is taken from the patient's record. Re-running updates, never duplicates.
+ */
+function importPca() {
+  const ss = db_(); let imp = ss.getSheetByName('PcaImport');
+  if (!imp) { imp = ss.insertSheet('PcaImport'); imp.appendRow(['firstName', 'lastName', 'dob', 'insurer', 'authNo', 'authFrom', 'authTo', 'units', 'icd10', 'hoursWeek']); Logger.log('Created the "PcaImport" tab. Fill it in (dates as yyyy-mm-dd), then run importPca again.'); return; }
+  const v = imp.getDataRange().getValues(), psh = ptSheet_(); let n = 0; const notes = [];
+  withLock_(function () {
+    for (let i = 1; i < v.length; i++) {
+      const first = String(v[i][0] || '').trim(), last = String(v[i][1] || '').trim(); if (!first && !last) continue;
+      const dob = iso_(v[i][2]), f = { insurer: String(v[i][3] || '').trim(), authNo: String(v[i][4] || '').trim(), authFrom: iso_(v[i][5]), authTo: iso_(v[i][6]), units: v[i][7], icd10: v[i][8], hoursWeek: v[i][9] };
+      if (!first || !last || !validDay_(dob)) { notes.push('row ' + (i + 1) + ': needs first, last and a valid dob'); continue; }
+      const pid = keyOf_([last, first, dob].join('_').toLowerCase().replace(/[^a-z0-9_-]/g, '')), pr = ptRow_(psh, pid);
+      if (!pr) { notes.push('row ' + (i + 1) + ': ' + first + ' ' + last + ' is not in the portal (check the spelling and dob)'); continue; }
+      const bad = pcaCheck_(f); if (bad) { notes.push('row ' + (i + 1) + ': ' + bad); continue; }
+      if (!f.insurer) { try { f.insurer = String(ptBlob_(ptGetRow_(psh, pr)).shared.insCompany || ''); } catch (e) {} if (!f.insurer) notes.push('row ' + (i + 1) + ': imported with no insurer (none on the patient record either)'); }
+      pcaApprove_(pid, f, 'import', psh); n++;
+    }
+  });
+  Logger.log('Imported ' + n + ' authorization(s).' + (notes.length ? ' Notes:\n' + notes.join('\n') : ''));
+}
+function aideTab_() { return tab_('AideRecords', ['email', 'firstCase', 'lastEvalAt', 'lastEvalType', 'updatedAt', 'aideName']); }
 function iso_(v) { if (!v) return ''; if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd'); return String(v).slice(0, 10); }
 function dparse_(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null; }
 function addMonths_(s, n) { const d = dparse_(s); if (!d) return ''; const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(day, last)); return iso_(d); }
@@ -648,7 +725,7 @@ function usersAll_() {
 // Each tab is read once per request and reused.
 function load_() {
   const ss = db_();
-  return { plans: ss.getSheetByName('Plans').getDataRange().getValues(), weeks: ss.getSheetByName('Weeks').getDataRange().getValues(), aideRec: aideTab_().getDataRange().getValues() };
+  return { plans: carePlanTab_().getDataRange().getValues(), weeks: ss.getSheetByName('Weeks').getDataRange().getValues(), aideRec: aideTab_().getDataRange().getValues() };
 }
 function byAide_(x, aide) { return x.byE ? x.byE === aide.email : (x.by === aide.name || x.by === aide.email); }
 
@@ -761,7 +838,16 @@ function records_(act, d, u) {
   if (act === 'pcaList') {
     const r = ptRow_(psh, keyOf_(d.id)); if (!r) return out_({ ok: false, error: 'not found' });
     const rows = pcaRows_(d.id).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; });
-    return out_({ ok: true, rows: rows, state: pcaState_(rows), agency: CONFIG.AGENCY || {} });
+    let ins = ''; try { ins = String(ptBlob_(ptGetRow_(psh, r)).shared.insCompany || ''); } catch (e) {}
+    return out_({ ok: true, rows: rows, state: pcaState_(rows), agency: CONFIG.AGENCY || {}, insurer: ins });
+  }
+  if (act === 'pcaAddExisting') {
+    const pid = keyOf_(d.patientId); if (!pid || !ptRow_(psh, pid)) return out_({ ok: false, error: 'not found' });
+    const bad = pcaCheck_(d); if (bad) return out_({ ok: false, error: bad });
+    return withLock_(function () {
+      pcaApprove_(pid, d, who, psh); audit_(u, 'pcaAddExisting', pid, String(d.authNo || ''));
+      const rows = pcaRows_(pid).sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; }); return out_({ ok: true, rows: rows, state: pcaState_(rows) });
+    });
   }
   if (act === 'pcaSave') {
     const pid = keyOf_(d.patientId); if (!pid || !ptRow_(psh, pid)) return out_({ ok: false, error: 'not found' });
@@ -781,7 +867,7 @@ function records_(act, d, u) {
       ['hoursDay', 'daysWeek', 'hoursWeek'].forEach(function (c) { if (d[c] !== undefined) set(c, num(d[c])); });
       set('reqFrom', d.reqFrom || ''); set('reqTo', d.reqTo || ''); set('status', d.status); set('approvedAt', d.approvedAt || '');
       set('authNo', txt_(String(d.authNo || '').slice(0, 40))); set('units', num(d.units)); set('authFrom', d.authFrom || ''); set('authTo', d.authTo || '');
-      set('icd10', txt_(String(d.icd10 || '').slice(0, 80))); set('note', txt_(String(d.note || '').slice(0, 300))); set('updatedAt', new Date().toISOString()); set('by', who);
+      set('icd10', txt_(String(d.icd10 || '').slice(0, 80))); set('note', txt_(String(d.note || '').slice(0, 300))); set('updatedAt', new Date().toISOString()); set('by', who); set('patientName', txt_(String(ptGetRow_(psh, ptRow_(psh, pid))[P_.NAME] || '')));
       if (r) sh.getRange(r, 1, 1, PCA_COLS_.length).setValues([x]); else sh.appendRow(x);
       audit_(u, 'pcaSave', pid, d.status + (x[PCA_COLS_.indexOf('authNo')] ? ' ' + x[PCA_COLS_.indexOf('authNo')] : ''));
       const rows = pcaRows_(pid); return out_({ ok: true, id: x[0], rows: rows.sort(function (a, b) { return a.sentAt < b.sentAt ? 1 : -1; }), state: pcaState_(rows) });
@@ -900,13 +986,13 @@ function reportSave_(d, u) {
     if (kind === 'pn') psh.getRange(ptRow_(psh, pid), P_.LASTNOTE + 1).setValue(day);
     if (kind === 'dc') {
       const r = ptRow_(psh, pid); psh.getRange(r, P_.STATUS + 1).setValue('discharged'); psh.getRange(r, P_.DISCHARGED + 1).setValue(day); psh.getRange(r, P_.DCFILED + 1).setValue(today_());
-      const plans = db_().getSheetByName('Plans'), pr = findRow_(plans, 0, pid); if (pr) plans.getRange(pr, 6).setValue(false); // aides stop seeing the sheet
+      const plans = carePlanTab_(), pr = findRow_(plans, 0, pid); if (pr) plans.getRange(pr, 6).setValue(false); // aides stop seeing the sheet
       delRows_(dsh, function (row) { return row[2] === pid; }); // every unfinished draft for this patient
     }
     if (kind === 'chha') {
       const rec = aideTab_(), r = findRowCI_(rec, aideEmail), fc = validDay_(d.firstCase) ? d.firstCase : '';
-      const row = [aideEmail, fc || (r ? iso_(rec.getRange(r, 2).getValue()) : ''), day, String(d.evalType || '').slice(0, 40), now];
-      if (r) rec.getRange(r, 1, 1, 5).setValues([row]); else rec.appendRow(row);
+      const row = [aideEmail, fc || (r ? iso_(rec.getRange(r, 2).getValue()) : ''), day, String(d.evalType || '').slice(0, 40), now, txt_(userName_(aideEmail))];
+      if (r) rec.getRange(r, 1, 1, 6).setValues([row]); else rec.appendRow(row);
     }
     const dr = findRow_(dsh, 0, draftId_({ kind: kind, patientId: pid, aideEmail: aideEmail })); if (dr) dsh.deleteRow(dr);
   });
@@ -947,6 +1033,7 @@ function dueDigest() {
 // with filed reports, unfinished drafts, the care plan and the aides' weekly sheets. The PDFs in Drive are kept. The patient's
 // name, date of birth and dates stay as an index so the filed PDFs can still be found.
 function purgeOld() {
+  try { refreshNames_(); } catch (e) {}
   withLock_(function () {
     const psh = ptSheet_(), v = psh.getDataRange().getValues(), cutoff = addDays_(today_(), -REC_.PURGE_DAYS), gone = {}, rows = [];
     for (let i = 1; i < v.length; i++) {
@@ -961,7 +1048,7 @@ function purgeOld() {
       if (users[e].roles.indexOf('aide') < 0) return;
       const fc = aideFacts_(users[e], '', '', L).firstCase; if (!fc) return;
       const r = findRowCI_(rec, e);
-      if (!r) rec.appendRow([e, fc, '', '', now]); else if (!rec.getRange(r, 2).getValue()) rec.getRange(r, 2).setValue(fc);
+      if (!r) rec.appendRow([e, fc, '', '', now, txt_(userName_(e))]); else if (!rec.getRange(r, 2).getValue()) rec.getRange(r, 2).setValue(fc);
     });
     rows.forEach(function (r) {
       psh.getRange(r, P_.SHARED + 1, 1, 2).setValues([['', '']]); psh.getRange(r, P_.FORM2 + 1, 1, 2).setValues([['', '']]); psh.getRange(r, P_.PURGED + 1).setValue(true);
@@ -969,7 +1056,7 @@ function purgeOld() {
     const ss = db_();
     delRows_(draftSheet_(), function (row) { return gone[row[2]]; });
     delRows_(ss.getSheetByName('Weeks'), function (row) { return gone[row[1]]; });
-    delRows_(ss.getSheetByName('Plans'), function (row) { return gone[row[0]]; });
+    delRows_(carePlanTab_(), function (row) { return gone[row[0]]; });
     delRows_(pcaTab_(), function (row) { return gone[row[1]]; });
     const rsh = repSheet_(), rv = rsh.getDataRange().getValues();
     for (let i = 1; i < rv.length; i++) if (gone[rv[i][2]] && rv[i][9]) rsh.getRange(i + 1, 10).setValue('');
@@ -1031,30 +1118,48 @@ function importAides() {
 // The office keeps a standing weekly schedule in the "Schedule" tab (one row per shift). Aides get a text shortly before a shift starts and when it ends.
 // Texts never contain a patient's name or address. Reminders go only to active aides with a phone number and SMS consent (AideTrack tab).
 // Until CONFIG.SMS is filled in and ENABLED is true, nothing is sent: each text that WOULD be sent is only recorded in the "TextLog" tab as dry-run.
-const SCHED_COLS_ = ['aideEmail', 'patient', 'days', 'start', 'end', 'active', 'skipDates'];
+const SCHED_DAYS_ = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];   // column order; JavaScript's getDay() is (index + 1) % 7
+const SCHED_COLS_ = (function () { const c = ['aideEmail', 'aideName', 'patient']; SCHED_DAYS_.forEach(function (d) { c.push(d + ' start', d + ' finish'); }); c.push('active', 'skip'); return c; })();
 const DAYNAMES_ = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 function now_() { return new Date(); }
 function schedTab_() {
+  if (!TABS_['Schedule']) { const ex = db_().getSheetByName('Schedule'); if (ex) { try { schedMigrate_(ex); } catch (e) {} } }
   const fresh = !db_().getSheetByName('Schedule'), sh = tab_('Schedule', SCHED_COLS_);
-  if (fresh) { try { schedFormat_(sh); } catch (e) {} }
+  if (fresh) { try { schedFormat_(sh); schedNameFormula_(sh); } catch (e) {} }
   return sh;
 }
+// The first version of the tab had one row per shift with a "days" column. Rows in that layout are moved into the per-day layout.
+function schedMigrate_(sh) {
+  const v = sh.getDataRange().getValues(); if (!v.length || String(v[0][2]) !== 'days') return false;
+  const out = [SCHED_COLS_.slice()];
+  for (let i = 1; i < v.length; i++) {
+    const r = v[i], row = SCHED_COLS_.map(function () { return ''; }); row[0] = r[0]; row[2] = r[1];
+    const days = parseDays_(r[2]); if (days) days.forEach(function (wd) { const k = (wd + 6) % 7; row[3 + 2 * k] = r[3]; row[4 + 2 * k] = r[4]; });
+    row[17] = r[5]; row[18] = r[6]; out.push(row);
+  }
+  try { schedFormat_(sh); } catch (e) {}
+  sh.getRange(1, 1, out.length, SCHED_COLS_.length).setValues(out);
+  try { schedNameFormula_(sh); } catch (e) {}
+  return true;
+}
+function schedNameFormula_(sh) { sh.getRange('B2').setFormula('=ARRAYFORMULA(IF(A2:A="","",IFERROR(VLOOKUP(A2:A,Users!A:B,2,FALSE),"not found")))'); }
 function schedFormat_(sh) {
   sh.setFrozenRows(1);
-  sh.getRange('C2:E1000').setNumberFormat('@'); sh.getRange('G2:G1000').setNumberFormat('@');
-  sh.getRange('F2:F1000').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['yes', 'no'], true).setAllowInvalid(true).build());
+  sh.getRange('C2:Q1000').setNumberFormat('@'); sh.getRange('S2:S1000').setNumberFormat('@');
+  sh.getRange('R2:R1000').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['yes', 'no'], true).setAllowInvalid(true).build());
   const t = '=OR(D2="",REGEXMATCH(TO_TEXT(D2),"^\\s*\\d{1,2}:\\d{2}\\s*([AaPp][Mm])?\\s*$"))';
-  sh.getRange('D2:D1000').setDataValidation(SpreadsheetApp.newDataValidation().requireFormulaSatisfied(t).setAllowInvalid(false).setHelpText('Type a time like 9:00 AM or 14:30').build());
-  sh.getRange('E2:E1000').setDataValidation(SpreadsheetApp.newDataValidation().requireFormulaSatisfied(t.replace(/D2/g, 'E2')).setAllowInvalid(false).setHelpText('Type a time like 1:00 PM or 17:30').build());
-  sh.getRange('A1').setNote('The aide\'s sign-in email (must be an active aide).');
-  sh.getRange('B1').setNote('For the office only. Never put in a text message.');
-  sh.getRange('C1').setNote('Days of the week, e.g. Mon, Wed, Fri  or  Mon-Fri  or  daily.');
-  sh.getRange('D1').setNote('Shift start, e.g. 9:00 AM or 14:30.');
-  sh.getRange('E1').setNote('Shift end. An end earlier than the start means an overnight shift.');
-  sh.getRange('F1').setNote('yes (or blank) = send reminders. no = pause this row.');
-  sh.getRange('G1').setNote('One-off days with no shift, e.g. 2026-12-25, 12/31/2026.');
+  sh.getRange('D2:Q1000').setDataValidation(SpreadsheetApp.newDataValidation().requireFormulaSatisfied(t).setAllowInvalid(false).setHelpText('Type a time like 9:00 AM or 14:30, or leave blank for no shift that day').build());
+  sh.getRange('A1').setNote('The aide\'s sign-in email (must be an active aide). One row per aide per patient. For two shifts on one day, use two rows.');
+  sh.getRange('B1').setNote('Filled in automatically from the Users tab. Do not type here.');
+  sh.getRange('C1').setNote('For the office only. Never put in a text message.');
+  sh.getRange('D1').setNote('Each day has a start and a finish. Leave both blank for no shift that day. A finish earlier than the start means an overnight shift.');
+  sh.getRange('R1').setNote('yes (or blank) = send reminders. no = pause this row.');
+  sh.getRange('S1').setNote('One-off dates with no shift, e.g. 2026-12-25, 12/31/2026. Applies to the whole row.');
 }
-function textLogTab_() { return tab_('TextLog', ['at', 'key', 'kind', 'email', 'phoneEnd', 'status', 'detail']); }
+function textLogTab_() {
+  if (!TABS_['TextLog']) { const ex = db_().getSheetByName('TextLog'); if (ex) { try { const h = ex.getRange(1, 1, 1, 7).getValues()[0]; if (String(h[4]) === 'phoneEnd') { const v = ex.getDataRange().getValues(), nv = v.map(function (r, i) { const q = r.slice(); q.splice(4, 0, i ? '' : 'aideName'); return q; }); ex.getRange(1, 1, nv.length, 8).setValues(nv); } } catch (e) {} } }
+  return tab_('TextLog', ['at', 'key', 'kind', 'email', 'aideName', 'phoneEnd', 'status', 'detail']);
+}
 function fmt12_(min) { const h = Math.floor(min / 60), m = min % 60, ap = h >= 12 ? 'PM' : 'AM', h12 = h % 12 === 0 ? 12 : h % 12; return h12 + ':' + String(m).padStart(2, '0') + ' ' + ap; }
 function parseTime_(v) {
   if (v instanceof Date) return v.getHours() * 60 + v.getMinutes();
@@ -1090,20 +1195,31 @@ function parseSkip_(v) {
 // Reads the Schedule tab. Returns the usable shifts and a list of rows that cannot be used (with the reason). No patient names in the reasons.
 function schedRows_() {
   const v = schedTab_().getDataRange().getValues(), users = usersAll_(), trk = trkMap_(), shifts = [], bad = [];
+  const blank = function (x) { return String(x == null ? '' : x).trim() === ''; };
   for (let i = 1; i < v.length; i++) {
     const r = v[i], email = String(r[0] || '').trim().toLowerCase(), row = i + 1;
-    if (!email && !String(r[2] || '').trim() && !String(r[3] || '').trim()) continue;
-    const act = String(r[5] == null ? '' : r[5]).trim().toLowerCase(); if (act === 'no' || act === 'false' || act === 'n') continue;
+    let any = !blank(r[2]); for (let c = 3; c <= 16; c++) if (!blank(r[c])) any = true;
+    if (!email && !any) continue;
+    const act = String(r[17] == null ? '' : r[17]).trim().toLowerCase(); if (act === 'no' || act === 'false' || act === 'n') continue;
     if (!email) { bad.push({ row: row, msg: 'no aide email' }); continue; }
     if (!users[email] || users[email].roles.indexOf('aide') < 0) { bad.push({ row: row, msg: 'no active aide with the email ' + email }); continue; }
-    const days = parseDays_(r[2]); if (!days) { bad.push({ row: row, msg: 'days not understood (use e.g. Mon, Wed, Fri or Mon-Fri)' }); continue; }
-    const st = parseTime_(r[3]), en = parseTime_(r[4]); if (st < 0 || en < 0) { bad.push({ row: row, msg: 'start or end time not understood (use e.g. 9:00 AM or 14:30)' }); continue; }
-    if (st === en) { bad.push({ row: row, msg: 'start and end are the same time' }); continue; }
-    const skip = parseSkip_(r[6]); if (!skip) { bad.push({ row: row, msg: 'skip dates not understood (use e.g. 2026-12-25)' }); continue; }
+    const days = []; let msg = '';
+    for (let d = 0; d < 7; d++) {
+      const a = r[3 + 2 * d], b = r[4 + 2 * d];
+      if (blank(a) && blank(b)) continue;
+      if (blank(a) || blank(b)) { msg = SCHED_DAYS_[d] + ' needs both a start and a finish'; break; }
+      const st = parseTime_(a), en = parseTime_(b);
+      if (st < 0 || en < 0) { msg = SCHED_DAYS_[d] + ' start or finish not understood (use e.g. 9:00 AM or 14:30)'; break; }
+      if (st === en) { msg = SCHED_DAYS_[d] + ' start and finish are the same time'; break; }
+      days.push({ wd: (d + 1) % 7, st: st, en: en });
+    }
+    if (msg) { bad.push({ row: row, msg: msg }); continue; }
+    if (!days.length) { bad.push({ row: row, msg: 'no days filled in' }); continue; }
+    const skip = parseSkip_(r[18]); if (!skip) { bad.push({ row: row, msg: 'skip dates not understood (use e.g. 2026-12-25)' }); continue; }
     const o = trk[email];
     if (!o || !o.phone) { bad.push({ row: row, msg: email + ' has no mobile phone on file, so no texts will be sent' }); continue; }
     if (!o.smsOk) { bad.push({ row: row, msg: email + ' has not agreed to text messages, so no texts will be sent' }); continue; }
-    shifts.push({ row: row, email: email, days: days, st: st, en: en, skip: skip });
+    shifts.push({ row: row, email: email, days: days, skip: skip });
   }
   return { shifts: shifts, bad: bad };
 }
@@ -1111,9 +1227,12 @@ function schedRows_() {
 function occurrences_(shifts, dateIso) {
   const d0 = dparse_(dateIso), wd = d0.getDay(), out = [];
   shifts.forEach(function (s) {
-    if (s.days.indexOf(wd) < 0 || s.skip[dateIso]) return;
-    const a = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), 0, s.st), b = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), 0, s.en + (s.en < s.st ? 1440 : 0));
-    out.push({ shift: s, date: dateIso, start: a, end: b });
+    if (s.skip[dateIso]) return;
+    s.days.forEach(function (dd) {
+      if (dd.wd !== wd) return;
+      const a = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), 0, dd.st), b = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate(), 0, dd.en + (dd.en < dd.st ? 1440 : 0));
+      out.push({ shift: s, date: dateIso, start: a, end: b, st: dd.st, en: dd.en });
+    });
   });
   return out;
 }
@@ -1130,7 +1249,7 @@ function smsLive_() { const c = smsCfg_(); return !!(c.ENABLED && c.TWILIO_SID &
 function e164_(p) { p = String(p || '').replace(/[^\d+]/g, ''); if (/^\+\d{8,15}$/.test(p)) return p; const d = p.replace(/\D/g, ''); if (d.length === 10) return '+1' + d; if (d.length === 11 && d.charAt(0) === '1') return '+' + d; return ''; }
 function smsIndex_() {
   const v = textLogTab_().getDataRange().getValues(), live = smsLive_(), m = {};
-  for (let i = 1; i < v.length; i++) { if (String(v[i][5]) !== (live ? 'sent' : 'dry-run')) continue; const k = String(v[i][1]); const at = String(v[i][0]); if (!m[k] || at > m[k]) m[k] = at; }
+  for (let i = 1; i < v.length; i++) { if (String(v[i][6]) !== (live ? 'sent' : 'dry-run')) continue; const k = String(v[i][1]); const at = String(v[i][0]); if (!m[k] || at > m[k]) m[k] = at; }
   return m;
 }
 function smsLast_(idx, prefix) { let best = ''; Object.keys(idx).forEach(function (k) { if (k.indexOf(prefix) === 0 && idx[k] > best) best = idx[k]; }); return best; }
@@ -1148,7 +1267,7 @@ function sendSms_(to, body, key, kind, email, idx) {
       if (code < 200 || code >= 300) { status = 'failed'; let ec = ''; try { ec = String(JSON.parse(res.getContentText()).code || ''); } catch (e) {} detail = 'HTTP ' + code + (ec ? ' Twilio ' + ec : ''); }
     } catch (e) { status = 'failed'; detail = 'send error'; }
   }
-  try { textLogTab_().appendRow([now_().toISOString(), txt_(key), kind, email || '', num.slice(-4), status, detail]); } catch (e) {}
+  try { textLogTab_().appendRow([now_().toISOString(), txt_(key), kind, email || '', txt_(userName_(email)), num.slice(-4), status, detail]); } catch (e) {}
   if (idx && status !== 'failed') idx[key] = now_().toISOString();
   return status;
 }
@@ -1163,8 +1282,8 @@ function shiftReminders() {
   const occ = occurrences_(sched.shifts, yest).concat(occurrences_(sched.shifts, today)); let sent = 0;
   occ.forEach(function (o) {
     const ph = trk[o.shift.email].phone, inAt = o.start.getTime() - lead * 60000, outAt = o.end.getTime(), t = now.getTime();
-    if (t >= inAt && t < inAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift starts at ' + fmt12_(o.shift.st) + '. Please clock in when you arrive.' + clockLink_() + smsTail_(), 'in|' + o.date + '|' + o.shift.email + '|' + o.shift.st, 'shift-in', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
-    if (t >= outAt && t < outAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift ends at ' + fmt12_(o.shift.en) + '. Please clock out.' + clockLink_() + smsTail_(), 'out|' + o.date + '|' + o.shift.email + '|' + o.shift.en, 'shift-out', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
+    if (t >= inAt && t < inAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift starts at ' + fmt12_(o.st) + '. Please clock in when you arrive.' + clockLink_() + smsTail_(), 'in|' + o.date + '|' + o.shift.email + '|' + o.st, 'shift-in', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
+    if (t >= outAt && t < outAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift ends at ' + fmt12_(o.en) + '. Please clock out.' + clockLink_() + smsTail_(), 'out|' + o.date + '|' + o.shift.email + '|' + o.en, 'shift-out', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
   });
   return sent;
 }
@@ -1179,7 +1298,7 @@ function checkSchedule() { const s = schedRows_(); Logger.log(s.shifts.length + 
 // Shows today's reminders without sending or recording anything.
 function shiftPreview() {
   const s = schedRows_(), lead = Number(smsCfg_().LEAD_MIN) || 15, lines = [];
-  occurrences_(s.shifts, today_()).forEach(function (o) { lines.push(fmt12_(Math.max(0, o.shift.st - lead)) + ' clock-in reminder, ' + fmt12_(o.shift.en) + ' clock-out reminder -> ' + o.shift.email); });
+  occurrences_(s.shifts, today_()).forEach(function (o) { lines.push(fmt12_(Math.max(0, o.st - lead)) + ' clock-in reminder, ' + fmt12_(o.en) + ' clock-out reminder -> ' + o.shift.email); });
   Logger.log((lines.length ? lines.join('\n') : 'No shifts today.') + (s.bad.length ? '\nRows with problems: ' + s.bad.length : '') + '\nTexting is ' + (smsLive_() ? 'LIVE' : 'OFF (dry-run only)') + '.');
 }
 // Compliance texts to aides: at 60 days, at 30 days, on the due date, then weekly until it is recorded. Run daily at 9 am.
@@ -1233,7 +1352,9 @@ function sendTestText() {
 function upgrade() {
   const ss = db_(), tz = Session.getScriptTimeZone();
   try { ss.setSpreadsheetTimeZone(tz); } catch (e) {}
-  ptSheet_(); repSheet_(); draftSheet_(); aideTab_(); pcaTab_(); trkTab_(); schedTab_(); textLogTab_(); onbSheet_(); auditSheet_(); hrRoot_();
+  try { if (ss.getName() !== SHEET_NAME_) { ss.rename(SHEET_NAME_); Logger.log('Renamed the Sheet to "' + SHEET_NAME_ + '".'); } } catch (e) { Logger.log('Could not rename the Sheet: ' + e); }
+  carePlanTab_(); ptSheet_(); repSheet_(); draftSheet_(); aideTab_(); pcaTab_(); trkTab_(); schedTab_(); textLogTab_(); onbSheet_(); auditSheet_(); hrRoot_();
+  try { Logger.log('Name columns refreshed on ' + refreshNames_() + ' row(s).'); } catch (e) { Logger.log('Could not refresh names: ' + e); }
   const us = usersSheet_(), v = us.getDataRange().getValues(); let n = 0;
   for (let i = 1; i < v.length; i++) if (/^[0-9a-f]{64}$/.test(String(v[i][2]))) { us.getRange(i + 1, 3).setValue(stretch_(String(v[i][2]))); n++; }
   Logger.log('Passwords strengthened for ' + n + ' account(s). Everyone signs in again once; passwords are unchanged.');

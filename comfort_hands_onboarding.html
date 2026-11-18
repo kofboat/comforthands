@@ -2532,7 +2532,7 @@ let PCAH=null;
 async function openPcaHub(id){
   let j; try{ j=await api('pcaList',{id:id}); }catch(e){ alert(e.message||'Could not open.'); return; }
   if(!j||!j.ok){ alert('Could not open PCA authorizations ('+((j&&j.error)||'error')+').'); return; }
-  PCAH={id:id,rows:j.rows,state:j.state,agency:j.agency||{}}; drawPcaHub();
+  PCAH={id:id,rows:j.rows,state:j.state,agency:j.agency||{},insurer:j.insurer||''}; drawPcaHub();
 }
 function drawPcaHub(){
   const old=document.getElementById('pcaHub'); if(old) old.remove();
@@ -2543,10 +2543,26 @@ function drawPcaHub(){
   const m=document.createElement('div'); m.id='pcaHub'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;padding:20px';
   m.innerHTML='<div style="background:#fff;max-width:780px;margin:0 auto;border-radius:12px;padding:20px 22px"><h3 style="margin:0 0 4px">PCA authorization</h3>'+
    '<p class="tmuted" style="margin:0 0 10px">'+(st.pcaStatus==='none'?'No request recorded yet. Start one at admission: fill the insurer\'s form and it is logged as sent.':'Current: '+esc(st.pcaStatus)+(st.pcaEnd?' · authorization ends '+usDate(st.pcaEnd)+' ('+st.daysToPca+' days)':''))+'</p>'+
-   '<div style="margin-bottom:10px"><button class="mini" style="background:#1a5d4a;color:#fff" onclick="pcaNew()">＋ '+(st.pcaStatus==='approved'||st.pcaStatus==='renewal sent'?'Renewal request':'New request')+' (fills the insurer\'s form)</button></div>'+
+   '<div style="margin-bottom:10px"><button class="mini" style="background:#1a5d4a;color:#fff" onclick="pcaNew()">＋ '+(st.pcaStatus==='approved'||st.pcaStatus==='renewal sent'?'Renewal request':'New request')+' (fills the insurer\'s form)</button> <button class="mini" onclick="pcaExisting()">＋ Add existing authorization</button></div>'+
    (rows.length?'<table class="htbl"><thead><tr><th>Sent</th><th>Insurer</th><th>Insurer answer</th><th></th></tr></thead><tbody>'+tr+'</tbody></table>':'')+
    '<div id="pcaEdit"></div><div style="margin-top:12px;text-align:right"><button class="mini" onclick="document.getElementById(\'pcaHub\').remove();HOME=null;renderHome()">Close</button></div></div>';
   document.body.appendChild(m);
+}
+
+function pcaExisting(){
+  const cur=PCAH.state||{}, e=(id,l,v,ty)=>'<div class="fgroup"><label class="lbl">'+l+'</label><input type="'+(ty||'text')+'" id="pae_'+id+'" value="'+escAct(v||'')+'"></div>';
+  const ins=PCAH.insurer||cur.pcaInsurer||'';
+  document.getElementById('pcaEdit').innerHTML='<div style="border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-top:12px"><h4 style="margin:0 0 4px">Add an existing authorization</h4><p class="tmuted" style="margin:0 0 8px">For an approval you already have. '+(cur.pcaStatus==='approved'||cur.pcaStatus==='renewal sent'?'This replaces the current authorization on file for this patient.':'')+'</p><div class="fg">'+
+   '<div class="fgroup"><label class="lbl">Insurer</label><select id="pae_insurer"><option value="">— Select —</option>'+Object.keys(PCA_MAP).map(k=>'<option value="'+k+'"'+(k===ins?' selected':'')+'>'+(k==='Horizon'?'Horizon NJ Health':k)+'</option>').join('')+'</select></div>'+
+   e('authNo','Authorization number','')+e('authFrom','Start date','','date')+e('authTo','End date','','date')+e('units','Total units approved (optional)','')+e('hoursWeek','Hours per week (optional)','')+e('icd10','ICD-10 code(s) (optional)','')+'</div>'+
+   '<p id="paeMsg" class="tmuted"></p><div style="text-align:right"><button class="mini" style="background:#1a5d4a;color:#fff" onclick="pcaExistingSave()">Save</button></div></div>';
+}
+async function pcaExistingSave(){
+  const g=k=>document.getElementById('pae_'+k).value.trim(), msg=document.getElementById('paeMsg');
+  if(!g('authNo')||!g('authFrom')||!g('authTo')){ msg.textContent='Enter the authorization number, start date and end date.'; return; }
+  try{ const j=await api('pcaAddExisting',{patientId:PCAH.id,insurer:g('insurer'),authNo:g('authNo'),authFrom:g('authFrom'),authTo:g('authTo'),units:g('units'),hoursWeek:g('hoursWeek'),icd10:g('icd10')});
+    if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; } PCAH.rows=j.rows; PCAH.state=j.state; drawPcaHub();
+  }catch(e){ msg.textContent=e.message||'Could not save.'; }
 }
 function pcaNew(){ const id=PCAH.id, last=PCAH.rows.filter(r=>r.status==='approved').sort((a,b)=>a.authTo<b.authTo?1:-1)[0]; const rows=PCAH.rows, agy=PCAH.agency; document.getElementById('pcaHub').remove(); openPca(id,last,rows,agy); }
 function pcaEdit(rid){
