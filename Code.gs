@@ -1159,6 +1159,97 @@ function importPatients() {
 }
 
 /**
+ * BULK PATIENT UPDATE. Fills in member ID, insurance company, address, phone, ICD-10 and first day of service for patients that are already in the portal
+ * (or adds new ones when a date of birth is given).
+ *   1. Make a tab named "PatientUpdate" (run previewPatientUpdate once and it creates it for you) and paste your list in, with a header row.
+ *      Headers it understands (any order, capital letters do not matter): Member ID, Insurance company, First Day of Service, Admission ID, First Name, Last Name,
+ *      ICD-10, Address1, Address2, City, County, Home Phone, State, Zip, DOB, Medicaid #. Only First Name and Last Name are required.
+ *   2. Run previewPatientUpdate: it changes nothing and lists what it would do (View > Logs).
+ *   3. Run updatePatients to apply it. A "Result" column is added on the tab, one line per row.
+ * A patient is found by first + last name (and DOB when you give one). A blank cell never erases what is already saved. Run it again any time.
+ */
+function previewPatientUpdate() { patientUpdate_(true); }
+function updatePatients() { patientUpdate_(false); }
+
+function patientUpdate_(dry) {
+  const ss = db_(); let imp = ss.getSheetByName('PatientUpdate');
+  if (!imp) { imp = ss.insertSheet('PatientUpdate'); imp.appendRow(['Member ID', 'Insurance company', 'First Day of Service', 'Admission ID', 'First Name', 'ICD-10', 'Last Name', 'Address1', 'Address2', 'City', 'County', 'Home Phone', 'State', 'Zip', 'DOB']); Logger.log('Created the "PatientUpdate" tab. Paste your list in under the headers, then run previewPatientUpdate again.'); return; }
+  const v = imp.getDataRange().getValues(); if (v.length < 2) { Logger.log('The PatientUpdate tab has no rows.'); return; }
+  const norm = function (h) { return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  const ALIAS = { memberid: 'memberId', insuranceid: 'memberId', insurancecompany: 'ins', insurance: 'ins', mco: 'ins', firstdayofservice: 'start', startofcare: 'start', admissionid: 'admId', firstname: 'first', lastname: 'last',
+    icd10: 'icd', icd: 'icd', address1: 'addr1', address: 'addr1', address2: 'addr2', city: 'city', county: 'county', homephone: 'phone', phone: 'phone', cell: 'phone', state: 'state', zip: 'zip', zipcode: 'zip', postalcode: 'zip',
+    dob: 'dob', dateofbirth: 'dob', medicaid: 'medicaid', medicaidnumber: 'medicaid', medicaidid: 'medicaid' };
+  const col = {}; let resCol = -1;
+  v[0].forEach(function (h, i) { const k = ALIAS[norm(h)]; if (k && col[k] === undefined) col[k] = i; if (norm(h) === 'result') resCol = i; });
+  if (col.first === undefined || col.last === undefined) { Logger.log('The first row must have headers named "First Name" and "Last Name".'); return; }
+  const get = function (row, k) { return col[k] === undefined ? '' : (row[col[k]] instanceof Date ? row[col[k]] : String(row[col[k]] == null ? '' : row[col[k]]).trim()); };
+  const letters = function (s) { return String(s || '').toLowerCase().replace(/[^a-z]/g, ''); };
+  const title = function (s) { s = String(s || '').trim(); return s && s === s.toUpperCase() ? s.toLowerCase().replace(/(^|[\s\-'])([a-z])/g, function (m, a, b) { return a + b.toUpperCase(); }) : s; };
+  const phoneFmt = function (s) { const d = String(s || '').replace(/\D/g, '').replace(/^1(\d{10})$/, '$1'); return d.length === 10 ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : String(s || '').trim(); };
+  const dayIn = function (x) {
+    if (!x) return ''; if (x instanceof Date) return iso_(x);
+    const t = String(x).trim(), m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t); if (m) return m[3] + '-' + ('0' + m[1]).slice(-2) + '-' + ('0' + m[2]).slice(-2);
+    return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : '';
+  };
+  const insMap = function (s) {
+    s = String(s || '').toLowerCase(); if (!s) return '';
+    if (/horizon/.test(s)) return 'Horizon'; if (/united|uhc/.test(s)) return 'UnitedHealthcare'; if (/aetna/.test(s)) return 'Aetna';
+    if (/wellpoint|amerigroup/.test(s)) return 'Wellpoint'; if (/health\s*partners/.test(s)) return 'HealthPartners'; return null;
+  };
+  const psh = ptSheet_(), pv = psh.getDataRange().getValues(), byName = {};
+  for (let i = 1; i < pv.length; i++) if (pv[i][P_.ID]) { const k = letters(String(pv[i][P_.NAME]).split(/\s+/)[0]) + '|' + letters(String(pv[i][P_.NAME]).split(/\s+/).slice(-1)[0]); (byName[k] = byName[k] || []).push(i + 1); }
+  const results = [], tally = { updated: 0, added: 0, unchanged: 0, skipped: 0 }; const seen = {};
+  const doRows = function () {
+    for (let i = 1; i < v.length; i++) {
+      const row = v[i], first = String(get(row, 'first')), last = String(get(row, 'last')); let msg = '';
+      if (!first && !last) { results.push(''); continue; }
+      try {
+        const dobIn = dayIn(get(row, 'dob')), key = letters(first) + '|' + letters(last); let rows = (byName[key] || []).slice();
+        const dupNote = seen[key + '|' + dobIn] ? ' [This patient is on more than one row; later rows overwrite earlier ones.]' : ''; seen[key + '|' + dobIn] = true;
+        if (rows.length > 1 && dobIn) rows = rows.filter(function (r) { return iso_(pv[r - 1][P_.DOB]) === dobIn; });
+        if (rows.length > 1) { msg = 'SKIPPED: more than one patient named ' + first + ' ' + last + '. Add a DOB column.'; tally.skipped++; results.push(msg); continue; }
+        let x, r = rows[0], isNew = false;
+        if (!r) {
+          if (!validDay_(dobIn)) { msg = 'SKIPPED: not in the portal yet. Add a DOB (yyyy-mm-dd or m/d/yyyy) to add them.'; tally.skipped++; results.push(msg); continue; }
+          x = []; for (let k = 0; k < PT_N_; k++) x.push(''); isNew = true;
+          const id = keyOf_([last, first, dobIn].join('_').toLowerCase().replace(/[^a-z0-9_-]/g, ''));
+          x[P_.ID] = id; x[P_.NAME] = txt_(first + ' ' + last); x[P_.DOB] = dobIn; x[P_.STATUS] = 'active'; x[P_.CREATED] = new Date().toISOString(); x[P_.PURGED] = false; x[P_.SUBMITTED] = today_(); x[P_.VER] = 0;
+          x[P_.SHARED] = JSON.stringify({ firstName: first, lastName: last, dob: dobIn }); x[P_.FORM] = '{}';
+        } else { x = ptGetRow_(psh, r); if (isTrue_(x[P_.PURGED])) { msg = 'SKIPPED: this patient record was purged.'; tally.skipped++; results.push(msg); continue; } }
+        const b = ptBlob_(x), sh = b.shared, fm = b.form, changed = [], warn = [];
+        const setS = function (k, val, label) { val = String(val || '').trim(); if (val && String(sh[k] || '') !== val) { sh[k] = val; changed.push(label); } };
+        const setF = function (k, val, label, sec) { val = String(val || '').trim(); if (val && String((fm[k] || {}).v || '') !== val) { fm[k] = { s: (fm[k] || {}).s || sec, l: (fm[k] || {}).l || label, v: val }; changed.push(label); } };
+        const a1 = String(get(row, 'addr1')), a2 = String(get(row, 'addr2'));
+        setS('address', [a1, a2].filter(Boolean).join(' '), 'address');
+        setS('city', title(get(row, 'city')), 'city'); setS('state', String(get(row, 'state')).toUpperCase(), 'state'); setS('zip', get(row, 'zip'), 'zip');
+        setS('cell', phoneFmt(get(row, 'phone')), 'phone'); setS('icd1', get(row, 'icd'), 'ICD-10');
+        const insRaw = String(get(row, 'ins')), ins = insMap(insRaw); if (ins === null) warn.push('insurance "' + insRaw + '" not recognised'); else setS('insCompany', ins, 'insurance');
+        setF('insNum', String(get(row, 'memberId')), 'Member ID / Insurance #', 'Insurance'); setF('medicaidNum', String(get(row, 'medicaid')), 'Medicaid #', 'Insurance');
+        setF('county', title(get(row, 'county')), 'County', 'Patient Information');
+        const adm = String(get(row, 'admId')); if (adm && String(sh.admissionId || '') !== adm) { sh.admissionId = adm; changed.push('admission ID'); }
+        const soc = dayIn(get(row, 'start'));
+        if (soc) { if (iso_(x[P_.START]) !== soc) { x[P_.START] = soc; changed.push('first day of service'); } setF('socDate', soc, 'Start of Care Date', 'Start of care'); }
+        if (!changed.length) { tally.unchanged++; results.push('No change' + (warn.length ? ' (' + warn.join('; ') + ')' : '') + dupNote); continue; }
+        msg = (isNew ? 'ADDED' : 'Updated') + ': ' + changed.join(', ') + (warn.length ? ' (' + warn.join('; ') + ')' : '') + dupNote;
+        if (!dry) {
+          x[P_.SHARED] = JSON.stringify(sh); ptSetForm_(x, JSON.stringify(fm));
+          x[P_.UPDATED] = new Date().toISOString(); x[P_.BY] = 'import'; x[P_.VER] = Number(x[P_.VER] || 0) + 1;
+          if (isNew) { psh.appendRow(safeRow_(x)); } else { psh.getRange(r, 1, 1, PT_N_).setValues([safeRow_(x)]); }
+        }
+        if (isNew) tally.added++; else tally.updated++; results.push(msg);
+      } catch (e) { msg = 'ERROR: ' + e.message; tally.skipped++; results.push(msg); }
+    }
+  };
+  if (dry) doRows(); else withLock_(function () { doRows(); });
+  results.forEach(function (m, i) { if (m) Logger.log('row ' + (i + 2) + ' ' + get(v[i + 1], 'first') + ' ' + get(v[i + 1], 'last') + ': ' + m); });
+  if (!dry) {
+    const rc = resCol >= 0 ? resCol + 1 : v[0].length + 1; if (resCol < 0) imp.getRange(1, rc).setValue('Result');
+    imp.getRange(2, rc, results.length, 1).setValues(results.map(function (m) { return [m]; }));
+  }
+  Logger.log((dry ? 'PREVIEW (nothing was changed). ' : 'Done. ') + tally.updated + ' updated, ' + tally.added + ' added, ' + tally.unchanged + ' already up to date, ' + tally.skipped + ' skipped.' + (dry ? ' Run updatePatients to apply.' : ''));
+}
+
+/**
  * ONE-TIME: load the compliance dates for your existing aides. Run it once to create the "AideImport" tab, fill one aide per row
  * (email, position, hireDate, certExpiry, bgLast, physLast, ceuDoneAt, phone, smsOk; dates yyyy-mm-dd; smsOk yes/no), then run it again.
  * The aide must already have an aide login (Users tab). Rows already imported are updated, never duplicated.

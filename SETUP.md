@@ -237,3 +237,12 @@ Until you switch it on, **nothing is sent**: every text that would go out is onl
 5. Test: submit an application. If real applicants are blocked, lower `RECAPTCHA_MIN_SCORE` (0.5 to 0.3).
 
 Until the secret is set, no check is made. The first time a verification runs, Google may ask you to authorize the script's "connect to an external service" permission (it already does this for texts).
+
+## Bulk patient update (member ID, insurer, address, phone, ICD-10, first day of service)
+
+1. In Apps Script, run `previewPatientUpdate` once. It creates a tab called **PatientUpdate** with headers.
+2. Paste your list under the headers. Headers it understands (any order, capital letters don't matter): Member ID, Insurance company, First Day of Service, Admission ID, First Name, Last Name, ICD-10, Address1, Address2, City, County, Home Phone, State, Zip, DOB, Medicaid #. Only First Name and Last Name are required.
+3. Run `previewPatientUpdate` again. It changes nothing; open View > Logs to see what it would do for each row.
+4. Run `updatePatients` to apply. A **Result** column is added on the tab showing what happened to each row.
+
+Patients are found by first + last name (and DOB when you give one). A blank cell never erases what is already saved. A patient not in the portal is added only if the row has a DOB. Insurance company names are matched to Horizon, UnitedHealthcare, Aetna, Wellpoint or HealthPartners; anything else is reported in the Result column and left alone. You can run it again any time.
