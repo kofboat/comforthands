@@ -355,9 +355,23 @@ body.print-sheet #phLetter{max-width:100%;margin:0 auto;padding:18px 26px;font-s
 body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;padding:12px 14px;font-size:10.5px}
   body.print-sheet #actSheet .acts td.a-desc{font-size:10px}
   @page{margin:0.4in}
+  /* Shared print style for the printed sheets (Activity Sheet, Physician Order, Patient Copy): Arial 10.5px, the same text, colour and
+     page spacing as the application packet. The extra padding brings the 0.4in page margin up to the packet's .55in / .6in. */
+  body.print-sheet{font-family:Arial,Helvetica,sans-serif!important;color:#111!important}
+  body.print-sheet .page.sheet-page{padding:.15in .2in!important}
+  body.print-sheet .print-only{display:block!important}
+  body.print-sheet #pcPreview .card,body.print-sheet #pcPreview .rights-box{break-inside:auto!important;page-break-inside:auto!important}
+  body.print-sheet #actSheet .sh-title{display:none!important}
+  body.print-sheet #phLetter,body.print-sheet #pcPreview,body.print-sheet #actSheet{font-family:Arial,Helvetica,sans-serif!important;color:#111!important}
+  body.print-sheet #phLetter,body.print-sheet #pcPreview{font-size:10.5px!important;line-height:1.42!important;padding:0!important;max-width:100%!important}
+  body.print-sheet #phLetter p,body.print-sheet #pcPreview p{margin:0 0 7px!important}
+  body.print-sheet #pcPreview h2{font-size:17px!important;color:#34182d!important}
+  body.print-sheet #pcPreview h3,body.print-sheet #pcPreview .sh{font-size:11px!important;font-weight:700!important;margin:10px 0 4px!important;padding:3px 6px!important;background:#f3e6f7!important;color:#34182d!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.print-sheet #phLetter,body.print-sheet #phLetter *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
 /* STAFF HOME */
+.print-only{display:none}
 #homeScreen,#repScreen{min-height:100vh;background:var(--cream)}
 .home-hdr{background:linear-gradient(135deg,#34182d 0%,var(--teal) 100%);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .home-hdr h1{font-family:'Playfair Display',serif;font-size:20px;flex:1;min-width:200px}
@@ -1155,6 +1169,7 @@ function actAllDays(n){
 
 function renderActivitySheet(){
   const body=document.getElementById('actSheetBody'); if(!body) return;
+  const ah=document.getElementById('actHdr'); if(ah) ah.innerHTML=docHdr('Home Health Aide Activity Sheet','patient',{});
   const v=id=>((document.getElementById(id)||{}).value||'').trim();
   const client=document.getElementById('sh_client');
   if(client && !client.dataset.touched){
@@ -1182,6 +1197,13 @@ function renderActivitySheet(){
     : '<div class="sh-empty">No activities ordered yet. Select activities and days in the Care Plan step, then refresh.</div>';
 }
 
+/* Shared document header: agency name and blanks/values on a rule, then the banner. Table and inline styles so it also works in the fax PDF. */
+function docHdr(title, kind, o){
+  o=o||{}; const E=escAct, bl=(v,w)=>v?'<u>&nbsp;'+E(v)+'&nbsp;</u>':'<span style="display:inline-block;border-bottom:1px solid #444;min-width:'+w+'px">&nbsp;</span>';
+  const right=kind==='patient'?'Patient name: '+bl(o.name,130)+' &nbsp; DOB: '+bl(o.dob,70)+' &nbsp; Date: '+bl(o.date,70):'';
+  return '<table style="width:100%;border-collapse:collapse;border-bottom:2px solid #34182d;margin:0 0 8px"><tr><td style="font-size:12px;font-weight:bold;color:#34182d;padding:0 0 5px;border:0">Comfort Hands Home Healthcare, LLC</td><td style="text-align:right;font-size:9.5px;color:#444;padding:0 0 5px;border:0">'+right+'</td></tr></table>'+
+   '<div style="background:#34182d;color:#fff;padding:9px 12px;margin:0 0 10px;border-radius:3px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#e6c8f2">'+(kind==='patient'?'Patient document':'Document')+'</div><div style="font-size:17px;font-weight:700;margin-top:2px">'+E(title)+'</div></div>';
+}
 function renderPhysicianLetter(){
   const box=document.getElementById('phLetter'); if(!box) return;
   const v=id=>((document.getElementById(id)||{}).value||'').trim();
@@ -1197,9 +1219,8 @@ function renderPhysicianLetter(){
   const informed=(document.querySelector('input[name="ph_informed"]:checked')||{}).value;
   const from=us(v('ph_from')), to=us(v('ph_to'));
   const other=v('ph_otherTxt');
-  box.innerHTML=`
+  box.innerHTML=docHdr('Physician Order Request','patient',{name:name,dob:us(v('dob')),date:us(v('ph_date'))})+`
   <div style="text-align:right;font-size:12px;line-height:1.4"><b>505 Hamilton Avenue Suite 200</b><br>Linwood, NJ 08221<br>Phone: 609-277-3032 &nbsp; Fax: 609-479-5931</div>
-  <div style="text-align:center;font-weight:700;font-size:15px;margin:6px 0 0">Comfort Hands Home Healthcare, LLC</div>
   <div style="margin-top:12px"><b>Ref: Physicians Order Request</b> &nbsp;&nbsp;&nbsp;&nbsp; Date: ${line(us(v('ph_date')),90)}</div>
   <div style="margin-top:10px">Dr. ${line(v('mdName').replace(/^dr\.?\s+/i,''),220)}</div>
   <p style="margin-top:10px">We have been asked to provide homecare for the following client who is a patient of yours. We will be sending a Certified Home Health Aide, who is certified by the Board of Nursing and supervised by a Registered Nurse, to care for your client. We are requesting a Physician order for a Nursing Care Plan.</p>
@@ -1230,7 +1251,7 @@ function patientCopyHTML(){
 function renderPatientCopy(){
   const box=document.getElementById('pcPreview'); if(!box) return;
   const name=[SHARED.firstName,SHARED.lastName].filter(Boolean).join(' ');
-  box.innerHTML='<div style="margin-bottom:10px"><h2 style="margin:0">Your Admission Documents — Copy for Your Records</h2>'+
+  box.innerHTML=docHdr('Admission Documents — Copy for Your Records','patient',{name:name,dob:(function(d){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d||'');return m?m[2]+'/'+m[3]+'/'+m[1]:(d||'');})(SHARED.dob),date:new Date().toLocaleDateString('en-US')})+'<div style="margin-bottom:10px">'+
     '<div style="font-size:12.5px;color:var(--muted)">Prepared for '+(escAct(name)||'the patient')+'. Please read before your nurse’s visit. Your nurse will answer any questions and collect your signature after the assessment.</div></div>'+patientCopyHTML();
   const st=document.getElementById('pcStatus');
   if(st&&SHARED.copySent&&!st.innerHTML) st.innerHTML='<span class="ico">✅</span><p>Copy already sent to the patient.</p>';
@@ -1818,6 +1839,7 @@ function nurseSteps(){return[
     <div id="pubStatus" style="margin-top:10px"></div>
   </div>
   <div id="actSheet">
+    <div id="actHdr" class="print-only"></div>
     <div class="sh-title">Home Health Aide Activity Sheet</div>
     <div class="sh-legend">&#8730; = CHHA Performed &nbsp;&nbsp; R = Client Refused</div>
     <div class="sh-phone">Agency Phone #: 609-277-3032</div>
