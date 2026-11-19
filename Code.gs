@@ -826,7 +826,7 @@ function home_() {
   const users = usersAll_(), aides = Object.keys(users).filter(function (e) { return users[e].roles.indexOf('aide') >= 0; }).map(function (e) { return aideSummary_(users[e], L); });
   const sheets = pendingSheets_(L);
   const names = {}; patients.forEach(function (p) { names[p.id] = p.name; });
-  const dv = draftSheet_().getDataRange().getValues(), drafts = [], LBL = { pn: '60-day progress note', dc: 'Discharge summary', chha: 'Aide evaluation' };
+  const dv = draftSheet_().getDataRange().getValues(), drafts = [], LBL = { pn: 'Supplemental progress note', ra: '60-day re-assessment', dc: 'Discharge summary', chha: 'Aide evaluation' };
   for (let i = 1; i < dv.length; i++) {
     if (!dv[i][0]) continue;
     const subj = dv[i][1] === 'chha' ? ((users[String(dv[i][3]).toLowerCase()] || {}).name || dv[i][3]) : (names[dv[i][2]] || dv[i][2]);
@@ -977,7 +977,7 @@ function records_(act, d, u) {
     return out_({ ok: true, reports: res });
   }
   if (act === 'draftSave' || act === 'draftGet' || act === 'draftDelete') {
-    if (['pn', 'dc', 'chha'].indexOf(String(d.kind)) < 0) return out_({ ok: false, error: 'bad kind' });
+    if (['pn', 'ra', 'dc', 'chha'].indexOf(String(d.kind)) < 0) return out_({ ok: false, error: 'bad kind' });
     const id = draftId_(d); if (id.slice(-1) === '|') return out_({ ok: false, error: 'missing subject' });
     const dsh = draftSheet_();
     if (act === 'draftGet') { const r = findRow_(dsh, 0, id); if (!r) return out_({ ok: true, draft: null }); const x = dsh.getRange(r, 1, 1, 7).getValues()[0]; let data = {}; try { data = JSON.parse(x[4] || '{}'); } catch (e) {} return out_({ ok: true, draft: { data: data, updatedAt: String(x[5] || ''), by: x[6] } }); }
@@ -1024,7 +1024,7 @@ function repHtml_(title, sub, body, kind, label) {
 }
 
 function reportSave_(d, u) {
-  const kind = String(d.kind || ''); if (['pn', 'dc', 'chha'].indexOf(kind) < 0) return { ok: false, error: 'bad kind' };
+  const kind = String(d.kind || ''); if (['pn', 'ra', 'dc', 'chha'].indexOf(kind) < 0) return { ok: false, error: 'bad kind' };
   if (!d.html || String(d.html).length > 1500000) return { ok: false, error: 'bad report' };
   const day = String(d.date || ''); if (!validDay_(day)) return { ok: false, error: 'Enter a valid date.' };
   if (daysUntil_(day) > 1) return { ok: false, error: 'The date is in the future.' };
@@ -1037,10 +1037,10 @@ function reportSave_(d, u) {
     pid = keyOf_(d.patientId); const r = ptRow_(psh, pid); if (!r) return { ok: false, error: 'no such patient' };
     const x = ptGetRow_(psh, r), st = String(x[P_.STATUS] || 'admission');
     if (st === 'discharged') return { ok: false, error: 'This patient is already discharged.' };
-    if (kind === 'pn' && st !== 'active') return { ok: false, error: 'The admission is not finished yet. Mark the patient active first.' };
+    if ((kind === 'pn' || kind === 'ra') && st !== 'active') return { ok: false, error: 'The admission is not finished yet. Mark the patient active first.' };
     sub = String(x[P_.NAME]); const fn = nameFolder_(sub);
     folder = ptFolder_(pid, fn);
-    label = kind === 'pn' ? 'Supplemental Progress Note' : 'Discharge-Transfer Summary';
+    label = kind === 'pn' ? 'Supplemental Progress Note' : kind === 'ra' ? (String((d.data || {}).type) === 'Post-Hospitalization' ? 'Post-Hospitalization Re-Assessment' : '60-Day Re-Assessment') : 'Discharge-Transfer Summary';
     fname = label + ' - ' + fn + ' - ' + day + '.pdf';
   }
   // PDF and Drive work happen before the lock is taken.
@@ -1049,7 +1049,8 @@ function reportSave_(d, u) {
   withLock_(function () {
     repSheet_().appendRow([Utilities.getUuid(), kind, pid, aideEmail, label, day, file.getUrl(), who, now, JSON.stringify(stripSensitive_(d.data || {})).slice(0, 4000)]);
     const dsh = draftSheet_();
-    if (kind === 'pn') psh.getRange(ptRow_(psh, pid), P_.LASTNOTE + 1).setValue(day);
+    // Only the 60-day Re-Assessment resets the 60-day clock. The supplemental progress note and a post-hospitalization re-assessment do not.
+    if (kind === 'ra' && String((d.data || {}).type) !== 'Post-Hospitalization') psh.getRange(ptRow_(psh, pid), P_.LASTNOTE + 1).setValue(day);
     if (kind === 'dc') {
       const r = ptRow_(psh, pid); psh.getRange(r, P_.STATUS + 1).setValue('discharged'); psh.getRange(r, P_.DISCHARGED + 1).setValue(day); psh.getRange(r, P_.DCFILED + 1).setValue(today_());
       const plans = carePlanTab_(), pr = findRow_(plans, 0, pid); if (pr) plans.getRange(pr, 6).setValue(false); // aides stop seeing the sheet
@@ -1084,7 +1085,7 @@ function installDueReminders() {
 }
 function dueDigest() {
   const h = home_(), lines = [];
-  h.patients.forEach(function (p) { if (p.daysToNote !== null && p.daysToNote <= REC_.WARN_DAYS) lines.push('60-day progress note ' + (p.daysToNote < 0 ? 'OVERDUE ' + (-p.daysToNote) + ' days' : 'due in ' + p.daysToNote + ' days') + ': ' + p.name); });
+  h.patients.forEach(function (p) { if (p.daysToNote !== null && p.daysToNote <= REC_.WARN_DAYS) lines.push('60-day re-assessment ' + (p.daysToNote < 0 ? 'OVERDUE ' + (-p.daysToNote) + ' days' : 'due in ' + p.daysToNote + ' days') + ': ' + p.name); });
   h.aides.forEach(function (a) { if (a.daysToEval !== null && a.daysToEval <= REC_.WARN_DAYS) lines.push('Aide evaluation ' + (a.daysToEval < 0 ? 'OVERDUE ' + (-a.daysToEval) + ' days' : 'due in ' + a.daysToEval + ' days') + ': ' + a.name); });
   onbAll_().forEach(function (o) { if (o.status === 'in progress' && o.createdAt && (Date.now() - new Date(o.createdAt).getTime()) > 7 * 86400000) lines.push('New hire still onboarding: ' + o.name + ' (' + o.done + '/' + o.total + ' steps; next: ' + o.next + ')'); });
   h.aides.forEach(function (a) { a.trk.items.forEach(function (i) { if (i.status === 'over') lines.push('Aide ' + i.label + ' OVERDUE ' + (-i.days) + ' days: ' + a.name); else if (i.status === 'soon') lines.push('Aide ' + i.label + (i.k === 'cert' ? ' expires in ' : ' due in ') + i.days + ' days' + (i.k === 'cert' ? ' (renewal window open)' : '') + ': ' + a.name); else if (i.status === 'unset') lines.push('Aide ' + i.label + ' date not entered: ' + a.name); }); });

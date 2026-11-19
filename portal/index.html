@@ -2388,13 +2388,13 @@ function drawList(){
     if(q) rows=rows.filter(p=>p.name.toLowerCase().includes(q));
     const rank=p=>p.status==='discharged'?9e6:(p.daysToNote===null?1e6:p.daysToNote);
     rows.sort((a,b)=>rank(a)-rank(b));
-    box.innerHTML=rows.length?'<table class="htbl"><thead><tr><th>Patient</th><th>Status</th><th>Next 60-day note</th><th>Actions</th></tr></thead><tbody>'+rows.map(p=>{
+    box.innerHTML=rows.length?'<table class="htbl"><thead><tr><th>Patient</th><th>Status</th><th>Next 60-day re-assessment</th><th>Actions</th></tr></thead><tbody>'+rows.map(p=>{
       const st=p.status==='admission'?'<span class="pill warn">Admission in progress</span>':p.status==='active'?'<span class="pill ok">Active</span>':'<span class="pill">Discharged '+usDate(p.dischargedAt)+'</span>';
       const dis=p.status==='discharged'||p.purged; const dr=(h.drafts||[]).filter(x=>x.patientId===p.id).map(x=>'<br><span class="pill warn">Draft: '+escAct(x.label)+'</span>').join('');
       return '<tr><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">DOB '+usDate(p.dob)+(p.start?' · SOC '+usDate(p.start):'')+'</span></td><td>'+st+dr+(dis?'':pcaBadge(p.pca))+'</td><td>'+(p.status==='active'?dueBadge(p.daysToNote)+'<br><span class="tmuted">'+(p.lastNote?'last '+usDate(p.lastNote):'none yet')+'</span>':'—')+'</td><td>'+
         (hasN?'<button class="mini" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\'nurse\')">Open as Nurse</button>':'')+
         (hasA?'<button class="mini" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\'admin\')">Open as Admin</button>':'')+
-        '<button class="mini" '+(p.status!=='active'?'disabled':'')+' onclick="openReport(\'pn\',\''+p.id+'\')">Progress note</button>'+
+        '<button class="mini" style="background:#6b21a8;color:#fff;border-color:#6b21a8;font-weight:700" '+(p.status!=='active'?'disabled':'')+' onclick="openReport(\'ra\',\''+p.id+'\')">60-day Re-Assessment</button>'+'<button class="mini" '+(p.status!=='active'?'disabled':'')+' onclick="openReport(\'pn\',\''+p.id+'\')">Progress note</button>'+
         '<button class="mini" '+(dis?'disabled':'')+' onclick="openReport(\'dc\',\''+p.id+'\')">Discharge</button>'+
         (p.status==='admission'?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'active\')">Mark active</button>':'')+
         ((p.status==='discharged'&&!p.purged&&hasA)?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'reopen\')">Reopen</button>':'')+
@@ -2450,10 +2450,10 @@ async function openReport(kind,id,email){
     if(kind==='hist'){ await drawHistory(id,email); return; }
     if(kind==='chha'){ const j=await api('aideWeeks',{email:id}); if(!j.ok) throw new Error(j.error); REP={kind:kind,aide:j.aide,rows:j.rows,from:j.from}; }
     else{ const j=await api('ptGet',{id:id}); if(!j.ok) throw new Error(j.error); REP={kind:kind,id:id,p:j.patient,shared:j.shared||{},form:j.form||{}}; }
-    const hj=await api('reports',kind==='chha'?{aideEmail:id}:{patientId:id,kind:'pn'}); REP.hist=(hj&&hj.reports)||[];
+    const hj=await api('reports',kind==='chha'?{aideEmail:id}:{patientId:id,kind:kind==='ra'?'ra':'pn'}); REP.hist=(hj&&hj.reports)||[];
   }catch(e){ body.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>Could not open this ('+E_(e.message||'error')+').</p></div>'; return; }
   let dj=null; try{ dj=await api('draftGet',kind==='chha'?{kind:kind,aideEmail:id}:{kind:kind,patientId:id}); }catch(e){}
-  ({pn:formPN,dc:formDC,chha:formCHHA})[kind]();
+  ({pn:formPN,ra:formRA,dc:formDC,chha:formCHHA})[kind]();
   ['repSigA','repSigB','repSigC'].forEach(s=>bindSig(s));
   REP.subject=id; _draftSig='';
   if(dj&&dj.ok&&dj.draft){ draftApply(dj.draft.data); const n=document.getElementById('draftNote'); if(n) n.textContent='Draft restored (saved '+(dj.draft.updatedAt||'').slice(0,10)+' by '+(dj.draft.by||'')+'). Signatures must be added again.'; _draftSig=JSON.stringify(draftCollect()); }
@@ -2469,7 +2469,7 @@ function repShell(title,inner,btn){
 }
 function repMsg(ico,t){ document.getElementById('repMsg').innerHTML='<div class="info-box"><span class="ico">'+ico+'</span><p>'+t+'</p></div>'; }
 
-// 1) 60-day supervisory progress note
+// 1) Supplemental progress note (extra entry; the 60-day note is the Re-Assessment)
 function formPN(){
   const p=REP.p, now=new Date(), loc=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);
   const prev=REP.hist.slice(0,5).map(r=>{ let d={}; try{ d=JSON.parse(r.data||'{}'); }catch(e){} return '<li><a href="'+E_(r.url)+'" target="_blank" rel="noopener">'+usDate(r.date)+'</a> — '+E_((d.narr||'').slice(0,110))+((d.narr||'').length>110?'…':'')+' <span class="tmuted">('+E_(r.by)+')</span></li>'; }).join('');
@@ -2479,6 +2479,68 @@ function formPN(){
    '<div class="fgroup s2"><label class="lbl">Progress notes / narrative</label><textarea id="rp_narr" rows="12" placeholder="Indicate care provided, complications, consultations, changes in condition, and instructions to patient and/or significant other."></textarea></div>'+
    RI('rp_sname','Nurse name',AUTH.name)+RI('rp_stitle','Title','RN')+sigBox('repSigA','Nurse signature')+'</div>'+
    (prev?'<div class="sh">Recent entries</div><ul style="margin:6px 0 0 18px">'+prev+'</ul>':'')+'</div>','Sign &amp; file note');
+}
+// 1b) 60-day Re-Assessment (the 60-day note). The Supplemental Progress Note above is an extra, stand-alone entry.
+const RA_SYS=['Support System','Neurological','HEENT','Cardiovascular','Respiratory','GI','GU','Skin','Musculoskeletal','Functional Status','Pain','Nutritional/Diet','Psycho-Social Status'];
+const RD=(name,opts,cls)=>'<span class="rrow" style="display:inline-flex;gap:6px;flex-wrap:wrap;vertical-align:middle">'+opts.map(o=>'<label class="rbtn" style="padding:5px 10px"><input type="radio" name="'+name+'" value="'+E_(o)+'"> '+E_(o)+'</label>').join('')+'</span>';
+const RDF=(label,inner,cls)=>'<div class="fgroup '+(cls||'')+'"><label class="lbl">'+label+'</label>'+inner+'</div>';
+function formRA(){
+  const p=REP.p, sh=REP.shared, fm=REP.form, f=id=>((fm[id]||{}).v)||'';
+  const addr=[sh.address,[sh.city,sh.state].filter(Boolean).join(', '),sh.zip].filter(Boolean).join(' ');
+  const prev=REP.hist.slice(0,5).map(r=>'<li><a href="'+E_(r.url)+'" target="_blank" rel="noopener">'+usDate(r.date)+'</a></li>').join('');
+  const rows=RA_SYS.map((s,i)=>'<tr><td>'+s+'</td><td style="white-space:nowrap">'+RD('rp_as'+i,['No change','Change'])+'</td><td><input type="text" id="rp_ac'+i+'" placeholder="Comments (required if changed)" style="width:100%"></td></tr>').join('');
+  repShell('60-Day Re-Assessment — '+p.name,
+   '<div class="card"><div class="card-header"><div class="card-icon">📋</div><div class="card-title"><h2>Re-Assessment</h2><p>This is the 60-day note. Prefilled from the admission. Signed and filed to the patient’s Drive folder.</p></div></div>'+
+   '<div class="fgroup s2" style="margin-bottom:8px">'+RD('rp_type',['60-day Reassessment','Post-Hospitalization'])+'</div>'+
+   '<div class="fg">'+RI('rp_name','Patient name',p.name)+RI('rp_emp','Employee’s name (aide)','')+RDF('Present',RD('rp_pres',['Yes','No']))+
+   RI('rp_addr','Address',addr,'text','s2')+RDF('Home folder complete',RD('rp_hf',['Yes','No']))+
+   RDF('Significant other',RD('rp_so',['No change','Update'])+' <input type="text" id="rp_so_t" placeholder="Update" style="margin-top:6px">','s2')+RI('rp_date','Date',todayISO(),'date')+
+   RI('rp_dx','Current diagnosis(es)',[sh.dx1,sh.dx2].filter(Boolean).join('; '),'text','s2')+RI('rp_ndx','New diagnosis(es)','')+'</div>'+
+   '<div class="sh">Vital signs</div><div class="fg">'+RI('rp_bp','B/P')+RI('rp_temp','Temp')+RI('rp_pulse','Pulse (reg./irreg.)')+RI('rp_resp','Resp.')+RI('rp_wt','Wt.')+RI('rp_ht','Ht.')+RI('rp_vother','Other')+RI('rp_adv','Location of advance directives','','text','s2')+'</div>'+
+   '<div class="sh">Physician</div>'+RD('rp_md',['No change','New MD'])+'<div class="fg" style="margin-top:8px">'+RI('rp_mdname','Physician',sh.mdName)+RI('rp_mdaddr','Address / phone',[f('mdAddress'),f('mdPhone')].filter(Boolean).join(' · '),'text','s2')+'</div>'+
+   '<div class="sh">Services provided</div><div class="chk-group">'+RC('rp_s_pc','Personal care')+RCT('rp_s_oth','Other')+'</div>'+
+   '<div class="sh">Assessment: compare to previous or baseline</div><p class="tmuted" style="margin:0 0 6px">Any area that changed must be explained in Comments. Use the Progress Note box below to elaborate.</p><table class="htbl"><thead><tr><th>System</th><th>Status</th><th>Comments</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+   '<div class="sh">Medications</div>'+RD('rp_med',['No change','New meds or med change'])+
+   '<div class="fg" style="margin-top:8px"><div class="fgroup s2"><label class="lbl">Patient education</label><textarea id="rp_edu" rows="3"></textarea></div>'+RDF('MD called',RD('rp_mdc',['Yes','No']))+RDF('MD order sent',RD('rp_mdo',['Yes','No']))+
+   RDF('Ambulates',RD('rp_amb',['Independently','With assistance','Wheelchair only','Bedbound']),'s2')+RDF('Personal care',RD('rp_pcare',['Independent','With assistance','Total care']),'s2')+
+   RI('rp_equip','List equipment','','text','s2')+RDF('Home / environment safety evaluation',RD('rp_safe',['No safety hazards','Yes (describe)'])+' <input type="text" id="rp_safe_t" placeholder="Describe hazards" style="margin-top:6px">','s2')+'</div>'+
+   '<div class="sh">Care plan review</div><div class="chk-group">'+RC('rp_hha','HHA: care plan re-evaluated / reviewed with CHHA and client / significant other')+RC('rp_ihsn','IHSN: NCP, physician orders, med profile, med administration sheets, flow sheets reviewed with field nurse')+'</div>'+
+   '<div class="fg" style="margin-top:8px"><div class="fgroup s2"><label class="lbl">Actions taken / instructions given</label><textarea id="rp_act" rows="2"></textarea></div>'+RDF('Plan of care',RD('rp_poc',['No change','Changes']),'s2')+
+   RDF('Reviewed POC with',RC('rp_rev_pt','Patient / S.O.')+RC('rp_rev_hha','HHA'),'s2')+'</div>'+
+   '<div class="sh">Progress note / response to care / goals met</div><textarea id="rp_narr" rows="6" style="width:100%" placeholder="Response to care, goals met, changes in condition."></textarea>'+
+   '<div class="fg" style="margin-top:8px">'+RDF('Disaster plan update',RD('rp_dp',['No change','Changes'])+' <input type="text" id="rp_dp_t" placeholder="Changes" style="margin-top:6px">','s2')+RI('rp_ref','Additional services needed / referrals made','','text','s2')+'</div>'+
+   '<div class="sh">Signature</div><div class="fg">'+RI('rp_sname','RN name',AUTH.name)+RI('rp_stitle','Title','RN')+sigBox('repSigA','RN signature')+'</div>'+
+   (prev?'<div class="sh">Earlier re-assessments</div><ul style="margin:6px 0 0 18px">'+prev+'</ul>':'')+'</div>','Sign &amp; file re-assessment');
+  const d=document.querySelector('input[name="rp_type"][value="60-day Reassessment"]'); if(d) d.checked=true;
+}
+function bodyRA(){
+  const cbx=(on,l)=>'<span class="cb">['+(on?'X':'&nbsp;')+']</span> '+E_(l), pick=(n,opts)=>{ const v=(document.querySelector('input[name="'+n+'"]:checked')||{}).value||''; return opts.map(o=>cbx(v===o,o)).join(' &nbsp; '); };
+  const k=(l,v)=>'<div class="k">'+l+'</div>'+E_(v||'');
+  const rows=RA_SYS.map((s,i)=>{ const v=(document.querySelector('input[name="rp_as'+i+'"]:checked')||{}).value||''; return '<tr><td>'+s+'</td><td class="c cb">'+(v==='No change'?'X':'')+'</td><td class="c cb">'+(v==='Change'?'X':'')+'</td><td>'+E_(rv('rp_ac'+i))+'</td></tr>'; }).join('');
+  const T=pick('rp_type',['60-day Reassessment','Post-Hospitalization']);
+  return '<h2>Re-Assessment</h2><p>'+T.replace('60-day Reassessment','60-day Reassessment').replace('Post-Hospitalization','Post-Hospitalization')+'</p>'+
+   '<table class="g"><tr><td style="width:50%">'+k('Patient name',rv('rp_name'))+'</td><td>'+k('Employee’s name',rv('rp_emp'))+'</td></tr>'+
+   '<tr><td colspan="2">'+k('Address',rv('rp_addr'))+'</td></tr>'+
+   '<tr><td><div class="k">Present</div>'+pick('rp_pres',['Yes','No'])+'</td><td><div class="k">Home folder complete</div>'+pick('rp_hf',['Yes','No'])+'</td></tr>'+
+   '<tr><td colspan="2"><div class="k">Significant other</div>'+pick('rp_so',['No change','Update'])+(rv('rp_so_t')?' — '+E_(rv('rp_so_t')):'')+'</td></tr>'+
+   '<tr><td colspan="2">'+k('Current diagnosis(es)',rv('rp_dx'))+'</td></tr><tr><td colspan="2">'+k('New diagnosis(es)',rv('rp_ndx'))+'</td></tr></table>'+
+   '<h3>Vital signs</h3><table class="g"><tr><td>'+k('B/P',rv('rp_bp'))+'</td><td>'+k('Temp',rv('rp_temp'))+'</td><td>'+k('Pulse',rv('rp_pulse'))+'</td><td>'+k('Resp.',rv('rp_resp'))+'</td></tr>'+
+   '<tr><td>'+k('Wt.',rv('rp_wt'))+'</td><td>'+k('Ht.',rv('rp_ht'))+'</td><td>'+k('Other',rv('rp_vother'))+'</td><td>'+k('Advance directives',rv('rp_adv'))+'</td></tr></table>'+
+   '<h3>Physician</h3><table class="g"><tr><td>'+pick('rp_md',['No change','New MD'])+'<br>'+E_(rv('rp_mdname'))+'</td><td>'+k('Address / phone',rv('rp_mdaddr'))+'</td></tr></table>'+
+   '<h3>Services provided</h3><p>'+cbx(rc('rp_s_pc'),'Personal care')+' &nbsp; '+cbx(rc('rp_s_oth'),'Other')+(rc('rp_s_oth')&&rv('rp_s_oth_t')?': '+E_(rv('rp_s_oth_t')):'')+'</p>'+
+   '<h3>Assessment: compare to previous or baseline</h3><table class="g"><tr><th>System</th><th class="c" style="width:12%">No change</th><th class="c" style="width:12%">Change</th><th>Comments</th></tr>'+rows+'</table>'+
+   '<h3 style="page-break-before:always">Medications</h3><p>'+pick('rp_med',['No change','New meds or med change'])+'</p>'+
+   '<table class="g"><tr><td colspan="2">'+k('Patient education',rv('rp_edu'))+'</td></tr>'+
+   '<tr><td>MD called: '+pick('rp_mdc',['Yes','No'])+'</td><td>MD order sent: '+pick('rp_mdo',['Yes','No'])+'</td></tr>'+
+   '<tr><td colspan="2">Ambulates: '+pick('rp_amb',['Independently','With assistance','Wheelchair only','Bedbound'])+'</td></tr>'+
+   '<tr><td colspan="2">Personal care: '+pick('rp_pcare',['Independent','With assistance','Total care'])+'</td></tr>'+
+   '<tr><td colspan="2">'+k('Equipment',rv('rp_equip'))+'</td></tr>'+
+   '<tr><td colspan="2">Home / environment safety: '+pick('rp_safe',['No safety hazards','Yes (describe)'])+(rv('rp_safe_t')?' — '+E_(rv('rp_safe_t')):'')+'</td></tr></table>'+
+   '<h3>Care plan review</h3><p>'+cbx(rc('rp_hha'),'HHA: care plan re-evaluated/reviewed with CHHA and client/significant other')+'<br>'+cbx(rc('rp_ihsn'),'IHSN: NCP, physician orders, med profile, med administration sheets, flow sheets reviewed with field nurse')+'</p>'+
+   '<table class="g"><tr><td>'+k('Actions taken / instructions given',rv('rp_act'))+'</td></tr><tr><td>Plan of care: '+pick('rp_poc',['No change','Changes'])+' &nbsp; Reviewed with: '+cbx(rc('rp_rev_pt'),'Patient/S.O.')+' '+cbx(rc('rp_rev_hha'),'HHA')+'</td></tr></table>'+
+   '<h3>Progress note / response to care / goals met</h3><div class="box">'+E_(rv('rp_narr'))+'</div>'+
+   '<table class="g"><tr><td>Disaster plan update: '+pick('rp_dp',['No change','Changes'])+(rv('rp_dp_t')?' — '+E_(rv('rp_dp_t')):'')+'</td></tr><tr><td>'+k('Additional services needed / referrals made',rv('rp_ref'))+'</td></tr></table>'+
+   '<table class="sig" style="margin-top:12px"><tr><td><div class="k">RN signature</div>'+(sigData('repSigA')?'<img src="'+sigData('repSigA')+'">':'')+'<div>'+E_(rv('rp_sname'))+', '+E_(rv('rp_stitle'))+'</div></td><td><div class="k">Title</div>'+E_(rv('rp_stitle'))+'</td><td><div class="k">Date</div>'+E_(usDate(rv('rp_date')))+'</td></tr></table>';
 }
 // 2) Discharge / transfer summary
 const DC_REASON=[['mdorder','MD order'],['improved','Client condition improved'],['inapp','Inappropriate for home care'],['exac','Exacerbation of condition'],['moved','Moved'],['refused','Client refused and/or non-compliant with care'],['cm','Case manager decision',1],['fin','Financial issue',1],['deceased','Deceased'],['oth','Other',1]];
@@ -2576,6 +2638,16 @@ async function saveReport(){
   if(!rv('rp_sname')||!rv('rp_stitle')) return repMsg('⚠️','Enter your name and title.');
   let payload={kind:k}, html='';
   if(k==='pn'){ if(!rv('rp_narr')) return repMsg('⚠️','The narrative is empty.'); if(!rv('rp_dt')) return repMsg('⚠️','Enter the date and time.'); html=bodyPN(); payload.patientId=REP.id; payload.date=rv('rp_dt').slice(0,10); payload.data={narr:rv('rp_narr'),dt:rv('rp_dt'),title:rv('rp_stitle')}; }
+  if(k==='ra'){
+    if(!document.querySelector('input[name="rp_type"]:checked')) return repMsg('⚠️','Choose 60-day Reassessment or Post-Hospitalization.');
+    if(!rv('rp_date')) return repMsg('⚠️','Enter the date.');
+    if(!rv('rp_emp')) return repMsg('⚠️','Enter the aide’s name (Employee’s name).');
+    let miss=0, noc=0; RA_SYS.forEach((s,i)=>{ const v=(document.querySelector('input[name="rp_as'+i+'"]:checked')||{}).value; if(!v) miss++; else if(v==='Change'&&!rv('rp_ac'+i)) noc++; });
+    if(miss) return repMsg('⚠️',miss+' assessment row(s) are not marked. Choose No change or Change for every system.');
+    if(noc) return repMsg('⚠️','Add a comment for every system marked Change.');
+    if(!rv('rp_narr')) return repMsg('⚠️','Complete the Progress note / response to care box.');
+    html=bodyRA(); payload.patientId=REP.id; payload.date=rv('rp_date'); payload.data={type:(document.querySelector('input[name="rp_type"]:checked')||{}).value,title:rv('rp_stitle')};
+  }
   if(k==='dc'){ if(!rv('rp_dis')) return repMsg('⚠️','Enter the discharge date.'); if(!DC_REASON.some(a=>rc('rp_r_'+a[0]))) return repMsg('⚠️','Select at least one reason for discharge.'); if(!confirm('File this discharge for '+REP.p.name+'? The patient will be closed and aides will no longer see the activity sheet.')) return; html=bodyDC(); payload.patientId=REP.id; payload.date=rv('rp_dis'); payload.data={reasons:DC_REASON.filter(a=>rc('rp_r_'+a[0])).map(a=>a[1])}; }
   if(k==='chha'){
     let miss=0; ['rp_ad'+0].forEach(()=>{}); CH_ADMIN.forEach((x,i)=>{ if(!rv('rp_ad'+i)) miss++; }); CH_GROUPS.forEach((g,i)=>{ if(!rv('rp_cgr'+i)) miss++; }); CH_LINES.forEach((x,i)=>{ if(!rv('rp_cl'+i)) miss++; });
