@@ -4,7 +4,7 @@
 - `apply/`: public job application and new-hire page
 - `portal/`: admissions and admin portal (with `hr-pdf/` I-9 and W-4 templates)
 - `staff/`: aide portal
-- `finance/`: owners-only finance portal (claims from 835/837 files, statements, bills, receipts, payroll cost, owner draws, reports). Single file, no data stored in the repo
+- `finance/`: owners-only finance portal (`index.html`), with `Code.gs` (Apps Script storage backend) and `SETUP.md` (Google setup steps). No data is stored in the repo
 - `SETUP.md`: deployment steps
 - `comfort_hands_onboarding.html`: single-file source of `portal/index.html`
 
