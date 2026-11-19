@@ -783,7 +783,7 @@ function vDash(){
     '<div class="grid4 sect">'+tile('file','Outstanding claims',fmt0(out))+tile('dollar','Paid this month',fmt0(paidM))+tile('receipt','Bills due',fmt0(due))+tile('trend','Net income (month to date)',fmt0(net))+'</div>'+
     '<p class="muted small" style="margin:6px 2px 12px">Income and net income are cash basis: they count payments on the date the 835 says they were paid.</p>'+
     '<div class="card sect"><h2>Needs attention</h2>'+(items.length?items.join(''):empty('Nothing needs attention','Import your 837 and 835 files from the Claims tab to see what was paid and what is still outstanding.'))+'</div>'+
-    '<div class="card sect"><h2>Recent imports</h2>'+(last.length?'<table><tbody>'+last.map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+' '+(f.type==='837'?'claims':'payments')+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files imported yet','Upload an 837 or 835 file to start.'))+'</div>';
+    '<div class="card sect"><h2>Recent imports</h2>'+(last.length?'<div class="tscroll"><table><tbody>'+last.map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n" style="white-space:nowrap">'+f.count+' '+(f.type==='837'?(f.count===1?'claim':'claims'):(f.count===1?'payment':'payments'))+'</td><td class="n" style="white-space:nowrap">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table></div>':empty('No files imported yet','Upload an 837 or 835 file to start.'))+'</div>';
   censusLoad();
 }
 
