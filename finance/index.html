@@ -60,6 +60,7 @@ label.f>*{margin-top:3px;color:var(--ink)}
 .filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px}
 @media(max-width:720px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters>label:first-child{grid-column:1/-1}}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.ro #view form,.ro #view label.btn,.ro #view details:has(form),.ro [data-act=paybill],.ro [data-act=delbill],.ro [data-act=delclaim],.ro [data-act=delpay],.ro [data-act=delacct],.ro [data-act=rcdel],.ro [data-act=rclink],.ro [data-act=rcunlink],.ro [data-act=staccept],.ro [data-act=staccall],.ro [data-act=stundo],.ro [data-act=stimport],.ro [data-act=cat],.ro [data-act=work],.ro [data-act=note],.ro #view select[id^=lk_]{display:none!important}
 .chipb{border:1px solid var(--line);background:var(--gray-bg);color:var(--gray);border-radius:8px;padding:4px 10px;font-size:13px}
 .chipb[aria-pressed="true"]{background:var(--p-soft);color:var(--p-dark);border-color:var(--p-line);font-weight:600}
 .pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:8px;white-space:nowrap}
@@ -127,11 +128,11 @@ details.tbl>summary{cursor:pointer;color:var(--p-dark);font-size:13px;margin-top
     <label class="f" id="pin2wrap" style="margin-top:10px" hidden>Confirm PIN<input type="password" id="pin2" autocomplete="off"></label>
     <div id="lockErr" class="msg bad" hidden></div>
     <button class="btn pri" type="submit" id="lockBtn" style="margin-top:12px;width:100%;justify-content:center">Unlock</button>
-    <p class="small" id="setupLink" style="margin:14px 0 0"><a href="#" id="setupToggle">Connect Google Sheets for shared storage</a></p>
+    <p class="small" id="setupLink" style="margin:14px 0 0"><a href="#" id="setupToggle">Connect Google for shared storage</a></p>
     <div id="setupBox" hidden style="margin-top:10px">
-      <p class="small muted" style="margin:0 0 8px">Use the same Google Client ID as your nurse app, and the ID of a new Google Sheet shared only with the owners. Your sign-in page address must be listed as an authorized JavaScript origin for that Client ID.</p>
+      <p class="small muted" style="margin:0 0 8px">Use the same Google Client ID as your nurse app, and the web app URL from the finance Apps Script (see SETUP.md). This page's address must be listed as an authorized JavaScript origin for that Client ID.</p>
       <label class="f">Google Client ID<input type="text" id="cfgClient"></label>
-      <label class="f" style="margin-top:8px">Sheet ID<input type="text" id="cfgSheet"></label>
+      <label class="f" style="margin-top:8px">Apps Script web app URL<input type="text" id="cfgScript" placeholder="https://script.google.com/macros/s/.../exec"></label>
       <button class="btn" type="button" id="cfgSave" style="margin-top:8px">Save and reload</button>
     </div>
   </form>
@@ -140,7 +141,7 @@ details.tbl>summary{cursor:pointer;color:var(--p-dark);font-size:13px;margin-top
 <div id="app" hidden>
   <div class="wrap">
     <div class="top">
-      <div><h1>Finance portal</h1><small>Comfort Hands Home Healthcare · Owners and admin only</small></div>
+      <div><h1>Finance portal</h1><small>Comfort Hands Home Healthcare · <span id="roleTag">Owners and admin only</span></small></div>
       <span id="saveState" class="small" style="opacity:.9;margin-left:auto;margin-right:10px"></span><button class="btn sm" id="lockNow"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>
     </div>
     <div class="nav" id="nav" role="tablist"></div>
@@ -499,12 +500,12 @@ let Store=Local;
 let db=null;
 
 /* ---------- Google Sheets storage ---------- */
-// Reuse your nurse app's Google Client ID and create a new Google Sheet for finance. Either fill these in here
-// or leave them blank and enter them on the sign-in screen.
-const CONFIG={clientId:'',sheetId:''};
+// Reuse your nurse app's Google Client ID and the web app URL of the finance Apps Script (see SETUP.md). Either fill
+// these in here or leave them blank and enter them on the sign-in screen.
+const CONFIG={clientId:'',scriptUrl:''};
 const cfgStored=(function(){try{return JSON.parse(localStorage.getItem('ch_fin_cfg')||'{}')}catch(e){return{}}})();
-const CFG={clientId:(CONFIG.clientId||cfgStored.clientId||'').trim(),sheetId:(CONFIG.sheetId||cfgStored.sheetId||'').trim()};
-const gMode=!!(CFG.clientId&&CFG.sheetId);
+const CFG={clientId:(CONFIG.clientId||cfgStored.clientId||'').trim(),scriptUrl:(CONFIG.scriptUrl||cfgStored.scriptUrl||'').trim()};
+const gMode=!!(CFG.clientId&&CFG.scriptUrl);
 const TABLES=[
   {name:'Claims',key:'claims',kind:'map',f:['id','payer','payerId','patient','memberId','billed','from','to','units','submitted','source','work','note','importedAt'],num:['billed','units']},
   {name:'Remits',key:'remits',kind:'list',f:['key','claimId','status','charge','paid','patResp','payerClaimId','trace','payDate','payer','patient','memberId','from','to','adj'],num:['charge','paid','patResp'],json:['adj']},
@@ -542,8 +543,7 @@ function fromRows(T,rows){
   return out;
 }
 const GStore={
-  db:null,token:null,exp:0,tc:null,version:0,cache:{},timer:null,flushing:false,again:false,_rej:null,
-  base(){return 'https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(CFG.sheetId)},
+  db:null,token:null,exp:0,tc:null,version:0,role:'owner',email:'',cache:{},timer:null,flushing:false,again:false,_rej:null,
   loadGsi(){
     return new Promise((res,rej)=>{
       if(window.google&&google.accounts&&google.accounts.oauth2)return res();
@@ -555,7 +555,7 @@ const GStore={
   async signIn(){
     await this.loadGsi();
     return new Promise((res,rej)=>{
-      if(!this.tc)this.tc=google.accounts.oauth2.initTokenClient({client_id:CFG.clientId,scope:'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',callback:function(){},error_callback:e=>{if(this._rej)this._rej(new Error(e&&e.type==='popup_closed'?'The sign-in window was closed.':'Google sign-in did not complete.'))}});
+      if(!this.tc)this.tc=google.accounts.oauth2.initTokenClient({client_id:CFG.clientId,scope:'openid email',callback:function(){},error_callback:e=>{if(this._rej)this._rej(new Error(e&&e.type==='popup_closed'?'The sign-in window was closed.':'Google sign-in did not complete.'))}});
       this._rej=rej;
       this.tc.callback=r=>{
         if(r.error)return rej(new Error('Google sign-in failed: '+(r.error_description||r.error)));
@@ -564,66 +564,51 @@ const GStore={
       this.tc.requestAccessToken({prompt:''});
     });
   },
-  async api(path,opt){
+  async call(action,body){
     if(!this.token||Date.now()>this.exp)await this.signIn();
-    opt=opt||{};
-    const r=await fetch(this.base()+path,{method:opt.method||'GET',headers:Object.assign({'Authorization':'Bearer '+this.token},opt.body?{'Content-Type':'application/json'}:{}),body:opt.body?JSON.stringify(opt.body):undefined});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok){
-      const m=(j.error&&j.error.message)||('HTTP '+r.status);
-      if(r.status===401)this.token=null;
-      const e=new Error((r.status===403||r.status===404)?'Cannot open the finance sheet ('+m+'). Check the Sheet ID and that your Google account has access to it.':m);
-      e.status=r.status;throw e;
-    }
+    let r;
+    try{r=await fetch(CFG.scriptUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({token:this.token,action:action},body||{}))})}
+    catch(e){throw new Error('Could not reach the finance script. Check your connection and the web app URL.')}
+    let j;
+    try{j=await r.json()}catch(e){throw new Error('The finance script did not answer correctly. Check that the web app is deployed with access set to Anyone and that its address ends in /exec.')}
+    if(j.error){if(j.auth)this.token=null;throw new Error(j.error)}
     return j;
   },
-  async raw(url,opt){
-    if(!this.token||Date.now()>this.exp)await this.signIn();
-    opt=opt||{};
-    const r=await fetch(url,{method:opt.method||'GET',headers:Object.assign({'Authorization':'Bearer '+this.token},opt.headers||{}),body:opt.body});
-    if(r.status===401)this.token=null;
-    if(!r.ok){
-      const j=await r.json().catch(()=>({}));const m=(j.error&&j.error.message)||('HTTP '+r.status);
-      throw new Error(r.status===403?'Google Drive refused the request ('+m+'). Check that the Google Drive API is turned on for your Google project, and that you allowed Drive access when signing in.':m);
-    }
-    return r.status===204?{}:await r.json().catch(()=>({}));
-  },
   async load(){
-    const meta=await this.api('?fields=sheets.properties.title');
-    const have=(meta.sheets||[]).map(x=>x.properties.title);
-    const need=TABLES.map(t=>t.name).concat(['Meta']).filter(n=>!have.includes(n));
-    if(need.length)await this.api(':batchUpdate',{method:'POST',body:{requests:need.map(n=>({addSheet:{properties:{title:n}}}))}});
-    const q=TABLES.map(t=>t.name).concat(['Meta']).map(n=>'ranges='+encodeURIComponent(n)).join('&');
-    const r=await this.api('/values:batchGet?'+q+'&valueRenderOption=UNFORMATTED_VALUE');
-    const vr=r.valueRanges||[];
+    const r=await this.call('load');
     const d=Local.emptyDb();
-    TABLES.forEach((T,i)=>{d[T.key]=fromRows(T,(vr[i]&&vr[i].values)||[]);this.cache[T.name]=JSON.stringify(toRows(T,d))});
-    const mv=vr[TABLES.length]&&vr[TABLES.length].values;
-    this.version=Number(mv&&mv[0]&&mv[0][0])||0;
+    TABLES.forEach(T=>{d[T.key]=fromRows(T,(r.tabs&&r.tabs[T.name])||[]);this.cache[T.name]=JSON.stringify(toRows(T,d))});
+    this.version=Number(r.version)||0;this.role=r.role||'owner';this.email=r.email||'';
     this.db=d;setSave('Loaded from Google Sheets');
   },
-  save(){setSave('Saving…');clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush(),800)},
+  save(){
+    clearTimeout(this.timer);
+    if(this.role==='viewer'){
+      const b=document.getElementById('banner');if(b){b.hidden=false;b.textContent='Your role is view only, so that change was not saved.'}
+      this.timer=setTimeout(async()=>{try{await this.load();db=this.db;go(current)}catch(e){}},400);return;
+    }
+    setSave('Saving…');this.timer=setTimeout(()=>this.flush(),800);
+  },
   saveAll(){this.cache={};return this.flush()},
   async flush(){
-    if(!this.db)return;
+    if(!this.db||this.role==='viewer')return;
     if(this.flushing){this.again=true;return}
     this.flushing=true;
     try{
-      const cur=await this.api('/values/'+encodeURIComponent('Meta!A1'));
-      const cv=Number(cur.values&&cur.values[0]&&cur.values[0][0])||0;
-      if(cv!==this.version){
-        if(confirm('Someone else saved changes to the finance sheet since you opened it.\n\nOK = load their changes (your unsaved changes are lost).\nCancel = overwrite their changes with yours.')){
-          await this.load();db=this.db;this.flushing=false;if(typeof go==='function')go(current);return;
-        }
-        this.version=cv;
-      }
       const changed=[];
       for(const T of TABLES){const rows=toRows(T,this.db);const js=JSON.stringify(rows);if(js!==this.cache[T.name])changed.push({T:T,rows:rows,js:js})}
       if(changed.length){
-        await this.api('/values:batchClear',{method:'POST',body:{ranges:changed.map(c=>c.T.name)}});
-        await this.api('/values:batchUpdate',{method:'POST',body:{valueInputOption:'RAW',data:changed.map(c=>({range:c.T.name+'!A1',values:c.rows}))}});
-        this.version=cv+1;
-        await this.api('/values/'+encodeURIComponent('Meta!A1')+'?valueInputOption=RAW',{method:'PUT',body:{values:[[this.version]]}});
+        let force=false;
+        for(;;){
+          const r=await this.call('save',{expected:this.version,force:force,changes:changed.map(c=>({name:c.T.name,rows:c.rows}))});
+          if(r.conflict){
+            if(confirm('Someone else saved changes to the finance sheet since you opened it.\n\nOK = load their changes (your unsaved changes are lost).\nCancel = overwrite their changes with yours.')){
+              await this.load();db=this.db;this.flushing=false;if(typeof go==='function')go(current);return;
+            }
+            force=true;continue;
+          }
+          this.version=r.version;break;
+        }
         changed.forEach(c=>{this.cache[c.T.name]=c.js});
       }
       setSave('Saved to Google Sheets');
@@ -637,7 +622,7 @@ const GStore={
   lock(){
     clearTimeout(this.timer);
     try{if(this.token&&window.google&&google.accounts&&google.accounts.oauth2)google.accounts.oauth2.revoke(this.token,function(){})}catch(e){}
-    this.db=null;this.token=null;this.cache={};this.folderId=null;
+    this.db=null;this.token=null;this.cache={};
   }
 };
 function setSave(msg,bad,detail){
@@ -655,7 +640,7 @@ function showLock(){
   $('#app').hidden=true;$('#lock').hidden=false;$('#lockErr').hidden=true;$('#setupBox').hidden=true;
   if(gMode){
     $('#lockTitle').textContent='Finance portal';
-    $('#lockText').textContent='Sign in with the Google account that has access to the finance sheet.';
+    $('#lockText').textContent='Sign in with your Google account. Only the owner accounts are allowed.';
     $('#pin1wrap').hidden=true;$('#pin2wrap').hidden=true;$('#setupLink').hidden=true;$('#lockBtn').textContent='Sign in with Google';
     GStore.loadGsi().catch(()=>{});
     return;
@@ -669,13 +654,13 @@ function showLock(){
   setTimeout(()=>$('#pin1').focus(),50);
 }
 function lockErr(t){const e=$('#lockErr');e.textContent=t;e.hidden=false}
-function enterApp(){db=Store.db;$('#lock').hidden=true;$('#app').hidden=false;resetIdle();go(current||'dashboard')}
-$('#setupToggle').addEventListener('click',function(e){e.preventDefault();$('#setupBox').hidden=!$('#setupBox').hidden;$('#cfgClient').value=CFG.clientId;$('#cfgSheet').value=CFG.sheetId});
+function enterApp(){db=Store.db;document.body.classList.toggle('ro',myRole()==='viewer');if(gMode)$('#roleTag').textContent=(GStore.email?GStore.email+' · ':'')+ROLE_NAME[myRole()];$('#lock').hidden=true;$('#app').hidden=false;resetIdle();go(current||'dashboard')}
+$('#setupToggle').addEventListener('click',function(e){e.preventDefault();$('#setupBox').hidden=!$('#setupBox').hidden;$('#cfgClient').value=CFG.clientId;$('#cfgScript').value=CFG.scriptUrl});
 function cfgSave(){
-  const c=$('#cfgClient').value.trim(),sh=$('#cfgSheet').value.trim();
-  if(!c||!sh)return lockErr('Enter both the Client ID and the Sheet ID.');
-  const m=sh.match(/\/d\/([A-Za-z0-9_-]+)/);
-  try{localStorage.setItem('ch_fin_cfg',JSON.stringify({clientId:c,sheetId:m?m[1]:sh}))}catch(e){return lockErr('Could not save the connection settings.')}
+  const c=$('#cfgClient').value.trim(),u=$('#cfgScript').value.trim();
+  if(!c||!u)return lockErr('Enter both the Client ID and the web app URL.');
+  if(!/^https:\/\/script\.google\.com\/(macros\/s\/|a\/)/.test(u))return lockErr('The web app URL should start with https://script.google.com/macros/s/ and end in /exec.');
+  try{localStorage.setItem('ch_fin_cfg',JSON.stringify({clientId:c,scriptUrl:u}))}catch(e){return lockErr('Could not save the connection settings.')}
   location.reload();
 }
 $('#cfgSave').addEventListener('click',cfgSave);
@@ -758,10 +743,19 @@ document.addEventListener('focusout',()=>{tip.hidden=true});
 const TABS=[['dashboard','Dashboard'],['claims','Claims'],['statements','Statements'],['receipts','Receipts'],['bills','Bills'],['payroll','Payroll'],['draws','Owner draws'],['reports','Reports'],['data','Data']];
 let current='dashboard';
 const ui={rc:{show:'all'},claims:{q:'',status:'all',payer:'',reason:'',range:'all',group:true},bills:{show:'unpaid'},st:{status:'review',acct:'',q:'',month:''},pending:null,dr:{owner:'',year:String(new Date().getFullYear()),type:'',edit:false},rep:{month:todayIso().slice(0,7)}};
+const ROLE_NAME={owner:'Owner',bookkeeper:'Bookkeeper',viewer:'Viewer'};
+function myRole(){return gMode?GStore.role:'owner'}
+function tabsFor(){
+  const r=myRole();
+  let t=TABS.filter(x=>r==='owner'||(x[0]!=='draws'&&x[0]!=='data'));
+  if(gMode&&r==='owner')t=t.concat([['users','Users']]);
+  return t;
+}
 function go(t){
+  const tabs=tabsFor();if(!tabs.some(x=>x[0]===t))t='dashboard';
   current=t;
-  $('#nav').innerHTML=TABS.map(x=>'<button role="tab" data-go="'+x[0]+'"'+(x[0]===t?' aria-current="page"':'')+'>'+x[1]+'</button>').join('');
-  ({dashboard:vDash,claims:vClaims,statements:vStatements,receipts:vReceipts,bills:vBills,payroll:vPayroll,draws:vDraws,reports:vReports,data:vData})[t]();
+  $('#nav').innerHTML=tabs.map(x=>'<button role="tab" data-go="'+x[0]+'"'+(x[0]===t?' aria-current="page"':'')+'>'+x[1]+'</button>').join('');
+  ({dashboard:vDash,claims:vClaims,statements:vStatements,receipts:vReceipts,bills:vBills,payroll:vPayroll,draws:vDraws,reports:vReports,data:vData,users:vUsers})[t]();
   window.scrollTo(0,0);
 }
 
@@ -1262,19 +1256,8 @@ const Rc={
     if(blob.size>RC_MAX)throw new Error(f.name+': the file is larger than 10 MB.');
     return{blob:blob,name:name,mime:mime};
   },
-  async driveFolder(){
-    if(GStore.folderId)return GStore.folderId;
-    const q="name='"+RC_FOLDER+"' and mimeType='application/vnd.google-apps.folder' and trashed=false";
-    const j=await GStore.raw('https://www.googleapis.com/drive/v3/files?fields=files(id)&q='+encodeURIComponent(q));
-    if(j.files&&j.files.length)return(GStore.folderId=j.files[0].id);
-    const c=await GStore.raw('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:RC_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
-    return(GStore.folderId=c.id);
-  },
-  async driveUpload(p){
-    const folder=await this.driveFolder();const bnd='chr'+uid();
-    const body=new Blob(['--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify({name:p.name,parents:[folder]})+'\r\n--'+bnd+'\r\nContent-Type: '+p.mime+'\r\n\r\n',p.blob,'\r\n--'+bnd+'--']);
-    return GStore.raw('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:body});
-  },
+  b64(blob){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]||'');fr.onerror=()=>rej(new Error('Could not read the file.'));fr.readAsDataURL(blob)})},
+  async driveUpload(p){return GStore.call('upload',{name:p.name,mime:p.mime,b64:await this.b64(p.blob)})},
   async localPut(id,p){
     const iv=crypto.getRandomValues(new Uint8Array(12));
     const data=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},Local.ck,await p.blob.arrayBuffer());
@@ -1293,7 +1276,7 @@ async function addReceipts(files,refType,refId){
       rcNote('Saving '+f.name+'…');
       const p=await Rc.prep(f);const id=uid();
       const rec={id:id,name:p.name,mime:p.mime,size:p.blob.size,added:todayIso(),kind:kind,driveId:'',link:'',refType:refType||'',refId:refId||''};
-      if(kind==='drive'){const j=await Rc.driveUpload(p);rec.driveId=j.id;rec.link=j.webViewLink||('https://drive.google.com/file/d/'+j.id+'/view')}
+      if(kind==='drive'){const j=await Rc.driveUpload(p);rec.driveId=j.id;rec.link=j.link}
       else await Rc.localPut(id,p);
       db.receipts.push(rec);ok++;
     }catch(x){errs.push(x.message)}
@@ -1322,7 +1305,7 @@ function vReceipts(){
   const txns=db.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,200);
   const opts='<option value="">Choose…</option>'+(bills.length?'<optgroup label="Bills">'+bills.map(b=>'<option value="bill:'+esc(b.id)+'">'+esc(fmtShort(b.billDate||b.due))+' · '+esc(b.vendor)+' · '+fmt2(b.amount)+'</option>').join('')+'</optgroup>':'')+(txns.length?'<optgroup label="Bank transactions">'+txns.map(t=>'<option value="txn:'+esc(t.id)+'">'+esc(fmtShort(t.date))+' · '+esc((t.desc||'').slice(0,36))+' · '+fmt2(t.amount)+'</option>').join('')+'</optgroup>':'');
   $('#view').innerHTML=
-    '<div class="card sect noprint"><h2>Add receipts</h2><p class="muted small" style="margin:-4px 0 10px">'+(gMode?'Files are saved to a Google Drive folder named "'+esc(RC_FOLDER)+'" in the Google account you signed in with. Share that folder in Google Drive with the other owner so they can open the links.':'Files are saved encrypted on this device only. They are not included in the backup file and are lost if you clear this browser\'s data.')+' Photos and PDFs up to 10 MB.</p>'+
+    '<div class="card sect noprint"><h2>Add receipts</h2><p class="muted small" style="margin:-4px 0 10px">'+(gMode?'Files are saved to a Google Drive folder named "'+esc(RC_FOLDER)+'" that belongs to the account that runs the finance script. Both owners can open them.':'Files are saved encrypted on this device only. They are not included in the backup file and are lost if you clear this browser\'s data.')+' Photos and PDFs up to 10 MB.</p>'+
     '<label class="btn pri" style="cursor:pointer">'+ic('receipt')+' Choose photos or PDFs<input type="file" hidden multiple accept="image/*,application/pdf" data-act="rcadd" data-rt="" data-id=""></label><div id="rcMsg" style="margin-top:8px"></div></div>'+
     '<div class="card sect"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Receipts</h2><div class="chips noprint" style="margin:0">'+[['all','All '+db.receipts.length],['unlinked','Not linked '+unl]].map(x=>'<button class="chipb" data-act="rcshow" data-v="'+x[0]+'" aria-pressed="'+(u.show===x[0])+'">'+x[1]+'</button>').join('')+'</div></div>'+
     (list.length?'<div class="flat">'+list.map(r=>{
@@ -1350,10 +1333,47 @@ async function rcDelete(id){
   const r=db.receipts.find(x=>x.id===id);if(!r)return;
   if(!confirm('Delete this receipt'+(r.kind==='drive'?' from the portal and from Google Drive?':'?')))return;
   let warn='';
-  try{if(r.kind==='drive'){if(r.driveId)await GStore.raw('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(r.driveId),{method:'DELETE'})}else await Rc.idbDel(id)}
+  try{if(r.kind==='drive'){if(r.driveId)await GStore.call('delete',{id:r.driveId})}else await Rc.idbDel(id)}
   catch(x){warn='The receipt was removed from the portal, but the file could not be deleted from Google Drive. Delete it there if needed.'}
   db.receipts=db.receipts.filter(x=>x.id!==id);Store.save();go(current);
   if(warn)rcNote(warn,true);
+}
+
+/* ---------- users and activity log ---------- */
+ui.us={list:[],owner:'',log:[],msg:''};
+function fmtTime(t){const d=new Date(t);return isNaN(d)?t:d.toLocaleString([],{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
+function roleOpts(sel){return Object.keys(ROLE_NAME).map(k=>'<option value="'+k+'"'+(sel===k?' selected':'')+'>'+ROLE_NAME[k]+'</option>').join('')}
+function vUsers(){
+  $('#view').innerHTML=
+    '<div class="card sect"><h2>Users</h2><p class="muted small" style="margin:-4px 0 10px">Owners can do everything and manage users. Bookkeepers can edit claims, bills, statements, receipts and payroll cost, but cannot see owner draws, users or backups. Viewers can only look.</p><div id="usMsg"></div><div id="usList"><p class="muted small">Loading…</p></div>'+
+    '<form id="usAdd" class="noprint" style="margin-top:12px"><div class="formgrid"><label class="f">Name<input type="text" name="name"></label><label class="f">Google email<input type="email" name="email" required></label><label class="f">Role<select name="role">'+roleOpts('bookkeeper')+'</select></label></div><button class="btn pri" type="submit" style="margin-top:10px">Add user</button></form></div>'+
+    '<div class="card sect"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Activity log</h2><div class="noprint" style="display:flex;gap:6px"><button class="btn sm" data-act="logrefresh">Refresh</button><button class="btn sm" data-act="logcsv">'+ic('download')+' Export CSV</button></div></div><p class="muted small" style="margin:6px 0 8px">Who signed in and what changed. It records counts of rows added, changed or removed, not their contents. Showing the latest 300 entries.</p><div id="usLog"><p class="muted small">Loading…</p></div></div>';
+  $('#usAdd').addEventListener('submit',e=>{
+    e.preventDefault();const f=new FormData(e.target);
+    usersPush(ui.us.list.concat([{email:String(f.get('email')).trim().toLowerCase(),name:String(f.get('name')).trim(),role:f.get('role')}]),true);
+  });
+  usersFetch();logFetch();
+}
+async function usersFetch(){
+  try{const r=await GStore.call('users_load');ui.us.list=r.users;ui.us.owner=r.owner;usersRender()}
+  catch(e){const el=$('#usList');if(el)el.innerHTML='<div class="msg bad">'+esc(e.message)+'</div>'}
+}
+async function usersPush(list,clear){
+  try{
+    const r=await GStore.call('users_save',{users:list.map(u=>({email:u.email,name:u.name,role:u.role}))});
+    ui.us.list=r.users;if($('#usMsg'))$('#usMsg').innerHTML='';usersRender();logFetch();
+    if(clear&&$('#usAdd'))$('#usAdd').reset();
+  }catch(e){if($('#usMsg'))$('#usMsg').innerHTML='<div class="msg bad">'+esc(e.message)+'</div>';usersFetch()}
+}
+function usersRender(){
+  const el=$('#usList');if(!el)return;const u=ui.us;
+  const row=(name,email,right)=>'<div class="crow" style="padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div><div>'+esc(name||email)+'</div>'+(name?'<div class="small muted">'+esc(email)+'</div>':'')+'</div><div style="display:flex;gap:6px;align-items:center">'+right+'</div></div>';
+  el.innerHTML='<div class="flat">'+row('',u.owner,'<span class="pill gray">Owner · script owner</span>')+u.list.map(x=>row(x.name,x.email,'<select data-act="usrole" data-email="'+esc(x.email)+'" aria-label="Role">'+roleOpts(x.role)+'</select><button class="btn sm danger" data-act="usdel" data-email="'+esc(x.email)+'">Remove</button>')).join('')+'</div>';
+}
+async function logFetch(){
+  try{const r=await GStore.call('log',{limit:300});ui.us.log=r.rows;const el=$('#usLog');if(!el)return;
+    el.innerHTML=r.rows.length?'<div class="tscroll"><table><thead><tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>'+r.rows.map(x=>'<tr><td style="white-space:nowrap">'+esc(fmtTime(x[0]))+'</td><td>'+esc(x[1])+'</td><td>'+esc(x[2])+'</td><td>'+esc(x[3])+'</td></tr>').join('')+'</tbody></table></div>':empty('No activity yet','Sign-ins and changes will appear here.');
+  }catch(e){const el=$('#usLog');if(el)el.innerHTML='<div class="msg bad">'+esc(e.message)+'</div>'}
 }
 
 /* ---------- data ---------- */
@@ -1375,7 +1395,7 @@ function vData(){
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="backup">'+ic('download')+' Download backup</button><label class="btn" style="cursor:pointer">'+ic('upload')+' Restore backup<input type="file" id="restore" hidden></label>'+(gMode?'':'<button class="btn" data-act="changepin">Change PIN</button>')+'<button class="btn danger" data-act="wipe">Erase all data</button></div><div id="dmsg"></div></div>'+
     '<div class="card sect"><h2>Imported files</h2>'+(db.files.length?'<table><tbody>'+db.files.slice().reverse().map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files yet','Imported 837 and 835 files are listed here.'))+'</div>'+
     '<div class="card sect"><h2>How your data is stored</h2>'+(gMode?
-      '<p class="small" style="margin:0 0 6px">Your data is stored in your Google Sheet, so everyone with access to that sheet sees the same numbers on any device. <a href="https://docs.google.com/spreadsheets/d/'+esc(CFG.sheetId)+'" target="_blank" rel="noopener">Open the sheet</a></p><p class="small" style="margin:0 0 6px">The 837, 835 and statement files themselves are not kept; only the claim, payment and transaction details read from them. Account numbers are never stored.</p><div class="warnbox">The sheet holds patient names and member IDs. Share it only with the owners, and make sure your Google Workspace has a signed HIPAA business associate agreement.</div><div style="margin-top:10px"><button class="btn danger sm" data-act="disconnect">Disconnect from Google Sheets</button></div>'
+      '<p class="small" style="margin:0 0 6px">Your data is stored in your finance Google Sheet through the finance script, so both owners see the same numbers on any device.</p><p class="small" style="margin:0 0 6px">The 837, 835 and statement files themselves are not kept; only the claim, payment and transaction details read from them. Account numbers are never stored.</p><div class="warnbox">The sheet holds patient names and member IDs. Share it only with the owners, and make sure your Google Workspace has a signed HIPAA business associate agreement.</div><div style="margin-top:10px"><button class="btn danger sm" data-act="disconnect">Disconnect from Google Sheets</button></div>'
       :'<p class="small" style="margin:0 0 6px">Everything stays in this browser on this device, encrypted with your PIN. Nothing is sent to a server, and the files you import are not kept; only the details read from them.</p><div class="warnbox">There is no PIN reset. If you forget the PIN, the data in this browser cannot be recovered, so keep a recent backup and your PIN somewhere safe. To share the data between devices and owners, connect Google Sheets from the sign-in screen.</div>')+
     '<p class="small muted" style="margin:8px 0 0">Backups are encrypted with a passphrase you choose when you download them.</p></div>';
   $('#restore').addEventListener('change',async e=>{
@@ -1399,7 +1419,7 @@ document.addEventListener('click',async function(e){
   else if(a==='chip'){ui.claims.status=t.dataset.st;updateClaims()}
   else if(a==='print'){window.print()}
   else if(a==='relogin'){try{await GStore.signIn();await GStore.flush()}catch(x){setSave('Not saved',true,x.message)}}
-  else if(a==='disconnect'){if(confirm('Disconnect this browser from Google Sheets? Your sheet is not changed.')){try{localStorage.removeItem('ch_fin_cfg')}catch(x){}location.reload()}}
+  else if(a==='disconnect'){if(confirm('Disconnect this browser from Google? Your sheet and receipts are not changed.')){try{localStorage.removeItem('ch_fin_cfg')}catch(x){}location.reload()}}
   else if(a==='stchip'){ui.st.status=t.dataset.st;updateTxns()}
   else if(a==='dredit'){ui.dr.edit=true;vDraws()}
   else if(a==='drcancel'){ui.dr.edit=false;vDraws()}
@@ -1441,6 +1461,9 @@ document.addEventListener('click',async function(e){
   else if(a==='billshow'){ui.bills.show=t.dataset.v;vBills()}
   else if(a==='paybill'){const b=db.bills.find(x=>x.id===id);const d=$('#pd'+id).value||todayIso();if(b){b.status='paid';b.paidDate=d;Store.save();vBills()}}
   else if(a==='delbill'){if(confirm('Delete this bill?')){db.bills=db.bills.filter(x=>x.id!==id);db.receipts.forEach(r=>{if(r.refType==='bill'&&r.refId===id){r.refType='';r.refId=''}});Store.save();vBills()}}
+  else if(a==='usdel'){if(confirm('Remove '+t.dataset.email+'? They will no longer be able to sign in.'))usersPush(ui.us.list.filter(x=>x.email!==t.dataset.email))}
+  else if(a==='logrefresh'){logFetch()}
+  else if(a==='logcsv'){download('activity-log-'+todayIso()+'.csv',csv([['Time (UTC)','User','Action','Details']].concat(ui.us.log)))}
   else if(a==='rview'){rcView(id)}
   else if(a==='rcdel'){rcDelete(id)}
   else if(a==='rcshow'){ui.rc.show=t.dataset.v;vReceipts()}
@@ -1466,6 +1489,7 @@ document.addEventListener('change',function(e){
   if(t.dataset.act==='work'){const c=db.claims[t.dataset.id];if(c){c.work=t.value;Store.save();updateClaims()}}
   else if(t.dataset.act==='note'){const c=db.claims[t.dataset.id];if(c){c.note=t.value.slice(0,300);Store.save()}}
   else if(t.dataset.act==='cat'){const x=db.txns.find(y=>y.id===t.dataset.id);if(x&&t.value){x.status='categorized';x.category=t.value;learn(x,t.value);Store.save();updateTxns()}}
+  else if(t.dataset.act==='usrole'){usersPush(ui.us.list.map(x=>x.email===t.dataset.email?Object.assign({},x,{role:t.value}):x))}
   else if(t.dataset.act==='rcadd'){const fs=Array.from(t.files||[]);t.value='';if(fs.length)addReceipts(fs,t.dataset.rt,t.dataset.id)}
   else if(t.dataset.act==='stflip'){if(ui.pending){ui.pending.flip=t.checked;renderPending()}}
 });
