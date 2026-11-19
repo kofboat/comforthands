@@ -24,6 +24,11 @@ const RECEIPT_FOLDER_NAME = 'Comfort Hands finance receipts';
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const MAX_LOG_ROWS = 20000;
 
+// Optional: the ID of the admin portal's data sheet ("Comfort Hands Operations Data (restricted)"), from its web address
+// (docs.google.com/spreadsheets/d/THIS-PART/edit). Used only to count clients, admissions and discharges; no names are read.
+// The Google account that owns this script must be able to open that sheet.
+const ADMIN_SHEET_ID = '';
+
 function doGet() {
   return json_({ ok: true, service: 'Comfort Hands finance' });
 }
@@ -40,6 +45,7 @@ function doPost(e) {
       case 'users_load': return json_(usersLoad_(who));
       case 'users_save': return json_(usersSave_(who, req));
       case 'log': return json_(logLoad_(who, req));
+      case 'census': return json_(census_());
       default: throw new Error('Unknown request.');
     }
   } catch (err) {
@@ -319,4 +325,71 @@ function delete_(who, req) {
   file.setTrashed(true);
   log_(ss_(), who.email, 'Receipt deleted', file.getName ? file.getName() : '');
   return { ok: true };
+}
+
+/* ---------- client counts from the admin portal's data sheet ---------- */
+
+function day_(v, tz) {
+  if (!v) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v));
+  return m ? m[1] : '';
+}
+
+function census_() {
+  if (!ADMIN_SHEET_ID) return { notConfigured: true };
+  let ss;
+  try { ss = SpreadsheetApp.openById(ADMIN_SHEET_ID); }
+  catch (e) { throw new Error('The finance script cannot open the admin data sheet. Check ADMIN_SHEET_ID, and that the Google account that owns this script can open that sheet.'); }
+  const sh = ss.getSheetByName('Patients');
+  if (!sh) throw new Error('The admin data sheet has no Patients tab.');
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return censusCompute_([], today);
+  const tz = ss.getSpreadsheetTimeZone();
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  function col(name) {
+    const c = head.indexOf(name) + 1;
+    return c ? sh.getRange(2, c, n, 1).getValues().map(function (r) { return r[0]; }) : new Array(n).fill('');
+  }
+  if (head.indexOf('status') < 0) throw new Error('The admin data sheet Patients tab has no status column.');
+  const status = col('status'), soc = col('startOfCare'), sub = col('submittedAt'), cre = col('createdAt'), dc = col('dischargedAt');
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    pts.push({
+      status: String(status[i] || 'admission'),
+      admit: day_(soc[i], tz) || day_(sub[i], tz) || day_(cre[i], tz),
+      disch: day_(dc[i], tz)
+    });
+  }
+  return censusCompute_(pts, today);
+}
+
+// Pure counting step. pts: [{status, admit, disch}] with yyyy-MM-dd dates. Contains no names.
+function censusCompute_(pts, today) {
+  let active = 0, inProgress = 0, noDate = 0, noDischarge = 0;
+  const list = [];
+  pts.forEach(function (p) {
+    if (p.status === 'admission') { inProgress++; return; }
+    if (!p.admit) { noDate++; return; }
+    if (p.status === 'discharged' && !p.disch) { noDischarge++; return; }
+    if (p.status === 'active') active++;
+    list.push({ a: p.admit, d: p.status === 'discharged' ? p.disch : '' });
+  });
+  const cy = Number(today.slice(0, 4));
+  const years = [];
+  if (list.length) {
+    const first = Math.max(Math.min.apply(null, list.map(function (p) { return Number(p.a.slice(0, 4)); })), cy - 7);
+    for (let y = first; y <= cy; y++) {
+      const jan1 = y + '-01-01';
+      const cut = y === cy ? today : y + '-12-31';
+      const start = list.filter(function (p) { return p.a < jan1 && (!p.d || p.d >= jan1); }).length;
+      const admit = list.filter(function (p) { return p.a >= jan1 && p.a <= cut; }).length;
+      const disch = list.filter(function (p) { return p.d && p.d >= jan1 && p.d <= cut; }).length;
+      const end = list.filter(function (p) { return p.a <= cut && (!p.d || p.d > cut); }).length;
+      const served = start + admit;
+      years.push({ year: y, start: start, admit: admit, disch: disch, end: end, churn: served ? disch / served : null, partial: y === cy });
+    }
+  }
+  return { years: years, active: active, inProgress: inProgress, noDate: noDate, noDischarge: noDischarge, asOf: today };
 }
