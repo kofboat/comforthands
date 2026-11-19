@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comfort Hands Finance Portal</title>
+<style>
+:root{
+  --p:#5b3cc4; --p-dark:#3f2a94; --p-soft:#efebfc; --p-line:#d9d0f6;
+  --ink:#1d1b26; --muted:#6a6779; --line:#e4e0f0; --bg:#f6f4fb; --card:#fff;
+  --green:#1f6f3a; --green-bg:#e3f4e8; --amber:#7a4e00; --amber-bg:#fdf0d5;
+  --red:#a3262a; --red-bg:#fbe5e5; --gray:#55526a; --gray-bg:#ecebf3;
+  --bar:#6250d6; --bar-hover:#4a3aa7;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+h1,h2,h3{margin:0;font-weight:600}
+.wrap{max-width:980px;margin:0 auto;padding:14px}
+/* lock screen */
+#lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.lockcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;width:100%;max-width:380px}
+.lockcard h1{font-size:20px;margin-bottom:4px}
+.lockcard p{color:var(--muted);margin:6px 0 14px;font-size:14px}
+/* header + nav */
+.top{background:var(--p);color:#fff;border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.top h1{font-size:18px}
+.top small{opacity:.85;font-size:12px;display:block;font-weight:400}
+.nav{display:flex;gap:6px;overflow-x:auto;margin:12px 0;padding-bottom:2px}
+.nav button{border:1px solid var(--p-line);background:var(--card);border-radius:8px;padding:8px 14px;white-space:nowrap;font-size:14px;color:var(--p-dark)}
+.nav button[aria-current="page"]{background:var(--p);color:#fff;border-color:var(--p)}
+/* generic */
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.card>h2{font-size:15px;margin-bottom:10px}
+.sect{break-inside:avoid;page-break-inside:avoid}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:720px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.formgrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+.tile{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--p);border-radius:0 0 10px 10px;padding:10px 12px}
+.tile .lab{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.tile .chip-i{width:26px;height:26px;border-radius:8px;background:var(--p-soft);color:var(--p);display:flex;align-items:center;justify-content:center;flex:none}
+.tile .val{font-size:22px;font-weight:600;margin-top:6px}
+.ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+.btn{border:1px solid var(--p-line);background:var(--card);border-radius:8px;padding:8px 12px;font-size:14px;color:var(--p-dark);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--p-soft)}
+.btn.pri{background:var(--p);border-color:var(--p);color:#fff}
+.btn.pri:hover{background:var(--p-dark)}
+.btn.sm{padding:4px 9px;font-size:13px}
+.btn.danger{color:var(--red);border-color:#efc3c3}
+input[type=text],input[type=password],input[type=number],input[type=date],input[type=month],select,textarea{width:100%;border:1px solid #cfc9e4;border-radius:8px;padding:8px 10px;background:#fff;min-height:36px}
+input:focus,select:focus,button:focus-visible,textarea:focus{outline:2px solid var(--p);outline-offset:1px}
+label.f{display:block;font-size:12px;color:var(--muted)}
+label.f>*{margin-top:3px;color:var(--ink)}
+.formgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px}
+@media(max-width:720px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters>label:first-child{grid-column:1/-1}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chipb{border:1px solid var(--line);background:var(--gray-bg);color:var(--gray);border-radius:8px;padding:4px 10px;font-size:13px}
+.chipb[aria-pressed="true"]{background:var(--p-soft);color:var(--p-dark);border-color:var(--p-line);font-weight:600}
+.pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:8px;white-space:nowrap}
+.pill.green{background:var(--green-bg);color:var(--green)}
+.pill.amber{background:var(--amber-bg);color:var(--amber)}
+.pill.red{background:var(--red-bg);color:var(--red)}
+.pill.gray{background:var(--gray-bg);color:var(--gray)}
+.msg{border-radius:8px;padding:8px 12px;margin:6px 0;font-size:14px}
+.msg.ok{background:var(--green-bg);color:var(--green)}
+.msg.bad{background:var(--red-bg);color:var(--red)}
+.drop{border:1.5px dashed var(--p-line);border-radius:10px;padding:14px;text-align:center;background:#fcfbff}
+.drop b{display:block}
+.drop span{display:block}
+.drop input[type=file]{display:block;margin:10px auto 0;max-width:100%;font-size:13px}
+/* tables */
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.tot td{font-weight:600;border-top:2px solid var(--p-line)}
+.tscroll{overflow-x:auto}
+@media(max-width:520px){#saveState{display:none}}
+/* claims */
+.grp{border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:10px;break-inside:avoid;page-break-inside:avoid}
+.grp>summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.grp>summary::-webkit-details-marker{display:none}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--p-soft);color:var(--p-dark);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none}
+.crow{padding:10px 14px;border-top:1px solid var(--line);break-inside:avoid;page-break-inside:avoid}
+.crow .l1{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.crow .why{color:var(--red);font-size:13px;margin-top:2px}
+.crow .work{display:grid;grid-template-columns:160px 1fr auto;gap:8px;margin-top:8px}
+@media(max-width:600px){.crow .work{grid-template-columns:1fr}}
+.flat{background:var(--card);border:1px solid var(--line);border-radius:12px}
+/* charts */
+.hb{margin:6px 0}
+.hb-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.hb-l{width:150px;flex:none;font-size:13px;color:var(--muted);text-align:right;overflow-wrap:anywhere}
+@media(max-width:600px){.hb-l{width:96px;font-size:12px}}
+.hb-t{flex:1;display:flex;align-items:center;gap:8px;border-left:1px solid #cfc9e4;min-height:24px}
+.hb-b{height:22px;background:var(--bar);border-radius:0 4px 4px 0;min-width:0}
+.hb-b:hover,.hb-b:focus{background:var(--bar-hover)}
+.hb-v{font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink)}
+#tip{position:fixed;z-index:50;background:#26233a;color:#fff;font-size:12px;padding:5px 9px;border-radius:6px;pointer-events:none;max-width:280px}
+details.tbl>summary{cursor:pointer;color:var(--p-dark);font-size:13px;margin-top:6px}
+.empty{text-align:center;padding:26px 10px;color:var(--muted)}
+.empty b{display:block;color:var(--ink);margin-bottom:2px}
+.warnbox{background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 12px;font-size:13px}
+@media print{
+  body{background:#fff}
+  .nav,.top button,.noprint,.btn,.chips,.drop,#lock{display:none!important}
+  .top{background:#fff;color:#000;border:none;padding:0}
+  .card,.grp,.crow,.sect,.tile{break-inside:avoid;page-break-inside:avoid;border-color:#bbb}
+  .wrap{max-width:none;padding:0}
+  .crow .work{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="lock" hidden>
+  <form class="lockcard" id="lockForm" autocomplete="off">
+    <h1 id="lockTitle">Finance portal</h1>
+    <p id="lockText"></p>
+    <label class="f" id="pin1wrap">PIN<input type="password" id="pin1" autocomplete="off"></label>
+    <label class="f" id="pin2wrap" style="margin-top:10px" hidden>Confirm PIN<input type="password" id="pin2" autocomplete="off"></label>
+    <div id="lockErr" class="msg bad" hidden></div>
+    <button class="btn pri" type="submit" id="lockBtn" style="margin-top:12px;width:100%;justify-content:center">Unlock</button>
+    <p class="small" id="setupLink" style="margin:14px 0 0"><a href="#" id="setupToggle">Connect Google Sheets for shared storage</a></p>
+    <div id="setupBox" hidden style="margin-top:10px">
+      <p class="small muted" style="margin:0 0 8px">Use the same Google Client ID as your nurse app, and the ID of a new Google Sheet shared only with the owners. Your sign-in page address must be listed as an authorized JavaScript origin for that Client ID.</p>
+      <label class="f">Google Client ID<input type="text" id="cfgClient"></label>
+      <label class="f" style="margin-top:8px">Sheet ID<input type="text" id="cfgSheet"></label>
+      <button class="btn" type="button" id="cfgSave" style="margin-top:8px">Save and reload</button>
+    </div>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <div class="wrap">
+    <div class="top">
+      <div><h1>Finance portal</h1><small>Comfort Hands Home Healthcare · Owners and admin only</small></div>
+      <span id="saveState" class="small" style="opacity:.9;margin-left:auto;margin-right:10px"></span><button class="btn sm" id="lockNow"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</button>
+    </div>
+    <div class="nav" id="nav" role="tablist"></div>
+    <div id="banner" class="msg bad noprint" hidden></div>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+// ==CORE START==
+const Core=(function(){
+  // Common claim adjustment reason codes (CARC), plain-language. Codes not listed show as "Reason code N".
+  const CARC={'1':'Deductible amount','2':'Coinsurance amount','3':'Co-payment amount','4':'Modifier inconsistent with procedure','5':'Procedure inconsistent with place of service','6':'Procedure inconsistent with patient age','11':'Diagnosis inconsistent with procedure','15':'Authorization number missing or invalid','16':'Claim lacks information or has errors','18':'Duplicate claim','22':'Coordination of benefits (other payer)','23':'Paid by another payer','24':'Covered under managed care plan','26':'Service before coverage started','27':'Service after coverage ended','29':'Filed after time limit','31':'Patient not eligible or not insured','45':'Charge above fee schedule','50':'Not medically necessary','96':'Non-covered service','97':'Included in another service','109':'Not covered by this payer','119':'Benefit maximum reached','140':'Patient ID or name mismatch','151':'Services exceed what is allowed','167':'Diagnosis not covered','170':'Provider type not allowed','177':'Patient not eligible on service date','181':'Procedure code invalid on service date','185':'Provider not eligible for this service','197':'Authorization or precertification missing','198':'Authorization limit exceeded','199':'Authorization does not match billed service','204':'Service not covered by plan','242':'Service not provided by network provider','252':'Additional documentation needed','253':'Sequestration reduction','256':'Service not payable per managed care contract'};
+  // Adjustments that are expected and settle the claim (not money still owed by the payer)
+  const SETTLED_CODES=new Set(['45','253','23']);
+  const g=(s,i)=>(s[i]||'').trim();
+  const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n};
+  const round=n=>Math.round((n+Number.EPSILON)*100)/100;
+  function toIso(d){d=(d||'').trim();if(/^\d{8}$/.test(d))return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6);if(/^\d{6}$/.test(d))return '20'+d.slice(0,2)+'-'+d.slice(2,4)+'-'+d.slice(4);return ''}
+  function splitSegments(text){
+    text=String(text).replace(/^﻿/,'');
+    const i=text.indexOf('ISA');
+    if(i<0)throw new Error('No ISA header found. This does not look like an X12 file.');
+    const t=text.slice(i);
+    if(t.length<106)throw new Error('The file is too short to be a valid X12 file.');
+    const el=t[3],seg=t[105];
+    const out=[];
+    for(const raw of t.split(seg)){const s=raw.replace(/^[\s]+|[\s]+$/g,'');if(s)out.push(s.split(el))}
+    return out;
+  }
+  function range(v,f){
+    if(f==='RD8'&&v.includes('-')){const[a,b]=v.split('-');return[toIso(a),toIso(b)]}
+    const d=toIso(v);return[d,d];
+  }
+  function parse837(segs){
+    const claims=[];let bht='',gs='';let sub=null,pat=null,payer=null,inClaim=false,claim=null;
+    for(const s of segs){
+      const id=s[0];
+      if(id==='GS')gs=g(s,4);
+      else if(id==='BHT')bht=g(s,4);
+      else if(id==='ST'){sub=pat=payer=null;inClaim=false;claim=null}
+      else if(id==='HL'){const c=g(s,3);inClaim=false;claim=null;if(c==='22'){sub=null;pat=null;payer=null}else if(c==='23'){pat=null}}
+      else if(id==='NM1'&&!inClaim){
+        const q=g(s,1);const nm={last:g(s,3),first:g(s,4),id:g(s,9),type:g(s,2)};
+        if(q==='IL')sub=nm;else if(q==='QC')pat=nm;else if(q==='PR')payer={name:g(s,3),id:g(s,9)};
+      }
+      else if(id==='CLM'){
+        const nm=(pat&&(pat.last||pat.first))?pat:sub;
+        const name=nm?(nm.type==='2'?nm.last:[nm.last,nm.first].filter(Boolean).join(', ')):'';
+        claim={id:g(s,1),payer:payer?payer.name:'',payerId:payer?payer.id:'',patient:name,memberId:(sub&&sub.id)||(pat&&pat.id)||'',billed:round(num(g(s,2))),from:'',to:'',units:0,submitted:toIso(bht||gs)};
+        claims.push(claim);inClaim=true;
+      }
+      else if(claim&&id==='DTP'){
+        const q=g(s,1);
+        if(q==='472'||q==='434'){const[a,b]=range(g(s,3),g(s,2));if(a&&(!claim.from||a<claim.from))claim.from=a;if(b&&(!claim.to||b>claim.to))claim.to=b}
+      }
+      else if(claim&&id==='SV1')claim.units+=num(g(s,4));
+      else if(claim&&id==='SV2')claim.units+=num(g(s,5));
+    }
+    return claims;
+  }
+  function parse835(segs){
+    const remits=[];let pay={date:'',trace:'',payer:''};let cur=null,svc=false,gs='';
+    for(const s of segs){
+      const id=s[0];
+      if(id==='GS')gs=g(s,4);
+      else if(id==='ST'){pay={date:'',trace:'',payer:''};cur=null}
+      else if(id==='BPR')pay.date=toIso(g(s,16));
+      else if(id==='TRN')pay.trace=g(s,2);
+      else if(id==='N1'&&g(s,1)==='PR')pay.payer=g(s,2);
+      else if(id==='CLP'){
+        cur={claimId:g(s,1),status:g(s,2),charge:round(num(g(s,3))),paid:round(num(g(s,4))),patResp:round(num(g(s,5))),payerClaimId:g(s,7),adjClaim:[],adjLine:[],patient:'',memberId:'',from:'',to:'',trace:pay.trace,payDate:pay.date||toIso(gs),payer:pay.payer};
+        remits.push(cur);svc=false;
+      }
+      else if(cur&&id==='NM1'){
+        const q=g(s,1);
+        if(q==='QC'||q==='IL'){
+          const name=[g(s,3),g(s,4)].filter(Boolean).join(', ');
+          if(q==='QC'||!cur.patient)cur.patient=name||cur.patient;
+          if(!cur.memberId)cur.memberId=g(s,9);
+        }
+      }
+      else if(cur&&id==='CAS'){
+        const grp=g(s,1);
+        for(let k=2;k+1<s.length;k+=3){const code=g(s,k);if(!code)continue;(svc?cur.adjLine:cur.adjClaim).push({g:grp,c:code,a:round(num(g(s,k+1)))})}
+      }
+      else if(cur&&id==='DTM'){const q=g(s,1);if(q==='232')cur.from=toIso(g(s,2));else if(q==='233')cur.to=toIso(g(s,2))}
+      else if(cur&&id==='SVC')svc=true;
+      else if(id==='SE')cur=null;
+    }
+    for(const r of remits){r.adj=r.adjClaim.length?r.adjClaim:r.adjLine;delete r.adjClaim;delete r.adjLine}
+    return remits;
+  }
+  function parseFile(text){
+    const segs=splitSegments(text);
+    const st=segs.find(s=>s[0]==='ST');
+    if(!st)throw new Error('No transaction (ST) found in this file.');
+    const t=g(st,1);
+    if(t==='837'){const claims=parse837(segs);if(!claims.length)throw new Error('This 837 file has no claims.');return{type:'837',claims}}
+    if(t==='835'){const remits=parse835(segs);if(!remits.length)throw new Error('This 835 file has no payments.');return{type:'835',remits}}
+    throw new Error('This is an X12 '+t+' file. Only 837 (claims) and 835 (payments) files can be imported.');
+  }
+  function isSettled(a){return a.g==='PR'||SETTLED_CODES.has(a.c)}
+  function reasonText(code){return CARC[code]||('Reason code '+code)}
+  function computeClaim(c,rems){
+    let paid=0,settled=0,last='';const reasons=[];
+    for(const r of rems){
+      paid+=r.paid;
+      for(const a of r.adj){
+        if(isSettled(a))settled+=a.a;
+        else if(a.a!==0&&!reasons.find(x=>x.code===a.c))reasons.push({code:a.c,group:a.g,amount:a.a});
+      }
+      if(r.payDate>last)last=r.payDate;
+    }
+    paid=round(paid);settled=round(settled);
+    let balance=round(c.billed-paid-settled);if(balance<0.005)balance=0;
+    let state;
+    if(!rems.length){state='unpaid';balance=c.billed}
+    else if(balance<0.005)state='paid';
+    else if(paid<=0.005)state=(reasons.length||rems.some(r=>r.status==='4'))?'denied':'unpaid';
+    else state='short';
+    const written=c.work==='writtenoff';
+    return{paid,settled,balance,owed:written?0:balance,state:written?'writtenoff':state,rawState:state,reasons,lastPay:last};
+  }
+  /* ---------- bank and card statements ---------- */
+  function daysApart(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000)}
+  function parseCsvRows(text,delim){
+    const rows=[];let row=[],f='',q=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i];
+      if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+      else if(c==='"')q=true;
+      else if(c===delim){row.push(f);f=''}
+      else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(f);f='';rows.push(row);row=[]}
+      else f+=c;
+    }
+    if(f!==''||row.length){row.push(f);rows.push(row)}
+    return rows.filter(r=>r.some(x=>String(x).trim()!==''));
+  }
+  function parseDateAny(s){
+    s=String(s||'').trim();let m;
+    if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/)))return m[1]+'-'+m[2]+'-'+m[3];
+    if((m=s.match(/^(\d{4})(\d{2})(\d{2})$/)))return m[1]+'-'+m[2]+'-'+m[3];
+    if((m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4}|\d{2})(?!\d)/))){let y=m[3];if(y.length===2)y='20'+y;return y+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0')}
+    if(/[A-Za-z]/.test(s)){const d=new Date(s);if(!isNaN(d))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+    return '';
+  }
+  function parseAmount(s){
+    s=String(s==null?'':s).trim();if(!s)return NaN;
+    let neg=false;
+    if(/^\(.*\)$/.test(s)){neg=true;s=s.slice(1,-1)}
+    if(/-$/.test(s)){neg=true;s=s.slice(0,-1)}
+    s=s.replace(/[$,\s]/g,'');
+    if(s[0]==='-'){neg=!neg;s=s.slice(1)}else if(s[0]==='+')s=s.slice(1);
+    const n=parseFloat(s);if(isNaN(n))return NaN;
+    return neg?-n:n;
+  }
+  function parseOfx(text){
+    const tag=(b,n)=>{const m=b.match(new RegExp('<'+n+'>([^<\\r\\n]*)','i'));return m?m[1].trim():''};
+    const parts=text.split(/<STMTTRN>/i).slice(1);
+    const txns=[];
+    for(let b of parts){
+      b=b.split(/<\/STMTTRN>/i)[0];
+      const date=toIso(tag(b,'DTPOSTED').slice(0,8));const amt=parseFloat(tag(b,'TRNAMT'));
+      if(!date||isNaN(amt))continue;
+      const name=tag(b,'NAME'),memo=tag(b,'MEMO');
+      const desc=(name&&memo&&!name.toUpperCase().includes(memo.toUpperCase())?name+' '+memo:(name||memo)).replace(/\s+/g,' ').trim();
+      txns.push({date:date,desc:desc,amount:round(amt),fitid:tag(b,'FITID')});
+    }
+    if(!txns.length)throw new Error('No transactions found in this OFX/QFX file.');
+    const acct=tag(text,'ACCTID');
+    const lb=text.match(/<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|<\/CCSTMTRS>|$)/i);
+    let endBalance=null,endDate='';
+    if(lb){const v=parseFloat(tag(lb[1],'BALAMT'));if(!isNaN(v))endBalance=round(v);endDate=toIso(tag(lb[1],'DTASOF').slice(0,8))}
+    return{format:'ofx',txns:txns,last4:acct?acct.replace(/\W/g,'').slice(-4):'',endBalance:endBalance,endDate:endDate};
+  }
+  function parseCsvStatement(text){
+    text=String(text).replace(/^﻿/,'');
+    const head=text.split(/\r?\n/).slice(0,20).join('\n');
+    const delim=[',',';','\t'].map(d=>[d,head.split(d).length-1]).sort((a,b)=>b[1]-a[1])[0][0];
+    const rows=parseCsvRows(text,delim);
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,25);i++){
+      const h=rows[i].map(x=>String(x).trim().toLowerCase());
+      if(h.some(x=>/date|posted/.test(x))&&h.some(x=>/amount|debit|credit|withdraw|deposit/.test(x))){hi=i;break}
+    }
+    if(hi<0)throw new Error('Could not find date and amount columns. Download the transactions as CSV, OFX or QFX from your bank.');
+    const H=rows[hi].map(x=>String(x).trim().toLowerCase());
+    const find=(...res)=>{for(const re of res){const i=H.findIndex(x=>re.test(x));if(i>=0)return i}return -1};
+    const cDate=find(/^post(ing|ed)?\s*date$/,/^date$/,/^transaction date$/,/date/);
+    const cDesc=find(/^description$/,/^payee$/,/^merchant$/,/^name$/,/details/,/description/,/memo/,/narrative/);
+    const cAmt=find(/^amount$/,/amount/);
+    const cDeb=find(/debit|withdraw|money out|paid out/);
+    const cCre=find(/credit|deposit|money in|paid in/);
+    const cBal=find(/balance/);
+    const txns=[];let endBalance=null,endDate='';
+    for(const r of rows.slice(hi+1)){
+      const date=parseDateAny(r[cDate]);if(!date)continue;
+      let amt=NaN;
+      if(cAmt>=0)amt=parseAmount(r[cAmt]);
+      if(isNaN(amt)&&(cDeb>=0||cCre>=0)){
+        const d=cDeb>=0?parseAmount(r[cDeb]):NaN,c=cCre>=0?parseAmount(r[cCre]):NaN;
+        if(!isNaN(d)||!isNaN(c))amt=Math.abs(isNaN(c)?0:c)-Math.abs(isNaN(d)?0:d);
+      }
+      if(isNaN(amt))continue;
+      const desc=String(cDesc>=0?(r[cDesc]||''):'').replace(/\s+/g,' ').trim();
+      txns.push({date:date,desc:desc,amount:round(amt),fitid:''});
+      if(cBal>=0){const b=parseAmount(r[cBal]);if(!isNaN(b)&&(!endDate||date>=endDate)){endDate=date;endBalance=round(b)}}
+    }
+    if(!txns.length)throw new Error('No transactions found in this file.');
+    return{format:'csv',txns:txns,last4:'',endBalance:endBalance,endDate:endDate};
+  }
+  function parseStatement(text){
+    const t=String(text);
+    if(/<OFX>|OFXHEADER|<STMTTRN>/i.test(t))return parseOfx(t);
+    return parseCsvStatement(t);
+  }
+  const STOP=new Set(['ACH','DEBIT','CREDIT','POS','PURCHASE','CHECKCARD','CARD','ONLINE','PAYMENT','PMT','THE','FROM','FOR','WITHDRAWAL','DEPOSIT','LLC','INC','CORP','AUTOPAY','WEB','PPD','CCD','TST']);
+  const words=s=>String(s||'').toUpperCase().replace(/[^A-Z ]/g,' ').split(/\s+/).filter(w=>w.length>=3&&!STOP.has(w));
+  function descKey(desc){return words(desc).slice(0,2).join(' ')}
+  function overlap(a,b){const set=new Set(words(b));return words(a).filter(w=>set.has(w)).length}
+  const KEYWORDS=[
+    [/STAPLES|OFFICE DEPOT|AMAZON|WALMART|WAL-MART|COSTCO|DOLLAR TREE|CVS|WALGREENS/i,'Supplies'],
+    [/VERIZON|AT&T|COMCAST|XFINITY|PSE&G|ELECTRIC|WATER|UTILIT|T-MOBILE/i,'Utilities'],
+    [/INSURANCE|GEICO|PROGRESSIVE|HARTFORD|LIBERTY MUTUAL/i,'Insurance'],
+    [/QUICKBOOKS|INTUIT|GOOGLE|MICROSOFT|ZOOM|DROPBOX|GODADDY|WORDPRESS|AVAILITY|METROFAX|ELEMENTOR/i,'Software'],
+    [/SHELL|EXXON|SUNOCO|WAWA|MOBIL|GASOLINE/i,'Vehicle and mileage'],
+    [/HOMEBASE|GUSTO|PAYCHEX|\bADP\b/i,'Payroll (in Payroll tab)']
+  ];
+  function suggestCategory(desc,rules,amount){
+    const k=descKey(desc);
+    if(k&&rules&&rules[k])return{category:rules[k],src:'rule'};
+    if(amount<0)for(const kw of KEYWORDS)if(kw[0].test(desc))return{category:kw[1],src:'keyword'};
+    return null;
+  }
+  function paymentGroups(remits){
+    const g={};
+    for(const r of remits){
+      if(!r.paid)continue;
+      const key=r.trace?('T:'+r.trace):('P:'+(r.payer||'')+'|'+r.payDate);
+      const x=g[key]||(g[key]={key:key,trace:r.trace||'',payer:r.payer||'Unknown payer',date:r.payDate,total:0,claims:0});
+      x.total=round(x.total+r.paid);x.claims++;
+    }
+    return Object.values(g);
+  }
+  function matchTxns(txns,ctx){
+    const usedG=new Set(ctx.usedGroups||[]),usedB=new Set(ctx.usedBills||[]);
+    const groups=ctx.groups||[],bills=ctx.bills||[],rules=ctx.rules||{};
+    const sorted=txns.slice().sort((a,b)=>a.date.localeCompare(b.date));
+    for(const t of sorted){
+      t.status='review';t.category='';t.matchType='';t.matchRef='';
+      if(t.amount>0){
+        let best=null,bs=1e9;
+        for(const g of groups){
+          if(usedG.has(g.key)||Math.abs(g.total-t.amount)>0.005)continue;
+          const dd=Math.abs(daysApart(g.date,t.date));if(dd>10)continue;
+          const sc=dd-(overlap(g.payer,t.desc)>0?5:0);
+          if(sc<bs){bs=sc;best=g}
+        }
+        if(best){usedG.add(best.key);t.status='matched';t.matchType='payment';t.matchRef=best.key}
+      }else if(t.amount<0){
+        const amt=-t.amount;const c=[];
+        for(const b of bills){
+          if(usedB.has(b.id)||Math.abs(b.amount-amt)>0.005)continue;
+          const ref=b.status==='paid'?b.paidDate:b.due;if(!ref)continue;
+          const dd=Math.abs(daysApart(ref,t.date));if(dd>(b.status==='paid'?10:20))continue;
+          c.push({b:b,dd:dd,ov:overlap(b.vendor,t.desc)});
+        }
+        c.sort((x,y)=>y.ov-x.ov||x.dd-y.dd);
+        if(c.length&&(c[0].ov>0||(c.length===1&&c[0].dd<=5))){usedB.add(c[0].b.id);t.status='matched';t.matchType='bill';t.matchRef=c[0].b.id}
+        else{const sg=suggestCategory(t.desc,rules,t.amount);if(sg){t.status='suggested';t.category=sg.category}}
+      }
+    }
+    const open=x=>x.status==='review'||x.status==='suggested';
+    const pool=(ctx.others||[]).filter(open).concat(sorted.filter(open));
+    for(const t of sorted){
+      if(!open(t)||!/TRANSFER|PAYMENT|PMT|AUTOPAY|XFER/i.test(t.desc))continue;
+      const o=pool.find(x=>x!==t&&open(x)&&x.accountId!==t.accountId&&Math.abs(x.amount+t.amount)<0.005&&Math.abs(daysApart(x.date,t.date))<=4);
+      if(o){t.status=o.status='categorized';t.category=o.category='Transfer'}
+    }
+  }
+  return{CARC,parseFile,computeClaim,reasonText,round,toIso,parseStatement,matchTxns,paymentGroups,descKey,suggestCategory,parseCsvRows,parseAmount,parseDateAny};
+})();
+// ==CORE END==
+
+(function(){
+'use strict';
+document.addEventListener('DOMContentLoaded',function(){
+const {computeClaim,reasonText,round}=Core;
+const $=(s,r)=>(r||document).querySelector(s);
+const $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt0=n=>(n<0?'-':'')+'$'+Math.abs(Math.round(n)).toLocaleString('en-US');
+const fmt2=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtD=iso=>{if(!iso||iso.length<10)return '';return MON[+iso.slice(5,7)-1]+' '+(+iso.slice(8,10))+', '+iso.slice(0,4)};
+const fmtShort=iso=>{if(!iso||iso.length<10)return '';return MON[+iso.slice(5,7)-1]+' '+(+iso.slice(8,10))};
+const pad=n=>String(n).padStart(2,'0');
+const isoOf=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayIso=()=>isoOf(new Date());
+const monthOf=iso=>(iso||'').slice(0,7);
+const daysBetween=(a,b)=>Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const ICON={
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  printer:'<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  dollar:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/>',
+  trend:'<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
+};
+const ic=n=>'<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+ICON[n]+'</svg>';
+
+/* ---------- encrypted storage ---------- */
+const Local={
+  key:'ch_finance_v1',ck:null,salt:null,db:null,timer:null,
+  emptyDb(){return{claims:{},remits:[],files:[],bills:[],payroll:[],accounts:[],txns:[],rules:{},owners:[],draws:[],receipts:[]}},
+  exists(){try{return !!localStorage.getItem(this.key)}catch(e){return false}},
+  b64e(buf){const a=new Uint8Array(buf);let s='';for(let i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,a.subarray(i,i+8192));return btoa(s)},
+  b64d(s){const b=atob(s);const a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a},
+  async derive(pin,salt){
+    const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
+    return crypto.subtle.deriveKey({name:'PBKDF2',salt:salt,iterations:250000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  },
+  async encrypt(){
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const enc=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},this.ck,new TextEncoder().encode(JSON.stringify(this.db)));
+    return{v:1,salt:this.b64e(this.salt),iv:this.b64e(iv),data:this.b64e(enc)};
+  },
+  async persist(){const rec=await this.encrypt();localStorage.setItem(this.key,JSON.stringify(rec));return rec},
+  async create(pin){this.salt=crypto.getRandomValues(new Uint8Array(16));this.ck=await this.derive(pin,this.salt);this.db=this.emptyDb();await this.persist()},
+  async decryptRec(rec,pin){
+    const salt=this.b64d(rec.salt);const key=await this.derive(pin,salt);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:this.b64d(rec.iv)},key,this.b64d(rec.data));
+    return{db:JSON.parse(new TextDecoder().decode(plain)),key,salt};
+  },
+  async unlock(pin){
+    const rec=JSON.parse(localStorage.getItem(this.key));
+    const r=await this.decryptRec(rec,pin);
+    this.db=Object.assign(this.emptyDb(),r.db);this.ck=r.key;this.salt=r.salt;
+  },
+  async changePin(pin){
+    const oldKey=this.ck;let plain=[];
+    try{const all=await Rc.idbAll();for(const r of all){plain.push({id:r.id,buf:await crypto.subtle.decrypt({name:'AES-GCM',iv:r.iv},oldKey,r.data)})}}catch(e){plain=[]}
+    this.salt=crypto.getRandomValues(new Uint8Array(16));this.ck=await this.derive(pin,this.salt);
+    for(const p of plain){const iv=crypto.getRandomValues(new Uint8Array(12));const data=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},this.ck,p.buf);await Rc.idbPut({id:p.id,iv:iv,data:data})}
+    await this.persist();
+  },
+  save(){clearTimeout(this.timer);this.timer=setTimeout(()=>{this.persist().catch(e=>alert('Could not save: '+e.message))},250)},
+  saveAll(){return this.persist()},
+  lock(){clearTimeout(this.timer);this.db=null;this.ck=null}
+};
+let Store=Local;
+let db=null;
+
+/* ---------- Google Sheets storage ---------- */
+// Reuse your nurse app's Google Client ID and create a new Google Sheet for finance. Either fill these in here
+// or leave them blank and enter them on the sign-in screen.
+const CONFIG={clientId:'',sheetId:''};
+const cfgStored=(function(){try{return JSON.parse(localStorage.getItem('ch_fin_cfg')||'{}')}catch(e){return{}}})();
+const CFG={clientId:(CONFIG.clientId||cfgStored.clientId||'').trim(),sheetId:(CONFIG.sheetId||cfgStored.sheetId||'').trim()};
+const gMode=!!(CFG.clientId&&CFG.sheetId);
+const TABLES=[
+  {name:'Claims',key:'claims',kind:'map',f:['id','payer','payerId','patient','memberId','billed','from','to','units','submitted','source','work','note','importedAt'],num:['billed','units']},
+  {name:'Remits',key:'remits',kind:'list',f:['key','claimId','status','charge','paid','patResp','payerClaimId','trace','payDate','payer','patient','memberId','from','to','adj'],num:['charge','paid','patResp'],json:['adj']},
+  {name:'Files',key:'files',kind:'list',f:['name','hash','type','date','count'],num:['count']},
+  {name:'Bills',key:'bills',kind:'list',f:['id','vendor','category','billDate','due','amount','memo','status','paidDate','txnId'],num:['amount']},
+  {name:'Payroll',key:'payroll',kind:'list',f:['id','payDate','periodEnd','aide','hours','gross','taxes'],num:['hours','gross','taxes']},
+  {name:'Accounts',key:'accounts',kind:'list',f:['id','name','type','last4','balance','balanceDate'],num:['balance']},
+  {name:'Txns',key:'txns',kind:'list',f:['id','accountId','date','desc','amount','fitid','key','status','category','matchType','matchRef','note'],num:['amount']},
+  {name:'Rules',key:'rules',kind:'rulemap',f:['key','category']},
+  {name:'Owners',key:'owners',kind:'list',f:['id','name','pct'],num:['pct']},
+  {name:'Draws',key:'draws',kind:'list',f:['id','ownerId','date','type','amount','note','txnId'],num:['amount']},
+  {name:'Receipts',key:'receipts',kind:'list',f:['id','name','mime','size','added','kind','driveId','link','refType','refId'],num:['size']}
+];
+function toRows(T,d){
+  const src=d[T.key];
+  const arr=T.kind==='map'?Object.values(src):T.kind==='rulemap'?Object.keys(src).map(k=>({key:k,category:src[k]})):src;
+  return [T.f.slice()].concat(arr.map(o=>T.f.map(k=>{const v=o[k];if(T.json&&T.json.includes(k))return JSON.stringify(v||[]);return v==null?'':v})));
+}
+function fromRows(T,rows){
+  rows=rows||[];
+  const head=(rows[0]||[]).map(String);const idx={};T.f.forEach(k=>{idx[k]=head.indexOf(k)});
+  const out=rows.slice(1).filter(r=>r.some(v=>v!==''&&v!=null)).map(r=>{
+    const o={};
+    T.f.forEach(k=>{
+      let v=idx[k]>=0?r[idx[k]]:'';if(v==null)v='';
+      if(T.json&&T.json.includes(k)){try{v=v===''?[]:JSON.parse(v)}catch(e){v=[]}}
+      else if(T.num&&T.num.includes(k))v=Number(v)||0;
+      else v=String(v);
+      o[k]=v;
+    });
+    return o;
+  });
+  if(T.kind==='map'){const m={};out.forEach(o=>{if(!o.work)o.work='open';m[o.id]=o});return m}
+  if(T.kind==='rulemap'){const m={};out.forEach(o=>{m[o.key]=o.category});return m}
+  return out;
+}
+const GStore={
+  db:null,token:null,exp:0,tc:null,version:0,cache:{},timer:null,flushing:false,again:false,_rej:null,
+  base(){return 'https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(CFG.sheetId)},
+  loadGsi(){
+    return new Promise((res,rej)=>{
+      if(window.google&&google.accounts&&google.accounts.oauth2)return res();
+      const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.async=true;
+      sc.onload=()=>res();sc.onerror=()=>rej(new Error('Could not load Google sign-in. Check your connection.'));
+      document.head.appendChild(sc);
+    });
+  },
+  async signIn(){
+    await this.loadGsi();
+    return new Promise((res,rej)=>{
+      if(!this.tc)this.tc=google.accounts.oauth2.initTokenClient({client_id:CFG.clientId,scope:'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',callback:function(){},error_callback:e=>{if(this._rej)this._rej(new Error(e&&e.type==='popup_closed'?'The sign-in window was closed.':'Google sign-in did not complete.'))}});
+      this._rej=rej;
+      this.tc.callback=r=>{
+        if(r.error)return rej(new Error('Google sign-in failed: '+(r.error_description||r.error)));
+        this.token=r.access_token;this.exp=Date.now()+(Number(r.expires_in||3600)-60)*1000;res();
+      };
+      this.tc.requestAccessToken({prompt:''});
+    });
+  },
+  async api(path,opt){
+    if(!this.token||Date.now()>this.exp)await this.signIn();
+    opt=opt||{};
+    const r=await fetch(this.base()+path,{method:opt.method||'GET',headers:Object.assign({'Authorization':'Bearer '+this.token},opt.body?{'Content-Type':'application/json'}:{}),body:opt.body?JSON.stringify(opt.body):undefined});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){
+      const m=(j.error&&j.error.message)||('HTTP '+r.status);
+      if(r.status===401)this.token=null;
+      const e=new Error((r.status===403||r.status===404)?'Cannot open the finance sheet ('+m+'). Check the Sheet ID and that your Google account has access to it.':m);
+      e.status=r.status;throw e;
+    }
+    return j;
+  },
+  async raw(url,opt){
+    if(!this.token||Date.now()>this.exp)await this.signIn();
+    opt=opt||{};
+    const r=await fetch(url,{method:opt.method||'GET',headers:Object.assign({'Authorization':'Bearer '+this.token},opt.headers||{}),body:opt.body});
+    if(r.status===401)this.token=null;
+    if(!r.ok){
+      const j=await r.json().catch(()=>({}));const m=(j.error&&j.error.message)||('HTTP '+r.status);
+      throw new Error(r.status===403?'Google Drive refused the request ('+m+'). Check that the Google Drive API is turned on for your Google project, and that you allowed Drive access when signing in.':m);
+    }
+    return r.status===204?{}:await r.json().catch(()=>({}));
+  },
+  async load(){
+    const meta=await this.api('?fields=sheets.properties.title');
+    const have=(meta.sheets||[]).map(x=>x.properties.title);
+    const need=TABLES.map(t=>t.name).concat(['Meta']).filter(n=>!have.includes(n));
+    if(need.length)await this.api(':batchUpdate',{method:'POST',body:{requests:need.map(n=>({addSheet:{properties:{title:n}}}))}});
+    const q=TABLES.map(t=>t.name).concat(['Meta']).map(n=>'ranges='+encodeURIComponent(n)).join('&');
+    const r=await this.api('/values:batchGet?'+q+'&valueRenderOption=UNFORMATTED_VALUE');
+    const vr=r.valueRanges||[];
+    const d=Local.emptyDb();
+    TABLES.forEach((T,i)=>{d[T.key]=fromRows(T,(vr[i]&&vr[i].values)||[]);this.cache[T.name]=JSON.stringify(toRows(T,d))});
+    const mv=vr[TABLES.length]&&vr[TABLES.length].values;
+    this.version=Number(mv&&mv[0]&&mv[0][0])||0;
+    this.db=d;setSave('Loaded from Google Sheets');
+  },
+  save(){setSave('Saving…');clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush(),800)},
+  saveAll(){this.cache={};return this.flush()},
+  async flush(){
+    if(!this.db)return;
+    if(this.flushing){this.again=true;return}
+    this.flushing=true;
+    try{
+      const cur=await this.api('/values/'+encodeURIComponent('Meta!A1'));
+      const cv=Number(cur.values&&cur.values[0]&&cur.values[0][0])||0;
+      if(cv!==this.version){
+        if(confirm('Someone else saved changes to the finance sheet since you opened it.\n\nOK = load their changes (your unsaved changes are lost).\nCancel = overwrite their changes with yours.')){
+          await this.load();db=this.db;this.flushing=false;if(typeof go==='function')go(current);return;
+        }
+        this.version=cv;
+      }
+      const changed=[];
+      for(const T of TABLES){const rows=toRows(T,this.db);const js=JSON.stringify(rows);if(js!==this.cache[T.name])changed.push({T:T,rows:rows,js:js})}
+      if(changed.length){
+        await this.api('/values:batchClear',{method:'POST',body:{ranges:changed.map(c=>c.T.name)}});
+        await this.api('/values:batchUpdate',{method:'POST',body:{valueInputOption:'RAW',data:changed.map(c=>({range:c.T.name+'!A1',values:c.rows}))}});
+        this.version=cv+1;
+        await this.api('/values/'+encodeURIComponent('Meta!A1')+'?valueInputOption=RAW',{method:'PUT',body:{values:[[this.version]]}});
+        changed.forEach(c=>{this.cache[c.T.name]=c.js});
+      }
+      setSave('Saved to Google Sheets');
+    }catch(e){
+      setSave('Not saved',true,e.message);
+    }finally{
+      this.flushing=false;
+      if(this.again){this.again=false;this.save()}
+    }
+  },
+  lock(){
+    clearTimeout(this.timer);
+    try{if(this.token&&window.google&&google.accounts&&google.accounts.oauth2)google.accounts.oauth2.revoke(this.token,function(){})}catch(e){}
+    this.db=null;this.token=null;this.cache={};this.folderId=null;
+  }
+};
+function setSave(msg,bad,detail){
+  const el=document.getElementById('saveState');if(el)el.textContent=msg;
+  const b=document.getElementById('banner');if(!b)return;
+  if(bad){b.hidden=false;b.innerHTML='Your latest changes are not saved to Google Sheets yet. '+esc(detail||'')+' <button class="btn sm" data-act="relogin" style="margin-left:6px">Sign in again and retry</button>'}
+  else b.hidden=true;
+}
+if(gMode)Store=GStore;
+
+/* ---------- lock screen ---------- */
+let fails=0,blockedUntil=0,idleTimer=null;
+function showLock(){
+  Store.lock();db=null;
+  $('#app').hidden=true;$('#lock').hidden=false;$('#lockErr').hidden=true;$('#setupBox').hidden=true;
+  if(gMode){
+    $('#lockTitle').textContent='Finance portal';
+    $('#lockText').textContent='Sign in with the Google account that has access to the finance sheet.';
+    $('#pin1wrap').hidden=true;$('#pin2wrap').hidden=true;$('#setupLink').hidden=true;$('#lockBtn').textContent='Sign in with Google';
+    GStore.loadGsi().catch(()=>{});
+    return;
+  }
+  const first=!Store.exists();
+  $('#lockTitle').textContent=first?'Create your PIN':'Finance portal';
+  $('#lockText').textContent=first?'Choose a PIN of at least 6 characters. It protects and encrypts the finance data stored in this browser. There is no reset, so keep the PIN and a backup file somewhere safe.':'Enter your PIN to open the finance portal.';
+  $('#pin1wrap').hidden=false;$('#pin2wrap').hidden=!first;$('#setupLink').hidden=false;$('#lockBtn').textContent=first?'Create PIN':'Unlock';
+  $('#pin1').value='';$('#pin2').value='';
+  if(!(window.crypto&&crypto.subtle)){lockErr('This page needs a secure (HTTPS) connection to protect your data. Open it from your https:// address.')}
+  setTimeout(()=>$('#pin1').focus(),50);
+}
+function lockErr(t){const e=$('#lockErr');e.textContent=t;e.hidden=false}
+function enterApp(){db=Store.db;$('#lock').hidden=true;$('#app').hidden=false;resetIdle();go(current||'dashboard')}
+$('#setupToggle').addEventListener('click',function(e){e.preventDefault();$('#setupBox').hidden=!$('#setupBox').hidden;$('#cfgClient').value=CFG.clientId;$('#cfgSheet').value=CFG.sheetId});
+function cfgSave(){
+  const c=$('#cfgClient').value.trim(),sh=$('#cfgSheet').value.trim();
+  if(!c||!sh)return lockErr('Enter both the Client ID and the Sheet ID.');
+  const m=sh.match(/\/d\/([A-Za-z0-9_-]+)/);
+  try{localStorage.setItem('ch_fin_cfg',JSON.stringify({clientId:c,sheetId:m?m[1]:sh}))}catch(e){return lockErr('Could not save the connection settings.')}
+  location.reload();
+}
+$('#cfgSave').addEventListener('click',cfgSave);
+$('#lockForm').addEventListener('submit',async function(ev){
+  ev.preventDefault();
+  if(!$('#setupBox').hidden){cfgSave();return}
+  const btn=$('#lockBtn');
+  if(gMode){
+    btn.disabled=true;$('#lockErr').hidden=true;
+    try{await GStore.signIn();await GStore.load();enterApp()}
+    catch(e){lockErr(e.message||'Could not sign in.')}
+    finally{btn.disabled=false}
+    return;
+  }
+  if(!(window.crypto&&crypto.subtle))return;
+  const pin=$('#pin1').value;
+  try{
+    if(!Store.exists()){
+      if(pin.length<6)return lockErr('Use at least 6 characters.');
+      if(pin!==$('#pin2').value)return lockErr('The two PINs do not match.');
+      await Store.create(pin);
+    }else{
+      if(Date.now()<blockedUntil)return lockErr('Too many tries. Wait a few seconds and try again.');
+      try{await Store.unlock(pin)}catch(e){fails++;if(fails>=5){blockedUntil=Date.now()+30000;fails=0}return lockErr('That PIN did not work.')}
+    }
+    fails=0;enterApp();
+  }catch(e){lockErr('Could not open the finance data: '+e.message)}
+});
+function resetIdle(){clearTimeout(idleTimer);idleTimer=setTimeout(()=>{if(db)showLock()},15*60*1000)}
+['click','keydown','touchstart'].forEach(e=>document.addEventListener(e,()=>{if(db)resetIdle()},{passive:true}));
+$('#lockNow').addEventListener('click',showLock);
+
+/* ---------- helpers ---------- */
+function download(name,text,type){
+  const b=new Blob([text],{type:type||'text/csv'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+}
+function csv(rows){
+  return rows.map(r=>r.map(v=>{
+    let s=v==null?'':String(v);
+    if(/^[=+\-@\t\r]/.test(s))s="'"+s;
+    return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  }).join(',')).join('\r\n');
+}
+async function sha(text){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return Local.b64e(h)}
+function remitIndex(){const m={};for(const r of db.remits){(m[r.claimId]=m[r.claimId]||[]).push(r)}return m}
+function allClaims(){
+  const idx=remitIndex();
+  return Object.values(db.claims).map(c=>({c:c,d:computeClaim(c,idx[c.id]||[])}));
+}
+const refDate=c=>c.submitted||c.to||c.from||(c.importedAt||'').slice(0,10);
+function monthKeys(n,end){const out=[];const d=end?new Date(end+'-01T00:00:00'):new Date();d.setDate(1);for(let i=n-1;i>=0;i--){const x=new Date(d.getFullYear(),d.getMonth()-i,1);out.push(x.getFullYear()+'-'+pad(x.getMonth()+1))}return out}
+const monthLabel=k=>MON[+k.slice(5)-1]+' '+k.slice(0,4);
+function pill(state){
+  const m={paid:['green','Paid in full'],short:['amber','Short paid'],denied:['red','Denied'],unpaid:['gray','Not paid yet'],writtenoff:['gray','Written off']}[state];
+  return '<span class="pill '+m[0]+'">'+m[1]+'</span>';
+}
+function tile(icon,label,val){return '<div class="tile"><div class="lab"><span class="chip-i">'+ic(icon)+'</span>'+esc(label)+'</div><div class="val">'+val+'</div></div>'}
+function empty(h,t){return '<div class="empty"><b>'+esc(h)+'</b>'+esc(t)+'</div>'}
+function hbar(items,label){
+  const max=Math.max(1,...items.map(i=>i.value));
+  return '<div class="hb" role="img" aria-label="'+esc(label)+'">'+items.map(i=>{
+    const w=Math.max(0,i.value)/max*100;
+    return '<div class="hb-row"><div class="hb-l">'+esc(i.label)+'</div><div class="hb-t"><div class="hb-b" tabindex="0" style="width:calc('+w.toFixed(1)+'% * 0.78)" data-tip="'+esc(i.label+': '+fmt2(i.value)+(i.sub?' · '+i.sub:''))+'"></div><span class="hb-v">'+fmt0(i.value)+'</span></div></div>';
+  }).join('')+'</div>';
+}
+function tableView(head,rows){
+  return '<details class="tbl noprint"><summary>View as table</summary><div class="tscroll"><table><thead><tr>'+head.map((h,i)=>'<th'+(i?' class="n"':'')+'>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((v,i)=>'<td'+(i?' class="n"':'')+'>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></details>';
+}
+/* tooltip */
+const tip=$('#tip');
+document.addEventListener('mouseover',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t){tip.textContent=t.getAttribute('data-tip');tip.hidden=false}});
+document.addEventListener('mousemove',e=>{if(!tip.hidden){tip.style.left=Math.min(e.clientX+12,window.innerWidth-300)+'px';tip.style.top=(e.clientY+14)+'px'}});
+document.addEventListener('mouseout',e=>{if(e.target.closest&&e.target.closest('[data-tip]'))tip.hidden=true});
+document.addEventListener('focusin',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t){tip.textContent=t.getAttribute('data-tip');const r=t.getBoundingClientRect();tip.style.left=r.left+'px';tip.style.top=(r.bottom+6)+'px';tip.hidden=false}});
+document.addEventListener('focusout',()=>{tip.hidden=true});
+
+/* ---------- navigation ---------- */
+const TABS=[['dashboard','Dashboard'],['claims','Claims'],['statements','Statements'],['receipts','Receipts'],['bills','Bills'],['payroll','Payroll'],['draws','Owner draws'],['reports','Reports'],['data','Data']];
+let current='dashboard';
+const ui={rc:{show:'all'},claims:{q:'',status:'all',payer:'',reason:'',range:'all',group:true},bills:{show:'unpaid'},st:{status:'review',acct:'',q:'',month:''},pending:null,dr:{owner:'',year:String(new Date().getFullYear()),type:'',edit:false},rep:{month:todayIso().slice(0,7)}};
+function go(t){
+  current=t;
+  $('#nav').innerHTML=TABS.map(x=>'<button role="tab" data-go="'+x[0]+'"'+(x[0]===t?' aria-current="page"':'')+'>'+x[1]+'</button>').join('');
+  ({dashboard:vDash,claims:vClaims,statements:vStatements,receipts:vReceipts,bills:vBills,payroll:vPayroll,draws:vDraws,reports:vReports,data:vData})[t]();
+  window.scrollTo(0,0);
+}
+
+/* ---------- dashboard ---------- */
+function vDash(){
+  const rows=allClaims();const now=todayIso();const mk=now.slice(0,7);
+  const out=rows.reduce((s,r)=>s+r.d.owed,0);
+  const paidM=db.remits.filter(r=>monthOf(r.payDate)===mk).reduce((s,r)=>s+r.paid,0);
+  const due=db.bills.filter(b=>b.status!=='paid').reduce((s,b)=>s+b.amount,0);
+  const net=pl(mk).net;
+  const den=rows.filter(r=>r.d.state==='denied'),dsum=den.reduce((s,r)=>s+r.d.owed,0);
+  const short=rows.filter(r=>r.d.state==='short');
+  const old=rows.filter(r=>r.d.state==='unpaid'&&refDate(r.c)&&daysBetween(refDate(r.c),now)>45);
+  const overdue=db.bills.filter(b=>b.status!=='paid'&&b.due&&b.due<now);
+  const items=[];
+  if(den.length)items.push('<div class="l1" style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"><span><span class="pill red">Denied</span> '+den.length+' claim'+(den.length>1?'s':'')+' · '+fmt0(dsum)+'</span><button class="btn sm" data-act="dashgo" data-st="denied">View</button></div>');
+  if(short.length)items.push('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"><span><span class="pill amber">Short paid</span> '+short.length+' claim'+(short.length>1?'s':'')+' · '+fmt0(short.reduce((s,r)=>s+r.d.owed,0))+'</span><button class="btn sm" data-act="dashgo" data-st="short">View</button></div>');
+  if(old.length)items.push('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"><span><span class="pill gray">No payment yet</span> '+old.length+' claim'+(old.length>1?'s':'')+' over 45 days old · '+fmt0(old.reduce((s,r)=>s+r.d.owed,0))+'</span><button class="btn sm" data-act="dashgo" data-st="unpaid">View</button></div>');
+  if(overdue.length)items.push('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0"><span><span class="pill red">Overdue</span> '+overdue.length+' bill'+(overdue.length>1?'s':'')+' · '+fmt0(overdue.reduce((s,b)=>s+b.amount,0))+'</span><button class="btn sm" data-go="bills">View</button></div>');
+  const tr=db.txns.filter(t=>t.status==='review'||t.status==='suggested');
+  if(tr.length)items.push('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"><span><span class="pill amber">Bank</span> '+tr.length+' transaction'+(tr.length>1?'s':'')+' to review</span><button class="btn sm" data-go="statements">View</button></div>');
+  const last=db.files.slice(-3).reverse();
+  $('#view').innerHTML=
+    '<div class="grid4 sect">'+tile('file','Outstanding claims',fmt0(out))+tile('dollar','Paid this month',fmt0(paidM))+tile('receipt','Bills due',fmt0(due))+tile('trend','Net income (month to date)',fmt0(net))+'</div>'+
+    '<p class="muted small" style="margin:6px 2px 12px">Income and net income are cash basis: they count payments on the date the 835 says they were paid.</p>'+
+    '<div class="card sect"><h2>Needs attention</h2>'+(items.length?items.join(''):empty('Nothing needs attention','Import your 837 and 835 files from the Claims tab to see what was paid and what is still outstanding.'))+'</div>'+
+    '<div class="card sect"><h2>Recent imports</h2>'+(last.length?'<table><tbody>'+last.map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+' '+(f.type==='837'?'claims':'payments')+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files imported yet','Upload an 837 or 835 file to start.'))+'</div>';
+}
+
+/* ---------- claims ---------- */
+function vClaims(){
+  const u=ui.claims;
+  $('#view').innerHTML=
+    '<div class="card sect noprint"><h2>Import claims files</h2>'+
+    '<div class="grid2"><div class="drop"><b>'+ic('upload')+' 837 claims</b><span class="muted small">What you billed</span><input type="file" id="f837" multiple></div>'+
+    '<div class="drop"><b>'+ic('upload')+' 835 remittance</b><span class="muted small">What was paid</span><input type="file" id="f835" multiple></div></div>'+
+    '<p class="muted small" style="margin:8px 0 0">Files are read in this browser and never uploaded. Either box accepts either file type; the portal detects which it is. Files already imported are skipped.</p>'+
+    '<div id="impMsg"></div></div>'+
+    '<div id="ctiles" class="grid4 sect"></div>'+
+    '<div class="card sect noprint" style="margin-top:12px"><div class="filters" id="filters"></div><div class="chips" id="chips"></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="grp"'+(u.group?' checked':'')+'> Group by patient</label><span><button class="btn sm" data-act="csvClaims">'+ic('download')+' Export CSV</button> <button class="btn sm" data-act="print">'+ic('printer')+' Print list</button></span></div></div>'+
+    '<div id="clist"></div>'+
+    '<details class="card noprint"><summary style="cursor:pointer;font-weight:600">Add a claim manually</summary><form id="addClaim" style="margin-top:10px"><div class="formgrid">'+
+    '<label class="f">Patient (Last, First)<input type="text" name="patient" required></label><label class="f">Member ID<input type="text" name="memberId"></label><label class="f">Payer<input type="text" name="payer" required></label><label class="f">Claim number<input type="text" name="id" required></label>'+
+    '<label class="f">Service from<input type="date" name="from" required></label><label class="f">Service to<input type="date" name="to" required></label><label class="f">Units<input type="number" name="units" min="0" step="0.25" required></label><label class="f">Rate per unit ($)<input type="number" name="rate" min="0" step="0.01" required></label>'+
+    '</div><button class="btn pri" style="margin-top:10px" type="submit">Add claim</button></form></details>';
+  buildFilters();updateClaims();
+  const imp=fs=>importFiles(fs);
+  $('#f837').addEventListener('change',e=>{imp(e.target.files);e.target.value=''});
+  $('#f835').addEventListener('change',e=>{imp(e.target.files);e.target.value=''});
+  $('#grp').addEventListener('change',e=>{u.group=e.target.checked;updateClaims()});
+  $('#addClaim').addEventListener('submit',e=>{
+    e.preventDefault();const f=new FormData(e.target);const id=String(f.get('id')).trim();
+    if(db.claims[id]&&!confirm('Claim '+id+' already exists. Replace it?'))return;
+    const old=db.claims[id]||{};
+    db.claims[id]=Object.assign(old,{id:id,payer:String(f.get('payer')).trim(),payerId:'',patient:String(f.get('patient')).trim(),memberId:String(f.get('memberId')).trim(),billed:round(+f.get('units')*+f.get('rate')),from:f.get('from'),to:f.get('to'),units:+f.get('units'),submitted:todayIso(),source:old.source||'manual',work:old.work||'open',importedAt:old.importedAt||new Date().toISOString()});
+    Store.save();e.target.reset();buildFilters();updateClaims();
+  });
+}
+function buildFilters(){
+  const u=ui.claims;const rows=allClaims();
+  const payers=[...new Set(rows.map(r=>r.c.payer).filter(Boolean))].sort();
+  const codes=[...new Set(rows.flatMap(r=>r.d.reasons.map(x=>x.code)))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  $('#filters').innerHTML=
+    '<label class="f">Patient, member ID or claim number<input type="text" id="q" value="'+esc(u.q)+'" placeholder="Search"></label>'+
+    '<label class="f">Payer<select id="fpayer"><option value="">All payers</option>'+payers.map(p=>'<option'+(p===u.payer?' selected':'')+'>'+esc(p)+'</option>').join('')+'</select></label>'+
+    '<label class="f">Denial reason<select id="freason"><option value="">All reasons</option>'+codes.map(c=>'<option value="'+esc(c)+'"'+(c===u.reason?' selected':'')+'>'+esc(c+' · '+reasonText(c))+'</option>').join('')+'</select></label>'+
+    '<label class="f">Service date<select id="frange">'+[['all','All dates'],['30','Last 30 days'],['90','Last 90 days'],['365','Last 12 months']].map(o=>'<option value="'+o[0]+'"'+(o[0]===u.range?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></label>';
+  $('#q').addEventListener('input',e=>{u.q=e.target.value;updateClaims()});
+  $('#fpayer').addEventListener('change',e=>{u.payer=e.target.value;updateClaims()});
+  $('#freason').addEventListener('change',e=>{u.reason=e.target.value;updateClaims()});
+  $('#frange').addEventListener('change',e=>{u.range=e.target.value;updateClaims()});
+}
+function updateClaims(){
+  const u=ui.claims;const all=allClaims();const now=todayIso();
+  const q=u.q.trim().toLowerCase();
+  const cut=u.range==='all'?'':isoOf(new Date(Date.now()-(+u.range)*86400000));
+  const base=all.filter(r=>{
+    const c=r.c;
+    if(q&&!(c.patient+' '+c.memberId+' '+c.id+' '+c.payer).toLowerCase().includes(q))return false;
+    if(u.payer&&c.payer!==u.payer)return false;
+    if(u.reason&&!r.d.reasons.some(x=>x.code===u.reason))return false;
+    if(cut){const d=c.to||c.from;if(d&&d<cut)return false}
+    return true;
+  });
+  const cnt=s=>s==='all'?base.length:base.filter(r=>r.d.state===s).length;
+  const rows=u.status==='all'?base:base.filter(r=>r.d.state===u.status);
+  $('#chips').innerHTML=[['all','All'],['denied','Denied'],['short','Short paid'],['unpaid','Not paid yet'],['paid','Paid in full'],['writtenoff','Written off']].map(x=>'<button class="chipb" data-act="chip" data-st="'+x[0]+'" aria-pressed="'+(u.status===x[0])+'">'+x[1]+' '+cnt(x[0])+'</button>').join('');
+  const sum=f=>rows.reduce((s,r)=>s+f(r),0);
+  $('#ctiles').innerHTML=tile('file','Billed',fmt0(sum(r=>r.c.billed)))+tile('dollar','Paid',fmt0(sum(r=>r.d.paid)))+tile('receipt','Adjusted off',fmt0(sum(r=>r.d.settled)))+tile('trend','Outstanding',fmt0(sum(r=>r.d.owed)));
+  const list=$('#clist');
+  if(!all.length){list.innerHTML='<div class="card">'+empty('Start by importing your files','Upload the 837 files you sent through Availity, then the 835 files you received back. The portal matches them by claim number.')+'</div>';return}
+  if(!rows.length){list.innerHTML='<div class="card">'+empty('No claims match','Try a different filter or clear the search.')+'</div>';return}
+  const claimRow=r=>{
+    const c=r.c,d=r.d;
+    const why=(d.state==='denied'||d.state==='short')&&d.reasons.length?'<div class="why">'+d.reasons.map(x=>'Code '+esc(x.code)+' · '+esc(reasonText(x.code))+' ('+esc(x.group)+')').join('<br>')+'</div>':'';
+    const work=(d.rawState==='denied'||d.rawState==='short')?'<div class="work noprint"><select data-act="work" data-id="'+esc(c.id)+'" aria-label="Work status">'+[['open','Open'],['corrected','Corrected'],['resubmitted','Resubmitted'],['writtenoff','Written off']].map(o=>'<option value="'+o[0]+'"'+((c.work||'open')===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select><input type="text" data-act="note" data-id="'+esc(c.id)+'" value="'+esc(c.note||'')+'" placeholder="Note" aria-label="Note">'+(c.source==='manual'?'<button class="btn sm danger" data-act="delclaim" data-id="'+esc(c.id)+'">Remove</button>':'<span></span>')+'</div>':(c.source==='manual'?'<div class="work noprint" style="grid-template-columns:1fr"><span><button class="btn sm danger" data-act="delclaim" data-id="'+esc(c.id)+'">Remove</button></span></div>':'');
+    const age=d.state==='unpaid'&&refDate(c)?' · Day '+daysBetween(refDate(c),now):'';
+    const wk=(c.work&&c.work!=='open'&&d.rawState!=='paid')?' · '+({corrected:'Corrected',resubmitted:'Resubmitted',writtenoff:'Written off'}[c.work]||''):'';
+    return '<div class="crow"><div class="l1"><span><b>Claim '+esc(c.id)+'</b> · '+esc(c.payer||'Unknown payer')+(u.group?'':' · '+esc(c.patient||'Unknown patient'))+'</span>'+pill(d.state)+'</div>'+
+      '<div class="small muted">'+esc(fmtShort(c.from))+(c.to&&c.to!==c.from?' – '+esc(fmtShort(c.to)):'')+(c.units?' · '+c.units+' units':'')+' · Billed '+fmt2(c.billed)+' · Paid '+fmt2(d.paid)+' · Balance '+fmt2(d.owed)+esc(age)+esc(wk)+(c.source==='835'?' · not in your 837 files':'')+'</div>'+why+work+'</div>';
+  };
+  if(!u.group){
+    rows.sort((a,b)=>(b.c.to||b.c.from||'').localeCompare(a.c.to||a.c.from||''));
+    list.innerHTML='<div class="flat">'+rows.map(claimRow).join('').replace(/^<div class="crow">/,'<div class="crow" style="border-top:none">')+'</div>';
+  }else{
+    const groups={};
+    rows.forEach(r=>{const k=(r.c.patient||'Unknown')+'|'+(r.c.memberId||'');(groups[k]=groups[k]||{name:r.c.patient||'Unknown patient',mid:r.c.memberId,rows:[]}).rows.push(r)});
+    const gs=Object.values(groups).sort((a,b)=>b.rows.reduce((s,r)=>s+r.d.owed,0)-a.rows.reduce((s,r)=>s+r.d.owed,0)||a.name.localeCompare(b.name));
+    list.innerHTML=gs.map(gp=>{
+      gp.rows.sort((a,b)=>(b.c.to||b.c.from||'').localeCompare(a.c.to||a.c.from||''));
+      const ini=gp.name.split(/[ ,]+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?';
+      const owed=gp.rows.reduce((s,r)=>s+r.d.owed,0);
+      return '<details class="grp" open><summary><span class="avatar">'+esc(ini)+'</span><span style="flex:1"><b>'+esc(gp.name)+'</b><br><span class="small muted">'+(gp.mid?esc(gp.mid)+' · ':'')+gp.rows.length+' claim'+(gp.rows.length>1?'s':'')+' · '+fmt2(owed)+' owed</span></span></summary>'+gp.rows.map(claimRow).join('')+'</details>';
+    }).join('');
+  }
+}
+async function importFiles(files){
+  const box=$('#impMsg');const msgs=[];
+  for(const f of Array.from(files)){
+    try{
+      const text=await f.text();const hash=await sha(text);
+      const prev=db.files.find(x=>x.hash===hash);
+      if(prev){msgs.push(['bad',f.name+': already imported on '+fmtD(prev.date)+'. Skipped.']);continue}
+      const p=Core.parseFile(text);const now=new Date().toISOString();let line;
+      if(p.type==='837'){
+        let nw=0,upd=0;
+        for(const c of p.claims){
+          const old=db.claims[c.id];
+          if(old){upd++;Object.assign(old,{payer:c.payer||old.payer,payerId:c.payerId||old.payerId,patient:c.patient||old.patient,memberId:c.memberId||old.memberId,billed:c.billed,from:c.from||old.from,to:c.to||old.to,units:c.units||old.units,submitted:c.submitted||old.submitted});if(old.source==='835')old.source='837'}
+          else{nw++;db.claims[c.id]=Object.assign({},c,{source:'837',work:'open',importedAt:now})}
+        }
+        line=f.name+': 837 · '+p.claims.length+' claims ('+nw+' new, '+upd+' updated)';
+        db.files.push({name:f.name,hash:hash,type:'837',date:todayIso(),count:p.claims.length});
+      }else{
+        let added=0,dup=0,matched=0,orphan=0,total=0;
+        const have=new Set(db.remits.map(r=>r.key));
+        for(const r of p.remits){
+          r.key=[r.trace,r.claimId,r.status,r.paid,r.charge].join('|');
+          if(have.has(r.key)){dup++;continue}
+          have.add(r.key);db.remits.push(r);added++;total+=r.paid;
+          if(db.claims[r.claimId])matched++;
+          else{orphan++;db.claims[r.claimId]={id:r.claimId,payer:r.payer,payerId:'',patient:r.patient,memberId:r.memberId,billed:r.charge,from:r.from,to:r.to,units:0,submitted:'',source:'835',work:'open',importedAt:now}}
+        }
+        line=f.name+': 835 · '+added+' payments, '+fmt2(total)+' paid ('+matched+' matched to your claims'+(orphan?', '+orphan+' not in your 837 files':'')+(dup?', '+dup+' duplicates skipped':'')+')';
+        db.files.push({name:f.name,hash:hash,type:'835',date:todayIso(),count:added});
+      }
+      msgs.push(['ok',line]);
+    }catch(e){msgs.push(['bad',f.name+': '+e.message])}
+  }
+  Store.save();
+  buildFilters();updateClaims();
+  const b=$('#impMsg');if(b)b.innerHTML=msgs.map(m=>'<div class="msg '+m[0]+'">'+esc(m[1])+'</div>').join('');
+}
+function claimsCsv(){
+  const rows=allClaims().sort((a,b)=>(a.c.patient||'').localeCompare(b.c.patient||''));
+  const head=['Patient','Member ID','Claim number','Payer','Service from','Service to','Units','Billed','Paid','Adjusted off','Balance','Status','Denial reasons','Last payment date','Work status','Note'];
+  const names={paid:'Paid in full',short:'Short paid',denied:'Denied',unpaid:'Not paid yet',writtenoff:'Written off'};
+  return csv([head].concat(rows.map(r=>[r.c.patient,r.c.memberId,r.c.id,r.c.payer,r.c.from,r.c.to,r.c.units,r.c.billed.toFixed(2),r.d.paid.toFixed(2),r.d.settled.toFixed(2),r.d.owed.toFixed(2),names[r.d.state],r.d.reasons.map(x=>x.code+' '+reasonText(x.code)).join('; '),r.d.lastPay,r.c.work||'open',r.c.note||''])));
+}
+
+/* ---------- bills ---------- */
+const CATS=['Rent','Utilities','Insurance','Supplies','Software','Professional fees','Vehicle and mileage','Marketing','Licenses and fees','Other'];
+function vBills(){
+  const now=todayIso();
+  $('#view').innerHTML=
+    '<div class="card sect noprint"><h2>Add a bill</h2><form id="addBill"><div class="formgrid">'+
+    '<label class="f">Vendor<input type="text" name="vendor" required></label>'+
+    '<label class="f">Category<select name="cat">'+CATS.map(c=>'<option>'+c+'</option>').join('')+'</select></label>'+
+    '<label class="f">Bill date<input type="date" name="billDate" value="'+now+'" required></label>'+
+    '<label class="f">Due date<input type="date" name="due" value="'+now+'" required></label>'+
+    '<label class="f">Amount ($)<input type="number" name="amount" min="0" step="0.01" required></label>'+
+    '<label class="f" style="grid-column:span 2">Memo<input type="text" name="memo"></label>'+
+    '<label class="f" style="display:flex;gap:6px;align-items:center;margin-top:18px"><input type="checkbox" name="paid"> Already paid</label>'+
+    '</div><button class="btn pri" type="submit" style="margin-top:10px">Add bill</button></form></div>'+
+    '<div class="card sect"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Bills</h2><div class="chips noprint" style="margin:0">'+[['unpaid','Unpaid'],['paid','Paid'],['all','All']].map(x=>'<button class="chipb" data-act="billshow" data-v="'+x[0]+'" aria-pressed="'+(ui.bills.show===x[0])+'">'+x[1]+'</button>').join('')+'</div></div><div id="blist"></div></div>';
+  $('#addBill').addEventListener('submit',e=>{
+    e.preventDefault();const f=new FormData(e.target);const paid=!!f.get('paid');
+    db.bills.push({id:uid(),vendor:String(f.get('vendor')).trim(),category:f.get('cat'),billDate:f.get('billDate'),due:f.get('due'),amount:round(+f.get('amount')),memo:String(f.get('memo')).trim(),status:paid?'paid':'unpaid',paidDate:paid?todayIso():''});
+    Store.save();vBills();
+  });
+  updateBills();
+}
+function updateBills(){
+  const now=todayIso();let list=db.bills.slice();
+  if(ui.bills.show!=='all')list=list.filter(b=>b.status===ui.bills.show);
+  list.sort((a,b)=>(a.status===b.status?(a.due||'').localeCompare(b.due||''):(a.status==='paid'?1:-1)));
+  const tot=list.reduce((s,b)=>s+b.amount,0);
+  $('#blist').innerHTML=list.length?'<div class="tscroll"><table><thead><tr><th>Vendor</th><th>Category</th><th>Due</th><th class="n">Amount</th><th>Status</th><th class="noprint"></th></tr></thead><tbody>'+list.map(b=>{
+    const od=b.status!=='paid'&&b.due&&b.due<now;
+    return '<tr><td>'+esc(b.vendor)+(b.memo?'<div class="small muted">'+esc(b.memo)+'</div>':'')+'<div style="margin-top:4px">'+rcChips('bill',b.id)+'</div></td><td>'+esc(b.category)+'</td><td>'+esc(fmtD(b.due))+'</td><td class="n">'+fmt2(b.amount)+'</td><td>'+(b.status==='paid'?'<span class="pill green">Paid '+esc(fmtShort(b.paidDate))+'</span>':(od?'<span class="pill red">Overdue</span>':'<span class="pill gray">Unpaid</span>'))+'</td><td class="noprint" style="white-space:nowrap">'+(b.status==='paid'?'':'<input type="date" class="pd" id="pd'+b.id+'" value="'+now+'" style="width:140px;display:inline-block" aria-label="Date paid"> <button class="btn sm" data-act="paybill" data-id="'+b.id+'">Mark paid</button> ')+'<button class="btn sm danger" data-act="delbill" data-id="'+b.id+'">Delete</button></td></tr>';
+  }).join('')+'<tr class="tot"><td colspan="3">Total shown</td><td class="n">'+fmt2(tot)+'</td><td colspan="2"></td></tr></tbody></table></div>':empty('No bills here','Add a bill above to track what you owe.');
+}
+
+/* ---------- payroll ---------- */
+function vPayroll(){
+  const now=todayIso();const aides=[...new Set(db.payroll.map(p=>p.aide))].sort();
+  $('#view').innerHTML=
+    '<div class="card sect noprint"><h2>Add payroll cost</h2><p class="muted small" style="margin:-4px 0 10px">Enter each aide\'s totals from the payroll run. Payroll itself is processed in Homebase; this tab only records the cost for your books.</p><form id="addPay"><div class="formgrid">'+
+    '<label class="f">Pay date<input type="date" name="payDate" value="'+now+'" required></label><label class="f">Pay period end<input type="date" name="periodEnd" value="'+now+'" required></label>'+
+    '<label class="f">Aide or employee<input type="text" name="aide" list="aideList" required></label><datalist id="aideList">'+aides.map(a=>'<option value="'+esc(a)+'">').join('')+'</datalist>'+
+    '<label class="f">Hours<input type="number" name="hours" min="0" step="0.01"></label>'+
+    '<label class="f">Gross wages ($)<input type="number" name="gross" min="0" step="0.01" required></label><label class="f">Employer taxes and benefits ($)<input type="number" name="taxes" min="0" step="0.01" value="0"></label>'+
+    '</div><button class="btn pri" type="submit" style="margin-top:10px">Add</button></form></div>'+
+    '<div class="card sect"><h2>Pay runs</h2><div id="plist"></div></div>'+
+    '<div class="card sect"><h2>Year to date by aide</h2><div id="pytd"></div></div>';
+  $('#addPay').addEventListener('submit',e=>{
+    e.preventDefault();const f=new FormData(e.target);
+    db.payroll.push({id:uid(),payDate:f.get('payDate'),periodEnd:f.get('periodEnd'),aide:String(f.get('aide')).trim(),hours:+f.get('hours')||0,gross:round(+f.get('gross')),taxes:round(+f.get('taxes')||0)});
+    Store.save();vPayroll();
+  });
+  const runs={};db.payroll.forEach(p=>{(runs[p.payDate]=runs[p.payDate]||[]).push(p)});
+  const dates=Object.keys(runs).sort().reverse();
+  $('#plist').innerHTML=dates.length?dates.map(d=>{
+    const r=runs[d];const g=r.reduce((s,x)=>s+x.gross,0),t=r.reduce((s,x)=>s+x.taxes,0);
+    return '<div class="sect" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between"><b>Paid '+esc(fmtD(d))+'</b><span class="muted small">Total '+fmt2(g+t)+'</span></div><div class="tscroll"><table><thead><tr><th>Aide</th><th>Period end</th><th class="n">Hours</th><th class="n">Wages</th><th class="n">Taxes and benefits</th><th class="noprint"></th></tr></thead><tbody>'+r.map(x=>'<tr><td>'+esc(x.aide)+'</td><td>'+esc(fmtShort(x.periodEnd))+'</td><td class="n">'+(x.hours||'')+'</td><td class="n">'+fmt2(x.gross)+'</td><td class="n">'+fmt2(x.taxes)+'</td><td class="noprint n"><button class="btn sm danger" data-act="delpay" data-id="'+x.id+'">Delete</button></td></tr>').join('')+'<tr class="tot"><td colspan="3">Run total</td><td class="n">'+fmt2(g)+'</td><td class="n">'+fmt2(t)+'</td><td class="noprint"></td></tr></tbody></table></div></div>';
+  }).join(''):empty('No payroll entered','Add the totals for each aide after each biweekly run.');
+  const yr=now.slice(0,4);const by={};
+  db.payroll.filter(p=>p.payDate.slice(0,4)===yr).forEach(p=>{const a=by[p.aide]=by[p.aide]||{h:0,g:0,t:0};a.h+=p.hours;a.g+=p.gross;a.t+=p.taxes});
+  const names=Object.keys(by).sort();
+  $('#pytd').innerHTML=names.length?'<div class="tscroll"><table><thead><tr><th>Aide</th><th class="n">Hours</th><th class="n">Wages</th><th class="n">Taxes and benefits</th><th class="n">Total cost</th></tr></thead><tbody>'+names.map(n=>'<tr><td>'+esc(n)+'</td><td class="n">'+(Math.round(by[n].h*100)/100)+'</td><td class="n">'+fmt2(by[n].g)+'</td><td class="n">'+fmt2(by[n].t)+'</td><td class="n">'+fmt2(by[n].g+by[n].t)+'</td></tr>').join('')+'</tbody></table></div>':empty('Nothing for '+yr,'Year to date totals appear here once you add payroll.');
+}
+
+/* ---------- reports ---------- */
+function pl(mk){
+  const rev={};let revTotal=0;
+  db.remits.filter(r=>monthOf(r.payDate)===mk&&r.paid!==0).forEach(r=>{const p=r.payer||'Unknown payer';rev[p]=(rev[p]||0)+r.paid;revTotal+=r.paid});
+  const exp={};let expTotal=0;
+  db.bills.filter(b=>b.status==='paid'&&monthOf(b.paidDate)===mk).forEach(b=>{exp[b.category]=(exp[b.category]||0)+b.amount;expTotal+=b.amount});
+  let wages=0,taxes=0;db.payroll.filter(p=>monthOf(p.payDate)===mk).forEach(p=>{wages+=p.gross;taxes+=p.taxes});
+  expTotal+=wages+taxes;
+  db.txns.filter(t=>t.status==='categorized'&&monthOf(t.date)===mk).forEach(t=>{
+    if(t.amount<0&&CATS.includes(t.category)){const a=-t.amount;exp[t.category]=(exp[t.category]||0)+a;expTotal+=a}
+    else if(t.amount>0&&t.category==='Other income'){rev['Other income']=(rev['Other income']||0)+t.amount;revTotal+=t.amount}
+  });
+  return{rev:rev,revTotal:round(revTotal),exp:exp,wages:round(wages),taxes:round(taxes),expTotal:round(expTotal),net:round(revTotal-expTotal)};
+}
+function aging(){
+  const now=todayIso();const B=[['0–30 days',0,30],['31–60 days',31,60],['61–90 days',61,90],['91–120 days',91,120],['Over 120 days',121,1e9]];
+  const tot=B.map(()=>0),cnt=B.map(()=>0),byPayer={};
+  allClaims().filter(r=>r.d.owed>0.005).forEach(r=>{
+    const rd=refDate(r.c);const age=rd?Math.max(0,daysBetween(rd,now)):0;
+    const i=B.findIndex(b=>age>=b[1]&&age<=b[2]);
+    tot[i]+=r.d.owed;cnt[i]++;
+    const p=r.c.payer||'Unknown payer';(byPayer[p]=byPayer[p]||B.map(()=>0))[i]+=r.d.owed;
+  });
+  return{B:B,tot:tot,cnt:cnt,byPayer:byPayer};
+}
+function vReports(){
+  const mk=ui.rep.month||todayIso().slice(0,7);const P=pl(mk);const A=aging();
+  const revRows=Object.keys(P.rev).sort((a,b)=>P.rev[b]-P.rev[a]);
+  const expRows=Object.keys(P.exp).sort();
+  const six=monthKeys(6,mk).map(k=>{const p=pl(k);return{k:k,rev:p.revTotal,out:p.expTotal,net:p.net}});
+  const waiting=db.txns.filter(t=>(t.status==='review'||t.status==='suggested')&&monthOf(t.date)===mk).length;
+  const waitNote=waiting?'<div class="warnbox" style="margin-top:8px">'+waiting+' bank transaction'+(waiting>1?'s':'')+' from this month '+(waiting>1?'have':'has')+' not been categorized yet and '+(waiting>1?'are':'is')+' not in these numbers.</div>':'';
+  const arTotal=A.tot.reduce((a,b)=>a+b,0);
+  const payerNames=Object.keys(A.byPayer).sort((a,b)=>A.byPayer[b].reduce((x,y)=>x+y,0)-A.byPayer[a].reduce((x,y)=>x+y,0));
+  $('#view').innerHTML=
+    '<div class="card sect noprint" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><label class="f" style="max-width:200px">Month<input type="month" id="rmonth" value="'+mk+'"></label><button class="btn" data-act="csvReports">'+ic('download')+' Export CSV</button><button class="btn" data-act="print">'+ic('printer')+' Print</button></div>'+
+    '<div class="card sect"><h2>Profit and loss · '+monthLabel(mk)+'</h2><div class="tscroll"><table><tbody>'+
+      '<tr><th colspan="2">Income (payments received)</th></tr>'+
+      (revRows.length?revRows.map(p=>'<tr><td>'+esc(p)+'</td><td class="n">'+fmt2(P.rev[p])+'</td></tr>').join(''):'<tr><td class="muted">No payments dated this month</td><td class="n">'+fmt2(0)+'</td></tr>')+
+      '<tr class="tot"><td>Total income</td><td class="n">'+fmt2(P.revTotal)+'</td></tr>'+
+      '<tr><th colspan="2">Expenses (paid)</th></tr>'+
+      expRows.map(c=>'<tr><td>'+esc(c)+'</td><td class="n">'+fmt2(P.exp[c])+'</td></tr>').join('')+
+      '<tr><td>Payroll wages</td><td class="n">'+fmt2(P.wages)+'</td></tr><tr><td>Payroll taxes and benefits</td><td class="n">'+fmt2(P.taxes)+'</td></tr>'+
+      '<tr class="tot"><td>Total expenses</td><td class="n">'+fmt2(P.expTotal)+'</td></tr>'+
+      '<tr class="tot"><td>Net income</td><td class="n">'+fmt2(P.net)+'</td></tr>'+
+    '</tbody></table></div><p class="muted small" style="margin:8px 0 0">Cash basis. Income counts on the payment date from the 835. Expenses count on the date a bill or payroll was paid. Claims not yet paid are in the aging below, not in income. Bank transactions count once they are categorized; deposits matched to 835 payments and payments matched to bills are not counted twice.</p>'+waitNote+'</div>'+
+    '<div class="card sect"><h2>Cash flow · last 6 months</h2><div class="tscroll"><table><thead><tr><th>Month</th><th class="n">Received</th><th class="n">Paid out</th><th class="n">Net</th></tr></thead><tbody>'+six.map(m=>'<tr><td>'+monthLabel(m.k)+'</td><td class="n">'+fmt2(m.rev)+'</td><td class="n">'+fmt2(m.out)+'</td><td class="n">'+fmt2(m.net)+'</td></tr>').join('')+'</tbody></table></div></div>'+
+    '<div class="card sect"><h2>Claims owed, by age · '+fmt0(arTotal)+' total</h2>'+
+      (arTotal>0?hbar(A.B.map((b,i)=>({label:b[0],value:A.tot[i],sub:A.cnt[i]+' claim'+(A.cnt[i]===1?'':'s')})),'Outstanding claim dollars by age bucket')+tableView(['Age','Claims','Owed'],A.B.map((b,i)=>[b[0],A.cnt[i],fmt2(A.tot[i])])):empty('Nothing outstanding','Import 837 and 835 files to see what is owed.'))+
+      (payerNames.length?'<div class="tscroll" style="margin-top:10px"><table><thead><tr><th>Payer</th>'+A.B.map(b=>'<th class="n">'+b[0]+'</th>').join('')+'<th class="n">Total</th></tr></thead><tbody>'+payerNames.map(p=>'<tr><td>'+esc(p)+'</td>'+A.byPayer[p].map(v=>'<td class="n">'+(v?fmt0(v):'')+'</td>').join('')+'<td class="n">'+fmt0(A.byPayer[p].reduce((a,b)=>a+b,0))+'</td></tr>').join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Age counts from the date the claim was submitted (or the service date when the 837 has none).</p>':'')+'</div>'+
+    '<div class="card sect"><h2>Income by payer · '+monthLabel(mk)+'</h2>'+(revRows.length?hbar(revRows.map(p=>({label:p,value:P.rev[p]})),'Payments received by payer')+tableView(['Payer','Received'],revRows.map(p=>[p,fmt2(P.rev[p])])):empty('No payments this month','Payments appear here after you import 835 files.'))+'</div>';
+  $('#rmonth').addEventListener('change',e=>{if(e.target.value){ui.rep.month=e.target.value;vReports()}});
+}
+function reportsCsv(){
+  const mk=ui.rep.month||todayIso().slice(0,7);const P=pl(mk);const A=aging();const rows=[['Profit and loss',monthLabel(mk)],[]];
+  rows.push(['Income']);Object.keys(P.rev).forEach(p=>rows.push([p,P.rev[p].toFixed(2)]));rows.push(['Total income',P.revTotal.toFixed(2)],[],['Expenses']);
+  Object.keys(P.exp).forEach(c=>rows.push([c,P.exp[c].toFixed(2)]));rows.push(['Payroll wages',P.wages.toFixed(2)],['Payroll taxes and benefits',P.taxes.toFixed(2)],['Total expenses',P.expTotal.toFixed(2)],['Net income',P.net.toFixed(2)],[],['Claims owed by age','Claims','Owed']);
+  A.B.forEach((b,i)=>rows.push([b[0],A.cnt[i],A.tot[i].toFixed(2)]));
+  return csv(rows);
+}
+
+/* ---------- statements ---------- */
+const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Owner draw'],IN_SPECIAL=['Other income','Transfer','Owner contribution'];
+function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL;return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')}
+function learn(t,cat){const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
+function acctLabel(id){const a=db.accounts.find(x=>x.id===id);return a?a.name+(a.last4?' ···'+a.last4:''):'Unknown account'}
+function vStatements(){
+  const u=ui.st;const accts=db.accounts;
+  $('#view').innerHTML=
+    '<div class="card sect noprint"><h2>Accounts</h2>'+
+    (accts.length?'<div class="tscroll"><table><tbody>'+accts.map(a=>'<tr><td>'+esc(a.name)+(a.last4?' ···'+esc(a.last4):'')+'</td><td>'+(a.type==='card'?'Credit card':'Checking or savings')+'</td><td class="n">'+(a.balanceDate?'Statement balance '+fmt2(a.balance)+' on '+esc(fmtShort(a.balanceDate)):'No statement yet')+'</td><td class="n"><button class="btn sm danger" data-act="delacct" data-id="'+esc(a.id)+'">Remove</button></td></tr>').join('')+'</tbody></table></div>':'<p class="muted small" style="margin:0 0 8px">Add your business checking account and each credit card you want to track.</p>')+
+    '<form id="addAcct" style="margin-top:10px"><div class="formgrid"><label class="f">Account name<input type="text" name="name" placeholder="Business checking" required></label><label class="f">Type<select name="type"><option value="bank">Checking or savings</option><option value="card">Credit card</option></select></label><label class="f">Last 4 digits<input type="text" name="last4" maxlength="4" pattern="\\d{4}" placeholder="4417"></label><button class="btn" type="submit">Add account</button></div></form></div>'+
+    '<div class="card sect noprint"><h2>Import a statement</h2>'+(accts.length?
+      '<div class="grid2"><label class="f">Account<select id="impAcct">'+accts.map(a=>'<option value="'+esc(a.id)+'"'+(u.acct===a.id?' selected':'')+'>'+esc(a.name+(a.last4?' ···'+a.last4:''))+'</option>').join('')+'</select></label><div class="drop"><b>'+ic('upload')+' Statement file</b><span class="muted small">CSV, OFX or QFX</span><input type="file" id="stFile"></div></div>'+
+      '<p class="muted small" style="margin:8px 0 0">Files are read in this browser. Only the transactions are kept, and account numbers are never stored, only the last four digits. In your bank or card site, look for Download transactions and choose CSV, or Quicken/QuickBooks (OFX or QFX).</p><div id="stPending"></div><div id="stMsg"></div>'
+      :empty('Add an account first','Then you can import its statements.'))+'</div>'+
+    '<div id="stTiles" class="grid4 sect"></div>'+
+    '<div class="card sect noprint" style="margin-top:12px"><div class="filters" style="grid-template-columns:2fr 1fr 1fr">'+
+      '<label class="f">Search description or category<input type="text" id="stq" value="'+esc(u.q)+'" placeholder="Search"></label>'+
+      '<label class="f">Account<select id="stacct"><option value="">All accounts</option>'+accts.map(a=>'<option value="'+esc(a.id)+'"'+(u.acct===a.id?' selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></label>'+
+      '<label class="f">Month<input type="month" id="stmonth" value="'+esc(u.month)+'"></label></div>'+
+      '<div class="chips" id="stChips"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="staccall">Accept all suggestions</button><button class="btn sm" data-act="csvTxns">'+ic('download')+' Export CSV</button><button class="btn sm" data-act="print">'+ic('printer')+' Print list</button></div></div>'+
+    '<div id="stList"></div>';
+  $('#addAcct').addEventListener('submit',e=>{
+    e.preventDefault();const f=new FormData(e.target);
+    db.accounts.push({id:uid(),name:String(f.get('name')).trim(),type:f.get('type'),last4:String(f.get('last4')||'').trim(),balance:0,balanceDate:''});
+    Store.save();vStatements();
+  });
+  const imp=$('#stFile');
+  if(imp)imp.addEventListener('change',async e=>{
+    const f=e.target.files[0];e.target.value='';if(!f)return;
+    try{
+      const parsed=Core.parseStatement(await f.text());
+      const aid=$('#impAcct').value;const a=db.accounts.find(x=>x.id===aid);
+      const pos=parsed.txns.filter(t=>t.amount>0).length,neg=parsed.txns.filter(t=>t.amount<0).length;
+      ui.pending={name:f.name,aid:aid,parsed:parsed,flip:parsed.format==='csv'&&a.type==='card'&&pos>neg};
+      $('#stMsg').innerHTML='';renderPending();
+    }catch(x){ui.pending=null;renderPending();$('#stMsg').innerHTML='<div class="msg bad">'+esc(f.name)+': '+esc(x.message)+'</div>'}
+  });
+  $('#stq').addEventListener('input',e=>{u.q=e.target.value;updateTxns()});
+  $('#stacct').addEventListener('change',e=>{u.acct=e.target.value;updateTxns()});
+  $('#stmonth').addEventListener('change',e=>{u.month=e.target.value;updateTxns()});
+  renderPending();updateTxns();
+}
+function pendingTxns(){const p=ui.pending,sg=p.flip?-1:1;return p.parsed.txns.map(t=>Object.assign({},t,{amount:round(t.amount*sg)}))}
+function renderPending(){
+  const p=ui.pending,box=$('#stPending');if(!box)return;
+  if(!p){box.innerHTML='';return}
+  const tx=pendingTxns();
+  const inn=tx.filter(t=>t.amount>0).reduce((x,t)=>x+t.amount,0),out=tx.filter(t=>t.amount<0).reduce((x,t)=>x-t.amount,0);
+  const dates=tx.map(t=>t.date).sort();
+  box.innerHTML='<div class="card" style="background:var(--p-soft);margin:10px 0 0"><b>'+esc(p.name)+'</b><div class="small">'+tx.length+' transactions · '+esc(fmtShort(dates[0]))+' – '+esc(fmtD(dates[dates.length-1]))+'</div><div class="small">Money in '+fmt2(inn)+' · Money out '+fmt2(out)+'</div>'+
+    (p.parsed.format==='csv'?'<label class="small" style="display:flex;gap:6px;margin:8px 0"><input type="checkbox" data-act="stflip"'+(p.flip?' checked':'')+'> Purchases and withdrawals show as positive numbers in this file (flip signs)</label>':'')+
+    '<div class="tscroll"><table><tbody>'+tx.slice(0,5).map(t=>'<tr><td>'+esc(fmtShort(t.date))+'</td><td>'+esc(t.desc)+'</td><td class="n">'+fmt2(t.amount)+'</td></tr>').join('')+'</tbody></table></div><div class="small muted">Check that deposits are positive and payments are negative.</div>'+
+    '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn pri" data-act="stimport">Import</button><button class="btn" data-act="stcancel">Cancel</button></div></div>';
+}
+function doImport(){
+  const p=ui.pending;if(!p)return;
+  const a=db.accounts.find(x=>x.id===p.aid);if(!a)return;
+  if(p.parsed.last4&&a.last4&&p.parsed.last4!==a.last4&&!confirm('This file is for an account ending '+p.parsed.last4+', but you selected '+a.name+' ending '+a.last4+'. Import anyway?'))return;
+  const have=new Set(db.txns.map(t=>t.key));const seen={};const fresh=[];
+  pendingTxns().forEach(t=>{
+    const base=[p.aid,t.date,t.amount.toFixed(2),t.fitid||(t.desc.toUpperCase().replace(/\s+/g,' '))].join('|');
+    seen[base]=(seen[base]||0)+1;const key=base+'#'+seen[base];
+    if(have.has(key))return;
+    fresh.push({id:uid(),accountId:p.aid,date:t.date,desc:t.desc,amount:t.amount,fitid:t.fitid||'',key:key,status:'review',category:'',matchType:'',matchRef:'',note:''});
+  });
+  const dup=p.parsed.txns.length-fresh.length;
+  Core.matchTxns(fresh,{groups:Core.paymentGroups(db.remits),bills:db.bills,rules:db.rules,usedGroups:db.txns.filter(t=>t.matchType==='payment').map(t=>t.matchRef),usedBills:db.txns.filter(t=>t.matchType==='bill').map(t=>t.matchRef),others:db.txns});
+  fresh.forEach(t=>{if(t.matchType==='bill'){const b=db.bills.find(x=>x.id===t.matchRef);if(b&&b.status!=='paid'){b.status='paid';b.paidDate=t.date;b.txnId=t.id}}});
+  db.txns.push.apply(db.txns,fresh);
+  if(p.parsed.endBalance!=null&&p.parsed.endDate&&(!a.balanceDate||p.parsed.endDate>=a.balanceDate)){a.balance=p.parsed.endBalance;a.balanceDate=p.parsed.endDate}
+  const n=s=>fresh.filter(t=>t.status===s).length;
+  const name=p.name;ui.pending=null;Store.save();
+  vStatements();
+  $('#stMsg').innerHTML='<div class="msg ok">'+esc(name)+': imported '+fresh.length+' transactions — '+n('matched')+' matched, '+n('suggested')+' suggested, '+n('categorized')+' transfers, '+n('review')+' need review'+(dup?' ('+dup+' already imported, skipped)':'')+'.</div>';
+}
+function updateTxns(){
+  const u=ui.st;const list=$('#stList');if(!list)return;
+  const q=u.q.trim().toLowerCase();
+  const base=db.txns.filter(t=>(!u.acct||t.accountId===u.acct)&&(!u.month||monthOf(t.date)===u.month)&&(!q||(t.desc+' '+t.category).toLowerCase().includes(q)));
+  const cnt=s=>s==='all'?base.length:base.filter(t=>t.status===s).length;
+  const rows=(u.status==='all'?base:base.filter(t=>t.status===u.status)).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  $('#stChips').innerHTML=[['review','Needs review'],['suggested','Suggested'],['matched','Matched'],['categorized','Categorized'],['all','All']].map(x=>'<button class="chipb" data-act="stchip" data-st="'+x[0]+'" aria-pressed="'+(u.status===x[0])+'">'+x[1]+' '+cnt(x[0])+'</button>').join('');
+  const mIn=base.filter(t=>t.amount>0).reduce((x,t)=>x+t.amount,0),mOut=base.filter(t=>t.amount<0).reduce((x,t)=>x-t.amount,0);
+  $('#stTiles').innerHTML=tile('file','Transactions',String(base.length))+tile('receipt','Needs review',String(cnt('review')+cnt('suggested')))+tile('dollar','Money in',fmt0(mIn))+tile('trend','Money out',fmt0(mOut));
+  if(!db.txns.length){list.innerHTML='<div class="card">'+empty('No transactions yet','Import a bank or card statement above.')+'</div>';return}
+  if(!rows.length){list.innerHTML='<div class="card">'+empty(u.status==='review'?'Nothing needs review':'No transactions match','Try a different filter.')+'</div>';return}
+  const G={};Core.paymentGroups(db.remits).forEach(g=>{G[g.key]=g});
+  const sel=t=>'<select data-act="cat" data-id="'+esc(t.id)+'" aria-label="Category" style="max-width:240px">'+catOptions(t.amount,t.category)+'</select>';
+  const row=t=>{
+    let st='',ctl='';
+    if(t.status==='matched'){
+      if(t.matchType==='payment'){const g=G[t.matchRef];st='<span class="pill green">Matched deposit</span> <span class="small muted">'+(g?esc(g.payer)+' · '+g.claims+' claim'+(g.claims>1?'s':'')+(g.trace?' · trace '+esc(g.trace):''):'835 payment')+'</span>'}
+      else{const b=db.bills.find(x=>x.id===t.matchRef);st='<span class="pill green">Matched bill</span> <span class="small muted">'+(b?esc(b.vendor)+' · '+esc(b.category):'bill')+'</span>'}
+      ctl='<button class="btn sm noprint" data-act="stundo" data-id="'+esc(t.id)+'">Undo match</button>';
+    }else if(t.status==='categorized'){st='<span class="pill gray">'+esc(t.category)+'</span>';ctl=sel(t)}
+    else if(t.status==='suggested'){st='<span class="pill amber">Suggested: '+esc(t.category)+'</span>';ctl='<button class="btn sm" data-act="staccept" data-id="'+esc(t.id)+'">Accept</button> '+sel(t)}
+    else{st='<span class="pill red">Needs review</span>';ctl=sel(t)}
+    return '<div class="crow"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc||'(no description)')+'</span><b style="'+(t.amount>0?'color:var(--green)':'')+'">'+(t.amount>0?'+':'')+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="margin-top:4px">'+st+'</div><div class="noprint" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+ctl+'</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+rcChips('txn',t.id)+'</div></div>';
+  };
+  list.innerHTML='<div class="flat">'+rows.slice(0,300).map(row).join('').replace(/^<div class="crow">/,'<div class="crow" style="border-top:none">')+'</div>'+(rows.length>300?'<p class="muted small">Showing the first 300 of '+rows.length+'. Narrow the filters to see the rest.</p>':'');
+}
+function txnsCsv(){
+  const rows=db.txns.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  return csv([['Date','Account','Description','Amount','Status','Category or match']].concat(rows.map(t=>{
+    let m=t.category;
+    if(t.status==='matched'){if(t.matchType==='bill'){const b=db.bills.find(x=>x.id===t.matchRef);m='Bill: '+(b?b.vendor:'')}else{const g=Core.paymentGroups(db.remits).find(x=>x.key===t.matchRef);m='835 payment: '+(g?g.payer:'')}}
+    return [t.date,acctLabel(t.accountId),t.desc,t.amount.toFixed(2),t.status,m];
+  })));
+}
+
+/* ---------- owner draws ---------- */
+const DR_TYPES=['Draw','Tax distribution','Contribution'];
+const drSign=d=>d.type==='Contribution'?1:-1;
+function ownerName(id){const o=db.owners.find(x=>x.id===id);return o?o.name:'Unknown owner'}
+function vDraws(){
+  const u=ui.dr;
+  if(!db.owners.length||u.edit){
+    const rows=db.owners.slice();while(rows.length<2)rows.push({id:'',name:'',pct:0});
+    $('#view').innerHTML='<div class="card sect"><h2>'+(db.owners.length?'Edit owners':'Set up owners')+'</h2><p class="muted small" style="margin:-4px 0 10px">Enter each owner and their ownership percentage. The percentages should add up to 100.</p><form id="ownForm"><div class="formgrid" style="grid-template-columns:2fr 1fr">'+
+      rows.map((o,i)=>'<label class="f">Owner '+(i+1)+' name<input type="text" name="n'+i+'" value="'+esc(o.name)+'"></label><label class="f">Ownership %<input type="number" name="p'+i+'" min="0" max="100" step="0.01" value="'+(o.pct?esc(o.pct):'')+'"></label>').join('')+
+      '</div><button class="btn pri" type="submit" style="margin-top:10px">Save owners</button>'+(db.owners.length?' <button class="btn" type="button" data-act="drcancel">Cancel</button>':'')+'<div id="ownErr"></div></form></div>';
+    $('#ownForm').addEventListener('submit',e=>{
+      e.preventDefault();const f=new FormData(e.target);const list=[];
+      const err=m=>{$('#ownErr').innerHTML='<div class="msg bad">'+esc(m)+'</div>'};
+      rows.forEach((o,i)=>{const n=String(f.get('n'+i)||'').trim();if(!n)return;list.push({id:o.id||uid(),name:n,pct:Math.round((Number(f.get('p'+i))||0)*100)/100})});
+      if(!list.length)return err('Enter at least one owner name.');
+      const withPct=list.filter(o=>o.pct>0);
+      if(withPct.length&&Math.abs(withPct.reduce((x,o)=>x+o.pct,0)-100)>0.01)return err('The ownership percentages must add up to 100.');
+      const gone=db.owners.filter(o=>!list.some(l=>l.id===o.id)&&db.draws.some(d=>d.ownerId===o.id));
+      if(gone.length)return err(gone[0].name+' has ledger entries, so the name cannot be removed.');
+      db.owners=list;u.edit=false;Store.save();vDraws();
+    });
+    return;
+  }
+  const now=todayIso();
+  const hist=db.draws.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const run={},balOf={};
+  hist.forEach(d=>{run[d.ownerId]=round((run[d.ownerId]||0)+drSign(d)*d.amount);balOf[d.id]=run[d.ownerId]});
+  const years=[...new Set(db.draws.map(d=>d.date.slice(0,4)).concat([String(new Date().getFullYear())]))].sort().reverse();
+  const inYear=db.draws.filter(d=>u.year==='all'||d.date.slice(0,4)===u.year);
+  const stat=o=>{
+    const mine=inYear.filter(d=>d.ownerId===o.id);
+    const sum=t=>round(mine.filter(d=>d.type===t).reduce((x,d)=>x+d.amount,0));
+    return{o:o,draw:sum('Draw'),tax:sum('Tax distribution'),con:sum('Contribution')};
+  };
+  const st=db.owners.map(stat);
+  const totalTaken=st.reduce((x,r)=>x+r.draw+r.tax,0);
+  const pctOk=db.owners.every(o=>o.pct>0)&&Math.abs(db.owners.reduce((x,o)=>x+o.pct,0)-100)<0.01;
+  const cand=db.txns.filter(t=>!db.draws.some(d=>d.txnId===t.id)&&t.note!=='notdraw'&&(
+    (t.status==='categorized'&&(t.category==='Owner draw'||t.category==='Owner contribution'))||
+    ((t.status==='review'||t.status==='suggested')&&(t.amount<0?/TRANSFER|ZELLE|DRAW|OWNER|VENMO/i:/OWNER|CONTRIB|TRANSFER FROM|ZELLE|VENMO/i).test(t.desc)))).sort((a,b)=>b.date.localeCompare(a.date));
+  const ownerOpts=db.owners.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.name)+'</option>').join('');
+  let rows=hist.filter(d=>(u.year==='all'||d.date.slice(0,4)===u.year)&&(!u.owner||d.ownerId===u.owner)&&(!u.type||d.type===u.type)).reverse();
+  $('#view').innerHTML=
+    '<div class="card sect noprint" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="min-width:130px">Year<select id="dryear">'+years.map(y=>'<option'+(u.year===y?' selected':'')+'>'+y+'</option>').join('')+'<option value="all"'+(u.year==='all'?' selected':'')+'>All years</option></select></label>'+
+      '<label class="f" style="min-width:150px">Owner<select id="drown"><option value="">All owners</option>'+db.owners.map(o=>'<option value="'+esc(o.id)+'"'+(u.owner===o.id?' selected':'')+'>'+esc(o.name)+'</option>').join('')+'</select></label>'+
+      '<label class="f" style="min-width:170px">Type<select id="drtype"><option value="">All types</option>'+DR_TYPES.map(t=>'<option'+(u.type===t?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'+
+      '<button class="btn" data-act="dredit">Edit owners</button><button class="btn" data-act="csvDraws">'+ic('download')+' Export CSV</button><button class="btn" data-act="print">'+ic('printer')+' Print ledger</button></div>'+
+    '<div class="grid2 sect">'+st.map(r=>'<div class="tile"><div class="lab">'+esc(r.o.name)+' · draws '+(u.year==='all'?'all years':esc(u.year))+'</div><div class="val">'+fmt0(r.draw)+'</div><div class="small muted">Tax distributions '+fmt0(r.tax)+' · Contributed '+fmt0(r.con)+'</div></div>').join('')+'</div>'+
+    (pctOk&&totalTaken>0?'<div class="card sect" style="margin-top:12px"><h2>Draws compared with ownership</h2><div class="tscroll"><table><thead><tr><th>Owner</th><th class="n">Ownership</th><th class="n">Taken out</th><th class="n">Share of total</th><th class="n">At ownership share</th><th class="n">Difference</th></tr></thead><tbody>'+st.map(r=>{const taken=r.draw+r.tax,exp=totalTaken*r.o.pct/100,diff=taken-exp;return '<tr><td>'+esc(r.o.name)+'</td><td class="n">'+r.o.pct+'%</td><td class="n">'+fmt2(taken)+'</td><td class="n">'+(taken/totalTaken*100).toFixed(1)+'%</td><td class="n">'+fmt2(exp)+'</td><td class="n">'+(Math.abs(diff)<0.005?fmt2(0):(diff>0?'+':'')+fmt2(diff))+'</td></tr>'}).join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Compares what each owner took out (draws and tax distributions) with their ownership share of the total taken out. Contributions are not included. A positive difference means that owner took more than their share.</p></div>':'')+
+    (cand.length?'<div class="card sect noprint" style="margin-top:12px"><h2>From your statements, not yet in the ledger</h2>'+cand.slice(0,30).map(t=>'<div class="crow" style="padding:8px 0"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc)+'</span><b>'+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><select id="dro_'+esc(t.id)+'" aria-label="Owner">'+ownerOpts+'</select><select id="drt_'+esc(t.id)+'" aria-label="Type">'+DR_TYPES.map(x=>'<option'+((t.amount<0?'Draw':'Contribution')===x?' selected':'')+'>'+x+'</option>').join('')+'</select><button class="btn sm pri" data-act="drassign" data-id="'+esc(t.id)+'">Add to ledger</button><button class="btn sm" data-act="drnot" data-id="'+esc(t.id)+'">Not a draw</button></div></div>').join('')+(cand.length>30?'<p class="muted small">Showing 30 of '+cand.length+'.</p>':'')+'</div>':'')+
+    '<div class="card sect" style="margin-top:12px"><h2>Ledger</h2>'+(rows.length?'<div class="tscroll"><table><thead><tr><th>Date</th><th>Owner</th><th>Type</th><th class="n">Amount</th><th class="n">Owner balance</th><th>Source</th><th class="noprint"></th></tr></thead><tbody>'+rows.map(d=>'<tr><td>'+esc(fmtD(d.date))+'</td><td>'+esc(ownerName(d.ownerId))+'</td><td>'+esc(d.type)+(d.note?'<div class="small muted">'+esc(d.note)+'</div>':'')+'</td><td class="n" style="'+(drSign(d)>0?'color:var(--green)':'')+'">'+(drSign(d)>0?'+':'-')+fmt2(d.amount)+'</td><td class="n">'+fmt2(balOf[d.id])+'</td><td>'+(d.txnId?'Bank transaction':'Entered by hand')+'</td><td class="noprint n"><button class="btn sm danger" data-act="drdel" data-id="'+esc(d.id)+'">Delete</button></td></tr>').join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Owner balance is contributions minus draws and tax distributions, from the first entry to that date. It is a tracking figure, not a capital account statement.</p>':empty('No entries','Add an entry below, or assign transfers from your bank statements.'))+'</div>'+
+    '<details class="card noprint"><summary style="cursor:pointer;font-weight:600">Add an entry</summary><form id="addDraw" style="margin-top:10px"><div class="formgrid"><label class="f">Owner<select name="owner">'+ownerOpts+'</select></label><label class="f">Date<input type="date" name="date" value="'+now+'" required></label><label class="f">Type<select name="type">'+DR_TYPES.map(t=>'<option>'+t+'</option>').join('')+'</select></label><label class="f">Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="f" style="grid-column:1/-1">Note<input type="text" name="note"></label></div><button class="btn pri" type="submit" style="margin-top:10px">Add entry</button></form></details>';
+  $('#dryear').addEventListener('change',e=>{u.year=e.target.value;vDraws()});
+  $('#drown').addEventListener('change',e=>{u.owner=e.target.value;vDraws()});
+  $('#drtype').addEventListener('change',e=>{u.type=e.target.value;vDraws()});
+  $('#addDraw').addEventListener('submit',e=>{
+    e.preventDefault();const f=new FormData(e.target);
+    db.draws.push({id:uid(),ownerId:f.get('owner'),date:f.get('date'),type:f.get('type'),amount:round(+f.get('amount')),note:String(f.get('note')||'').trim(),txnId:''});
+    Store.save();vDraws();
+  });
+}
+function drawsCsv(){
+  const hist=db.draws.slice().sort((a,b)=>a.date.localeCompare(b.date));const run={};
+  return csv([['Date','Owner','Type','Amount','Direction','Owner balance','Note','Source']].concat(hist.map(d=>{
+    run[d.ownerId]=round((run[d.ownerId]||0)+drSign(d)*d.amount);
+    return [d.date,ownerName(d.ownerId),d.type,d.amount.toFixed(2),drSign(d)>0?'Put in':'Taken out',run[d.ownerId].toFixed(2),d.note,d.txnId?'Bank transaction':'Entered by hand'];
+  })));
+}
+
+/* ---------- receipts ---------- */
+const RC_FOLDER='Comfort Hands finance receipts',RC_MAX=10*1048576;
+const Rc={
+  _db:null,
+  idb(){
+    if(this._db)return this._db;
+    this._db=new Promise((res,rej)=>{
+      if(!window.indexedDB)return rej(new Error('This browser cannot store files on this device.'));
+      const q=indexedDB.open('ch_finance_receipts',1);
+      q.onupgradeneeded=()=>q.result.createObjectStore('files',{keyPath:'id'});
+      q.onsuccess=()=>res(q.result);q.onerror=()=>rej(new Error('Could not open file storage on this device.'));
+    });
+    return this._db;
+  },
+  async tx(mode,fn){const d=await this.idb();return new Promise((res,rej)=>{const t=d.transaction('files',mode);const st=t.objectStore('files');const r=fn(st);t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(new Error('Could not use file storage on this device.'))})},
+  idbPut(rec){return this.tx('readwrite',st=>st.put(rec))},
+  idbGet(id){return this.tx('readonly',st=>st.get(id))},
+  idbDel(id){return this.tx('readwrite',st=>st.delete(id))},
+  idbAll(){return this.tx('readonly',st=>st.getAll())},
+  async prep(f){
+    const isPdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name),isImg=/^image\//.test(f.type);
+    if(!isPdf&&!isImg)throw new Error(f.name+': only photos and PDFs can be attached.');
+    let blob=f,name=f.name,mime=f.type||(isPdf?'application/pdf':'image/jpeg');
+    if(/^image\/(jpeg|png|webp)$/.test(f.type)){
+      try{
+        const bmp=await createImageBitmap(f);const sc=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+        const c=document.createElement('canvas');c.width=Math.max(1,Math.round(bmp.width*sc));c.height=Math.max(1,Math.round(bmp.height*sc));
+        const cx=c.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,c.width,c.height);cx.drawImage(bmp,0,0,c.width,c.height);
+        const out=await new Promise(r=>c.toBlob(r,'image/jpeg',0.82));
+        if(out&&out.size<f.size){blob=out;mime='image/jpeg';name=name.replace(/\.[^.]+$/,'')+'.jpg'}
+      }catch(e){}
+    }
+    if(blob.size>RC_MAX)throw new Error(f.name+': the file is larger than 10 MB.');
+    return{blob:blob,name:name,mime:mime};
+  },
+  async driveFolder(){
+    if(GStore.folderId)return GStore.folderId;
+    const q="name='"+RC_FOLDER+"' and mimeType='application/vnd.google-apps.folder' and trashed=false";
+    const j=await GStore.raw('https://www.googleapis.com/drive/v3/files?fields=files(id)&q='+encodeURIComponent(q));
+    if(j.files&&j.files.length)return(GStore.folderId=j.files[0].id);
+    const c=await GStore.raw('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:RC_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
+    return(GStore.folderId=c.id);
+  },
+  async driveUpload(p){
+    const folder=await this.driveFolder();const bnd='chr'+uid();
+    const body=new Blob(['--'+bnd+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify({name:p.name,parents:[folder]})+'\r\n--'+bnd+'\r\nContent-Type: '+p.mime+'\r\n\r\n',p.blob,'\r\n--'+bnd+'--']);
+    return GStore.raw('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+bnd},body:body});
+  },
+  async localPut(id,p){
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const data=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},Local.ck,await p.blob.arrayBuffer());
+    await this.idbPut({id:id,iv:iv,data:data});
+  }
+};
+function rcNote(msg,bad){
+  const el=document.getElementById('rcMsg');
+  if(el)el.innerHTML=msg?'<div class="msg '+(bad?'bad':'ok')+'">'+esc(msg)+'</div>':'';
+  else if(bad)alert(msg);
+}
+async function addReceipts(files,refType,refId){
+  const kind=gMode?'drive':'local';let ok=0,errs=[];
+  for(const f of files){
+    try{
+      rcNote('Saving '+f.name+'…');
+      const p=await Rc.prep(f);const id=uid();
+      const rec={id:id,name:p.name,mime:p.mime,size:p.blob.size,added:todayIso(),kind:kind,driveId:'',link:'',refType:refType||'',refId:refId||''};
+      if(kind==='drive'){const j=await Rc.driveUpload(p);rec.driveId=j.id;rec.link=j.webViewLink||('https://drive.google.com/file/d/'+j.id+'/view')}
+      else await Rc.localPut(id,p);
+      db.receipts.push(rec);ok++;
+    }catch(x){errs.push(x.message)}
+  }
+  if(ok)Store.save();
+  go(current);
+  if(errs.length)rcNote(errs.join(' '),true);
+  else if(ok)rcNote(ok+' receipt'+(ok>1?'s':'')+' saved'+(kind==='drive'?' to Google Drive.':' on this device.'));
+}
+function rcFor(type,id){return db.receipts.filter(r=>r.refType===type&&r.refId===id)}
+function rcChips(type,id){
+  return rcFor(type,id).map(r=>'<button class="chipb" data-act="rview" data-id="'+esc(r.id)+'" title="Open '+esc(r.name)+'">'+ic('file')+' '+esc(r.name.length>22?r.name.slice(0,20)+'…':r.name)+'</button>').join(' ')+
+    ' <label class="btn sm noprint" style="cursor:pointer">'+ic('receipt')+' Add receipt<input type="file" hidden multiple accept="image/*,application/pdf" data-act="rcadd" data-rt="'+type+'" data-id="'+esc(id)+'"></label>';
+}
+function rcRefLabel(r){
+  if(r.refType==='bill'){const b=db.bills.find(x=>x.id===r.refId);return b?'Bill · '+b.vendor+' · '+fmt2(b.amount):'Bill (deleted)'}
+  if(r.refType==='txn'){const t=db.txns.find(x=>x.id===r.refId);return t?'Transaction · '+fmtShort(t.date)+' · '+t.desc+' · '+fmt2(t.amount):'Transaction (not found)'}
+  return '';
+}
+function fmtSize(n){return n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+function vReceipts(){
+  const u=ui.rc;
+  const list=db.receipts.filter(r=>u.show==='all'||!r.refType).slice().sort((a,b)=>b.added.localeCompare(a.added));
+  const unl=db.receipts.filter(r=>!r.refType).length;
+  const bills=db.bills.slice().sort((a,b)=>(b.billDate||'').localeCompare(a.billDate||'')).slice(0,100);
+  const txns=db.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,200);
+  const opts='<option value="">Choose…</option>'+(bills.length?'<optgroup label="Bills">'+bills.map(b=>'<option value="bill:'+esc(b.id)+'">'+esc(fmtShort(b.billDate||b.due))+' · '+esc(b.vendor)+' · '+fmt2(b.amount)+'</option>').join('')+'</optgroup>':'')+(txns.length?'<optgroup label="Bank transactions">'+txns.map(t=>'<option value="txn:'+esc(t.id)+'">'+esc(fmtShort(t.date))+' · '+esc((t.desc||'').slice(0,36))+' · '+fmt2(t.amount)+'</option>').join('')+'</optgroup>':'');
+  $('#view').innerHTML=
+    '<div class="card sect noprint"><h2>Add receipts</h2><p class="muted small" style="margin:-4px 0 10px">'+(gMode?'Files are saved to a Google Drive folder named "'+esc(RC_FOLDER)+'" in the Google account you signed in with. Share that folder in Google Drive with the other owner so they can open the links.':'Files are saved encrypted on this device only. They are not included in the backup file and are lost if you clear this browser\'s data.')+' Photos and PDFs up to 10 MB.</p>'+
+    '<label class="btn pri" style="cursor:pointer">'+ic('receipt')+' Choose photos or PDFs<input type="file" hidden multiple accept="image/*,application/pdf" data-act="rcadd" data-rt="" data-id=""></label><div id="rcMsg" style="margin-top:8px"></div></div>'+
+    '<div class="card sect"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Receipts</h2><div class="chips noprint" style="margin:0">'+[['all','All '+db.receipts.length],['unlinked','Not linked '+unl]].map(x=>'<button class="chipb" data-act="rcshow" data-v="'+x[0]+'" aria-pressed="'+(u.show===x[0])+'">'+x[1]+'</button>').join('')+'</div></div>'+
+    (list.length?'<div class="flat">'+list.map(r=>{
+      const lab=rcRefLabel(r);
+      return '<div class="crow"><div class="l1"><span>'+ic('file')+' '+esc(r.name)+'</span><span class="small muted">'+esc(fmtSize(r.size))+' · '+esc(fmtShort(r.added))+'</span></div>'+
+        '<div style="margin-top:4px"><span class="pill '+(r.kind==='drive'?'green':'gray')+'">'+(r.kind==='drive'?'Google Drive':'This device')+'</span> '+(lab?'<span class="small">'+esc(lab)+'</span>':'<span class="pill amber">Not linked yet</span>')+'</div>'+
+        '<div class="noprint" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="btn sm" data-act="rview" data-id="'+esc(r.id)+'">Open</button>'+
+        (lab?'<button class="btn sm" data-act="rcunlink" data-id="'+esc(r.id)+'">Unlink</button>':'<select id="lk_'+esc(r.id)+'" aria-label="Link to" style="max-width:260px">'+opts+'</select><button class="btn sm pri" data-act="rclink" data-id="'+esc(r.id)+'">Link</button>')+
+        '<button class="btn sm danger" data-act="rcdel" data-id="'+esc(r.id)+'">Delete</button></div></div>';
+    }).join('')+'</div>':empty('No receipts','Choose a photo or PDF above, or use Add receipt on a bill or bank transaction.'))+'</div>';
+}
+async function rcView(id){
+  const r=db.receipts.find(x=>x.id===id);if(!r)return;
+  if(r.kind==='drive'){window.open(r.link,'_blank','noopener');return}
+  const w=window.open('about:blank','_blank');
+  try{
+    const rec=await Rc.idbGet(id);if(!rec)throw new Error('This receipt is not stored in this browser. It was added on another device or the browser data was cleared.');
+    const buf=await crypto.subtle.decrypt({name:'AES-GCM',iv:rec.iv},Local.ck,rec.data);
+    const url=URL.createObjectURL(new Blob([buf],{type:r.mime}));
+    if(w)w.location=url;else{const a=document.createElement('a');a.href=url;a.download=r.name;a.click()}
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(x){if(w)w.close();alert(x.message)}
+}
+async function rcDelete(id){
+  const r=db.receipts.find(x=>x.id===id);if(!r)return;
+  if(!confirm('Delete this receipt'+(r.kind==='drive'?' from the portal and from Google Drive?':'?')))return;
+  let warn='';
+  try{if(r.kind==='drive'){if(r.driveId)await GStore.raw('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(r.driveId),{method:'DELETE'})}else await Rc.idbDel(id)}
+  catch(x){warn='The receipt was removed from the portal, but the file could not be deleted from Google Drive. Delete it there if needed.'}
+  db.receipts=db.receipts.filter(x=>x.id!==id);Store.save();go(current);
+  if(warn)rcNote(warn,true);
+}
+
+/* ---------- data ---------- */
+async function backupRecord(pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));const key=await Local.derive(pass,salt);const iv=crypto.getRandomValues(new Uint8Array(12));
+  const enc=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(JSON.stringify(db)));
+  return{v:1,salt:Local.b64e(salt),iv:Local.b64e(iv),data:Local.b64e(enc)};
+}
+async function doBackup(){
+  const pass=prompt('Choose a passphrase to encrypt this backup (at least 6 characters). You will need it to restore.');
+  if(pass==null)return;
+  if(pass.length<6){alert('Use at least 6 characters.');return}
+  download('comfort-hands-finance-backup-'+todayIso()+'.json',JSON.stringify(await backupRecord(pass)),'application/json');
+}
+function vData(){
+  const nC=Object.keys(db.claims).length;
+  $('#view').innerHTML=
+    '<div class="card sect"><h2>Your data</h2><p class="small" style="margin:0 0 8px">'+nC+' claims · '+db.remits.length+' payments · '+db.txns.length+' bank transactions · '+db.files.length+' imported files · '+db.bills.length+' bills · '+db.payroll.length+' payroll lines</p>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="backup">'+ic('download')+' Download backup</button><label class="btn" style="cursor:pointer">'+ic('upload')+' Restore backup<input type="file" id="restore" hidden></label>'+(gMode?'':'<button class="btn" data-act="changepin">Change PIN</button>')+'<button class="btn danger" data-act="wipe">Erase all data</button></div><div id="dmsg"></div></div>'+
+    '<div class="card sect"><h2>Imported files</h2>'+(db.files.length?'<table><tbody>'+db.files.slice().reverse().map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files yet','Imported 837 and 835 files are listed here.'))+'</div>'+
+    '<div class="card sect"><h2>How your data is stored</h2>'+(gMode?
+      '<p class="small" style="margin:0 0 6px">Your data is stored in your Google Sheet, so everyone with access to that sheet sees the same numbers on any device. <a href="https://docs.google.com/spreadsheets/d/'+esc(CFG.sheetId)+'" target="_blank" rel="noopener">Open the sheet</a></p><p class="small" style="margin:0 0 6px">The 837, 835 and statement files themselves are not kept; only the claim, payment and transaction details read from them. Account numbers are never stored.</p><div class="warnbox">The sheet holds patient names and member IDs. Share it only with the owners, and make sure your Google Workspace has a signed HIPAA business associate agreement.</div><div style="margin-top:10px"><button class="btn danger sm" data-act="disconnect">Disconnect from Google Sheets</button></div>'
+      :'<p class="small" style="margin:0 0 6px">Everything stays in this browser on this device, encrypted with your PIN. Nothing is sent to a server, and the files you import are not kept; only the details read from them.</p><div class="warnbox">There is no PIN reset. If you forget the PIN, the data in this browser cannot be recovered, so keep a recent backup and your PIN somewhere safe. To share the data between devices and owners, connect Google Sheets from the sign-in screen.</div>')+
+    '<p class="small muted" style="margin:8px 0 0">Backups are encrypted with a passphrase you choose when you download them.</p></div>';
+  $('#restore').addEventListener('change',async e=>{
+    const f=e.target.files[0];if(!f)return;e.target.value='';
+    try{
+      const rec=JSON.parse(await f.text());if(!rec.salt||!rec.iv||!rec.data)throw new Error('This is not a finance backup file.');
+      const pass=prompt('Enter the passphrase that was used when this backup was made');if(pass==null)return;
+      const r=await Local.decryptRec(rec,pass);
+      if(!confirm('Replace everything with the backup?'))return;
+      db=Store.db=Object.assign(Local.emptyDb(),r.db);await Store.saveAll();vData();$('#dmsg').innerHTML='<div class="msg ok">Backup restored.</div>';
+    }catch(x){$('#dmsg').innerHTML='<div class="msg bad">Could not restore: '+esc(x.message==='The operation failed for an operation-specific reason'?'wrong passphrase or damaged file':x.message)+'</div>'}
+  });
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',async function(e){
+  const t=e.target.closest('[data-go],[data-act]');if(!t||!db)return;
+  if(t.dataset.go){go(t.dataset.go);return}
+  const a=t.dataset.act,id=t.dataset.id;
+  if(a==='dashgo'){ui.claims.status=t.dataset.st;go('claims')}
+  else if(a==='chip'){ui.claims.status=t.dataset.st;updateClaims()}
+  else if(a==='print'){window.print()}
+  else if(a==='relogin'){try{await GStore.signIn();await GStore.flush()}catch(x){setSave('Not saved',true,x.message)}}
+  else if(a==='disconnect'){if(confirm('Disconnect this browser from Google Sheets? Your sheet is not changed.')){try{localStorage.removeItem('ch_fin_cfg')}catch(x){}location.reload()}}
+  else if(a==='stchip'){ui.st.status=t.dataset.st;updateTxns()}
+  else if(a==='dredit'){ui.dr.edit=true;vDraws()}
+  else if(a==='drcancel'){ui.dr.edit=false;vDraws()}
+  else if(a==='csvDraws'){download('owner-draws-'+todayIso()+'.csv',drawsCsv())}
+  else if(a==='drdel'){if(confirm('Delete this ledger entry?')){db.draws=db.draws.filter(x=>x.id!==id);Store.save();vDraws()}}
+  else if(a==='drnot'){const x=db.txns.find(y=>y.id===id);if(x){x.note='notdraw';Store.save();vDraws()}}
+  else if(a==='drassign'){
+    const x=db.txns.find(y=>y.id===id);if(!x)return;
+    const type=$('#drt_'+id).value;
+    db.draws.push({id:uid(),ownerId:$('#dro_'+id).value,date:x.date,type:type,amount:Math.abs(x.amount),note:x.desc,txnId:x.id});
+    x.status='categorized';x.category=type==='Contribution'?'Owner contribution':'Owner draw';
+    Store.save();vDraws();
+  }
+  else if(a==='stimport'){doImport()}
+  else if(a==='stcancel'){ui.pending=null;renderPending()}
+  else if(a==='csvTxns'){download('transactions-'+todayIso()+'.csv',txnsCsv())}
+  else if(a==='delacct'){
+    const n=db.txns.filter(x=>x.accountId===id).length;
+    if(confirm('Remove this account'+(n?' and its '+n+' imported transactions':'')+'?')){
+      db.txns.filter(x=>x.accountId===id&&x.matchType==='bill').forEach(x=>{const b=db.bills.find(y=>y.id===x.matchRef);if(b&&b.txnId===x.id){b.status='unpaid';b.paidDate='';b.txnId=''}});
+      db.txns=db.txns.filter(x=>x.accountId!==id);db.accounts=db.accounts.filter(x=>x.id!==id);Store.save();vStatements();
+    }
+  }
+  else if(a==='staccept'){const x=db.txns.find(y=>y.id===id);if(x&&x.category){x.status='categorized';learn(x,x.category);Store.save();updateTxns()}}
+  else if(a==='staccall'){
+    const list=db.txns.filter(x=>x.status==='suggested');
+    if(list.length&&confirm('Accept all '+list.length+' suggested categories?')){list.forEach(x=>{x.status='categorized';learn(x,x.category)});Store.save();updateTxns()}
+  }
+  else if(a==='stundo'){
+    const x=db.txns.find(y=>y.id===id);
+    if(x){
+      if(x.matchType==='bill'){const b=db.bills.find(y=>y.id===x.matchRef);if(b&&b.txnId===x.id){b.status='unpaid';b.paidDate='';b.txnId=''}}
+      x.status='review';x.matchType='';x.matchRef='';x.category='';Store.save();updateTxns();
+    }
+  }
+  else if(a==='csvClaims'){download('claims-'+todayIso()+'.csv',claimsCsv())}
+  else if(a==='csvReports'){download('reports-'+(ui.rep.month||todayIso().slice(0,7))+'.csv',reportsCsv())}
+  else if(a==='delclaim'){if(confirm('Remove claim '+id+'?')){delete db.claims[id];Store.save();buildFilters();updateClaims()}}
+  else if(a==='billshow'){ui.bills.show=t.dataset.v;vBills()}
+  else if(a==='paybill'){const b=db.bills.find(x=>x.id===id);const d=$('#pd'+id).value||todayIso();if(b){b.status='paid';b.paidDate=d;Store.save();vBills()}}
+  else if(a==='delbill'){if(confirm('Delete this bill?')){db.bills=db.bills.filter(x=>x.id!==id);db.receipts.forEach(r=>{if(r.refType==='bill'&&r.refId===id){r.refType='';r.refId=''}});Store.save();vBills()}}
+  else if(a==='rview'){rcView(id)}
+  else if(a==='rcdel'){rcDelete(id)}
+  else if(a==='rcshow'){ui.rc.show=t.dataset.v;vReceipts()}
+  else if(a==='rcunlink'){const r=db.receipts.find(x=>x.id===id);if(r){r.refType='';r.refId='';Store.save();vReceipts()}}
+  else if(a==='rclink'){const r=db.receipts.find(x=>x.id===id),v=($('#lk_'+id)||{}).value;if(r&&v){const i=v.indexOf(':');r.refType=v.slice(0,i);r.refId=v.slice(i+1);Store.save();vReceipts()}}
+  else if(a==='delpay'){if(confirm('Delete this payroll line?')){db.payroll=db.payroll.filter(x=>x.id!==id);Store.save();vPayroll()}}
+  else if(a==='backup'){await doBackup()}
+  else if(a==='changepin'){
+    const p1=prompt('New PIN (at least 6 characters)');if(p1==null)return;
+    if(p1.length<6){alert('Use at least 6 characters.');return}
+    if(prompt('Type the new PIN again')!==p1){alert('The PINs did not match.');return}
+    await Store.changePin(p1);$('#dmsg').innerHTML='<div class="msg ok">PIN changed. Older backups still need the PIN used when they were made.</div>';
+  }
+  else if(a==='wipe'){
+    if(confirm('Erase all finance data from this browser? This cannot be undone.')&&confirm('Really erase everything? Download a backup first if you are unsure.')){
+      if(!gMode){try{for(const r of await Rc.idbAll())await Rc.idbDel(r.id)}catch(x){}}
+      db=Store.db=Local.emptyDb();await Store.saveAll();vData();
+    }
+  }
+});
+document.addEventListener('change',function(e){
+  const t=e.target;if(!db||!t.dataset)return;
+  if(t.dataset.act==='work'){const c=db.claims[t.dataset.id];if(c){c.work=t.value;Store.save();updateClaims()}}
+  else if(t.dataset.act==='note'){const c=db.claims[t.dataset.id];if(c){c.note=t.value.slice(0,300);Store.save()}}
+  else if(t.dataset.act==='cat'){const x=db.txns.find(y=>y.id===t.dataset.id);if(x&&t.value){x.status='categorized';x.category=t.value;learn(x,t.value);Store.save();updateTxns()}}
+  else if(t.dataset.act==='rcadd'){const fs=Array.from(t.files||[]);t.value='';if(fs.length)addReceipts(fs,t.dataset.rt,t.dataset.id)}
+  else if(t.dataset.act==='stflip'){if(ui.pending){ui.pending.flip=t.checked;renderPending()}}
+});
+window.addEventListener('beforeprint',()=>{$$('details').forEach(d=>d.open=true)});
+
+showLock();
+});
+})();
+</script>
+</body>
+</html>
