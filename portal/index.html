@@ -2492,8 +2492,8 @@ function formRA(){
   repShell('60-Day Re-Assessment — '+p.name,
    '<div class="card"><div class="card-header"><div class="card-icon">📋</div><div class="card-title"><h2>Re-Assessment</h2><p>This is the 60-day note. Prefilled from the admission. Signed and filed to the patient’s Drive folder.</p></div></div>'+
    '<div class="fgroup s2" style="margin-bottom:8px">'+RD('rp_type',['60-day Reassessment','Post-Hospitalization'])+'</div>'+
-   '<div class="fg">'+RI('rp_name','Patient name',p.name)+RI('rp_emp','Employee’s name (aide)','')+RDF('Present',RD('rp_pres',['Yes','No']))+
-   RI('rp_addr','Address',addr,'text','s2')+RDF('Home folder complete',RD('rp_hf',['Yes','No']))+
+   '<div class="fg">'+RI('rp_name','Patient name',p.name)+RDF('Present',RD('rp_pres',['Yes','No']))+
+   RI('rp_addr','Address',addr,'text')+RDF('Home folder complete',RD('rp_hf',['Yes','No']))+
    RDF('Significant other',RD('rp_so',['No change','Update'])+' <input type="text" id="rp_so_t" placeholder="Update" style="margin-top:6px">','s2')+RI('rp_date','Date',todayISO(),'date')+
    RI('rp_dx','Current diagnosis(es)',[sh.dx1,sh.dx2].filter(Boolean).join('; '),'text','s2')+RI('rp_ndx','New diagnosis(es)','')+'</div>'+
    '<div class="sh">Vital signs</div><div class="fg">'+RI('rp_bp','B/P')+RI('rp_temp','Temp')+RI('rp_pulse','Pulse (reg./irreg.)')+RI('rp_resp','Resp.')+RI('rp_wt','Wt.')+RI('rp_ht','Ht.')+RI('rp_vother','Other')+RI('rp_adv','Location of advance directives','','text','s2')+'</div>'+
@@ -2519,9 +2519,8 @@ function bodyRA(){
   const rows=RA_SYS.map((s,i)=>{ const v=(document.querySelector('input[name="rp_as'+i+'"]:checked')||{}).value||''; return '<tr><td>'+s+'</td><td class="c cb">'+(v==='No change'?'X':'')+'</td><td class="c cb">'+(v==='Change'?'X':'')+'</td><td>'+E_(rv('rp_ac'+i))+'</td></tr>'; }).join('');
   const T=pick('rp_type',['60-day Reassessment','Post-Hospitalization']);
   return '<h2>Re-Assessment</h2><p>'+T.replace('60-day Reassessment','60-day Reassessment').replace('Post-Hospitalization','Post-Hospitalization')+'</p>'+
-   '<table class="g"><tr><td style="width:50%">'+k('Patient name',rv('rp_name'))+'</td><td>'+k('Employee’s name',rv('rp_emp'))+'</td></tr>'+
-   '<tr><td colspan="2">'+k('Address',rv('rp_addr'))+'</td></tr>'+
-   '<tr><td><div class="k">Present</div>'+pick('rp_pres',['Yes','No'])+'</td><td><div class="k">Home folder complete</div>'+pick('rp_hf',['Yes','No'])+'</td></tr>'+
+   '<table class="g"><tr><td style="width:50%">'+k('Patient name',rv('rp_name'))+'</td><td><div class="k">Present</div>'+pick('rp_pres',['Yes','No'])+'</td></tr>'+
+   '<tr><td>'+k('Address',rv('rp_addr'))+'</td><td><div class="k">Home folder complete</div>'+pick('rp_hf',['Yes','No'])+'</td></tr>'+
    '<tr><td colspan="2"><div class="k">Significant other</div>'+pick('rp_so',['No change','Update'])+(rv('rp_so_t')?' — '+E_(rv('rp_so_t')):'')+'</td></tr>'+
    '<tr><td colspan="2">'+k('Current diagnosis(es)',rv('rp_dx'))+'</td></tr><tr><td colspan="2">'+k('New diagnosis(es)',rv('rp_ndx'))+'</td></tr></table>'+
    '<h3>Vital signs</h3><table class="g"><tr><td>'+k('B/P',rv('rp_bp'))+'</td><td>'+k('Temp',rv('rp_temp'))+'</td><td>'+k('Pulse',rv('rp_pulse'))+'</td><td>'+k('Resp.',rv('rp_resp'))+'</td></tr>'+
@@ -2641,7 +2640,6 @@ async function saveReport(){
   if(k==='ra'){
     if(!document.querySelector('input[name="rp_type"]:checked')) return repMsg('⚠️','Choose 60-day Reassessment or Post-Hospitalization.');
     if(!rv('rp_date')) return repMsg('⚠️','Enter the date.');
-    if(!rv('rp_emp')) return repMsg('⚠️','Enter the aide’s name (Employee’s name).');
     let miss=0, noc=0; RA_SYS.forEach((s,i)=>{ const v=(document.querySelector('input[name="rp_as'+i+'"]:checked')||{}).value; if(!v) miss++; else if(v==='Change'&&!rv('rp_ac'+i)) noc++; });
     if(miss) return repMsg('⚠️',miss+' assessment row(s) are not marked. Choose No change or Change for every system.');
     if(noc) return repMsg('⚠️','Add a comment for every system marked Change.');
