@@ -14,6 +14,16 @@ The portal page never touches your Sheet or Drive directly. It signs you in with
 6. **Connect the portal.** Open the portal. On the sign-in screen, choose "Connect Google for shared storage", paste the Client ID and the web app URL, and save. Then choose Sign in with Google.
 7. **Abigail** repeats step 6 on her device with the same two values, then signs in with her `@comforthands.net` account. Anyone else you add on the Users tab does the same.
 
+## Client counts on the Dashboard (optional)
+
+The Dashboard can show active clients, admissions, discharges and churn by year, read from the admin portal's data sheet. Only counts are read, never client names.
+
+1. In Google Drive, open the sheet named "Comfort Hands Operations Data (restricted)". Its web address looks like `docs.google.com/spreadsheets/d/LONG-ID/edit`.
+2. Copy the `LONG-ID` part and paste it between the quotes after `ADMIN_SHEET_ID` at the top of `Code.gs`.
+3. Redeploy: Deploy, Manage deployments, edit, new version. Google will ask you to approve the script again.
+
+The Google account that owns the finance script must be able to open that sheet. Admissions use the start of care date, discharges use the discharge date, and churn is discharges divided by clients served that year (clients at the start of the year plus new admissions). If the admin sheet is not connected, owners see a short note on the Dashboard instead.
+
 ## Users and roles
 
 The first time the script runs it creates a **Users** tab in the Sheet and adds the emails in `ALLOWED_EMAILS` as Owners. The Google account that owns the script is always an Owner. After that, manage people from the **Users** tab in the portal (visible to Owners only).

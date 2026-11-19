@@ -779,10 +779,39 @@ function vDash(){
   if(tr.length)items.push('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"><span><span class="pill amber">Bank</span> '+tr.length+' transaction'+(tr.length>1?'s':'')+' to review</span><button class="btn sm" data-go="statements">View</button></div>');
   const last=db.files.slice(-3).reverse();
   $('#view').innerHTML=
+    '<div id="census"></div>'+
     '<div class="grid4 sect">'+tile('file','Outstanding claims',fmt0(out))+tile('dollar','Paid this month',fmt0(paidM))+tile('receipt','Bills due',fmt0(due))+tile('trend','Net income (month to date)',fmt0(net))+'</div>'+
     '<p class="muted small" style="margin:6px 2px 12px">Income and net income are cash basis: they count payments on the date the 835 says they were paid.</p>'+
     '<div class="card sect"><h2>Needs attention</h2>'+(items.length?items.join(''):empty('Nothing needs attention','Import your 837 and 835 files from the Claims tab to see what was paid and what is still outstanding.'))+'</div>'+
     '<div class="card sect"><h2>Recent imports</h2>'+(last.length?'<table><tbody>'+last.map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+' '+(f.type==='837'?'claims':'payments')+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files imported yet','Upload an 837 or 835 file to start.'))+'</div>';
+  censusLoad();
+}
+
+/* ---------- client counts (from the admin portal's data sheet) ---------- */
+ui.cen=null;
+function pct(x){return x==null?'–':Math.round(x*100)+'%'}
+function renderCensus(){
+  const el=$('#census');if(!el)return;const c=ui.cen;if(!c)return;
+  if(c.error){el.innerHTML=myRole()==='owner'?'<div class="card sect"><b>Client counts</b><div class="msg bad" style="margin-top:6px">'+esc(c.error)+'</div></div>':'';return}
+  if(c.notConfigured){el.innerHTML=myRole()==='owner'?'<div class="card sect"><b>Client counts</b><p class="muted small" style="margin:4px 0 0">Not connected yet. Set ADMIN_SHEET_ID in the finance script to count clients, admissions and discharges from the admin portal (see SETUP.md).</p></div>':'';return}
+  const yrs=c.years.slice().sort((a,b)=>b.year-a.year),cur=yrs[0],prev=yrs[1];
+  const sub=(v,fn)=>prev?'<div class="small muted">'+esc(String(prev.year))+': '+fn(prev)+'</div>':'';
+  el.innerHTML=
+    '<div class="grid4 sect">'+
+    '<div class="tile"><div class="lab"><span class="chip-i">'+ic('file')+'</span>Active clients</div><div class="val">'+c.active+'</div><div class="small muted">'+c.inProgress+' admission'+(c.inProgress===1?'':'s')+' in progress</div></div>'+
+    (cur?'<div class="tile"><div class="lab"><span class="chip-i">'+ic('upload')+'</span>Admissions, '+cur.year+'</div><div class="val">'+cur.admit+'</div>'+sub(0,p=>p.admit)+'</div>'+
+    '<div class="tile"><div class="lab"><span class="chip-i">'+ic('download')+'</span>Discharges, '+cur.year+'</div><div class="val">'+cur.disch+'</div>'+sub(0,p=>p.disch)+'</div>'+
+    '<div class="tile"><div class="lab"><span class="chip-i">'+ic('trend')+'</span>Churn, '+cur.year+(cur.partial?' so far':'')+'</div><div class="val">'+pct(cur.churn)+'</div>'+sub(0,p=>pct(p.churn))+'</div>':'')+
+    '</div>'+
+    (yrs.length?'<div class="card sect"><h2>Clients by year</h2><div class="tscroll"><table><thead><tr><th>Year</th><th class="n">Start of year</th><th class="n">Admitted</th><th class="n">Discharged</th><th class="n">End of year</th><th class="n">Churn</th></tr></thead><tbody>'+
+      yrs.map(y=>'<tr><td>'+y.year+(y.partial?' (so far)':'')+'</td><td class="n">'+y.start+'</td><td class="n">'+y.admit+'</td><td class="n">'+y.disch+'</td><td class="n">'+y.end+'</td><td class="n">'+pct(y.churn)+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<p class="muted small" style="margin:6px 0 0">Admissions use the start of care date and discharges use the discharge date recorded in the admin portal. Churn is discharges divided by clients served that year (clients at the start of the year plus new admissions). Counts only; no client names are read.'+(c.noDate||c.noDischarge?' Left out because a date is missing: '+(c.noDate?c.noDate+' without a start date':'')+(c.noDate&&c.noDischarge?', ':'')+(c.noDischarge?c.noDischarge+' discharged without a date':'')+'.':'')+' A client who was discharged and later reopened shows only their latest status.</p></div>':'')
+}
+async function censusLoad(){
+  if(!gMode)return;
+  if(ui.cen)renderCensus();
+  try{ui.cen=await GStore.call('census')}catch(e){ui.cen={error:e.message}}
+  renderCensus();
 }
 
 /* ---------- claims ---------- */
