@@ -1718,7 +1718,18 @@ function hrForms_(x) {
     html: (emps.length ? '<p><b>Former employers listed on my application:</b></p><ul>' + emps.map(function (e) { return '<li>' + esc_(e[0]) + (e[1] ? ', ' + esc_(e[1]) : '') + (e[2] ? ' (' + esc_(e[2]) + ' to ' + esc_(e[3] || 'present') + ')' : '') + '</li>'; }).join('') + '</ul>' : '') +
       '<p>I authorize my former employers to release information relating to my employment history, including my position, dates of employment, job performance, attendance, cooperation, initiative, health, strengths, weaknesses and eligibility for rehire. I release them from any and all liability resulting from filling out this form. I understand that any information received will be treated in a completely confidential manner.</p>',
     fields: [{ id: 'print', label: 'Applicant\'s name', value: full, req: true }] });
+  const conRate = rateFor_(x[O_.POS]);
+  if (conRate) forms.unshift({ k: 'contract', step: 'contract', title: 'Provisional Employment Agreement', html: contractOnscreen_(full, x[O_.POS], conRate), fields: [{ id: 'print', label: 'Print full name', value: full, req: true }, { id: 'start', label: 'Start date (MM/DD/YYYY)', value: '', req: true }] });
   return forms;
+}
+// The contract as shown for on-screen signing: the paper blanks (start date, signatures) are replaced by the fields and signature pad on the page.
+function contractOnscreen_(name, pos, rate) {
+  return contractBody_(esc_(name), esc_(pos), '$' + Number(rate).toFixed(2) + ' per hour', ' (the position selected on the online application)')
+    .replace(/<b>Start date:<\/b> _+/, '<b>Start date:</b> entered below')
+    .replace(/<p><b>Employee signature:<\/b>[^]*?<\/p>/, '')
+    .replace(/<p><b>Printed name:<\/b>[^]*?<\/p>/, '')
+    .replace(/<p><b>For Comfort Hands Home Healthcare LLC:<\/b>[^]*?<\/p>/, '<p><b>For Comfort Hands Home Healthcare LLC:</b> offered by the Agency on the date this offer was sent.</p>')
+    .replace(/<p><b>Name and title:<\/b>[^]*?<\/p>/, '');
 }
 function hrState_(x) {
   const docs = onbDocs_(x), has = {}; docs.forEach(function (d) { has[d.k] = true; });
@@ -1894,8 +1905,8 @@ function onb_(act, d, u) {
     const first = String(x[O_.NAME]).split(/\s+/)[0], office = String(CONFIG.OFFICE_EMAIL).split(/[,;\s]+/)[0], link = String(CONFIG.APPLY_URL) + (String(CONFIG.APPLY_URL).indexOf('?') >= 0 ? '&' : '?') + 'a=' + x[O_.ID];
     MailApp.sendEmail({ to: x[O_.EMAIL], replyTo: office, subject: 'Comfort Hands Home Healthcare: provisional offer of employment',
       body: ['Hello ' + first + ',', '', 'Thank you for applying to Comfort Hands Home Healthcare. We have reviewed your application and are pleased to offer you provisional employment' + (x[O_.POS] ? ' as ' + x[O_.POS] : '') + '.', '',
-        'This offer is provisional. It is subject to a satisfactory background check and satisfactory reference checks, and to completing the new-hire steps below. Your employment contract is attached. Please read it, sign it, and upload the signed copy with your other documents.', '',
-        'Next step: open your personal new-hire page:', link, '', 'On that page you will ask for a 6-digit code by email, then review and sign your forms on screen and upload your identification documents. Your details from the application are already filled in.', '',
+        'This offer is provisional. It is subject to a satisfactory background check and satisfactory reference checks, and to completing the new-hire steps below. A copy of your employment contract is attached for you to read. You will sign it on screen on your new-hire page; there is nothing to print or upload.', '',
+        'Next step: open your personal new-hire page:', link, '', 'On that page you will ask for a 6-digit code by email, then review and sign your forms on screen, including your employment contract, and upload your identification documents. Your details from the application are already filled in.', '',
         (CONFIG.ONBOARDING_NOTE || ''), 'Call us at 609-277-3032 with any questions.', '', 'Sincerely,', 'Comfort Hands Home Healthcare, LLC'].join('\n'), attachments: att });
     x[O_.OFFER] = today_(); mark('offer'); sh.getRange(r, 1, 1, ONB_N_).setValues([safeRow_(x)]);
     return out_({ ok: true, item: onbObj_(x), sent: att.length });
@@ -2016,6 +2027,7 @@ function packetSections_(position) {
       '<p class="eeo">' + esc_('As required by federal and state law, we are an equal opportunity employer and manage our per diem employment and employee relations practices without discrimination based on race, age, color, religion, national origin, medical condition, marital status, sex, citizenship status, ancestry, sexual orientation, creed, disability, or handicap. Our company will comply with all relevant state mandates. I acknowledge that Comfort Hands Home Healthcare is a per diem employer.') + '</p>' + pkSign_('Applicant signature') });
   const both = !jobDesc_(position);
   hrForms_(blank).forEach(function (f) {
+    if (f.k === 'contract') return;
     if (f.k === 'refrelease') f.html = f.html.replace(/<p><b>Former employers listed[\s\S]*?<\/ul>/, '');
     sec.push({ title: f.title, html: (f.k.indexOf('bg') === 0 && f.k !== 'bgnj' ? '<div style="font-size:9px;line-height:1.28">' : '<div>') + f.html + pkBlank_(f.fields.filter(function (q) { return q.id !== 'print' || f.k === 'standards'; })) + pkSign_('Signature') + (f.post || '') + '</div>' });
     if (f.k === 'jobdesc' && both) sec.push({ title: HR_JOB_TITLE_CHHA_, html: HR_JOB_CHHA_ + pkBlank_(f.fields.filter(function (q) { return false; })) + pkSign_('Signature') });
