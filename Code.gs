@@ -38,6 +38,7 @@ const CONFIG = {
   // Google reCAPTCHA v3 on the public Apply page. Paste the SECRET key here (never in the web page). Blank = no check, so nothing breaks until you set it up.
   RECAPTCHA_SECRET: '',
   RECAPTCHA_MIN_SCORE: 0.5,   // 0 to 1. Google scores each visitor; below this the application is refused. Lower it (0.3) if real applicants get blocked
+  RN_SIGNERS: [{ name: 'Abigail Ayitiah', title: 'ARN MSN, A-GNP-C' }],   // Nurses who can sign reports. They appear in the RN name and title dropdown. Add one per line; "Other…" is always offered too
   // Text messages through Twilio. Leave ENABLED false until you have tested with sendTestText(). Until then texts are only recorded in the TextLog tab.
   SMS: {
     ENABLED: false,
@@ -120,7 +121,8 @@ function setHash_(user, h) {
 }
 function setPassword_(user, pw) { return setHash_(user, pwHash_(user.email, pw)); }
 function pwOk_(pw) { pw = String(pw || ''); return pw.length >= 10 && pw.length <= 100; }
-function session_(u) { const t = makeToken_(u); return { ok: true, token: t.token, exp: t.exp, name: u.name || u.email, roles: u.roles || [] }; }
+function signers_() { return (CONFIG.RN_SIGNERS || []).map(function (q) { return { name: String(q.name || '').slice(0, 80), title: String(q.title || '').slice(0, 80) }; }).filter(function (q) { return q.name; }); }
+function session_(u) { const t = makeToken_(u); return { ok: true, token: t.token, exp: t.exp, name: u.name || u.email, roles: u.roles || [], signers: signers_() }; }
 
 // Password reset by emailed 6-digit code (also used to set a first password for a new Users-tab row).
 function resetRequest_(d) {
@@ -1013,14 +1015,16 @@ function pdfHdr_(title, kind, o) {
 const PDF_CSS_ = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111}' +
   'h2{font-size:14px;margin:8px 0 5px;color:#34182d}h3{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d}' +
   '.psl{color:#555;font-weight:bold;font-size:9px}.psv{margin-bottom:6px}ul,ol{padding-left:18px}p{margin:0 0 7px}table{border-collapse:collapse}';
+function usdate_(v) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? m[2] + '/' + m[3] + '/' + m[1] : String(v || ''); }
 function repHtml_(title, sub, body, kind, label) {
   const css = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.42}h1{font-size:17px;margin:0;color:#34182d}h2{font-size:14px;margin:8px 0;text-align:center}' +
     'h3{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d}table{width:100%;border-collapse:collapse}' +
     'table.g td,table.g th{border:1px solid #888;padding:4px 5px;vertical-align:top;font-size:10px}table.g th{background:#eee;text-align:left}' +
     '.c{text-align:center}.ln{border-bottom:1px solid #444;display:inline-block;min-width:120px}.cb{font-family:Courier New,monospace;font-weight:bold}' +
-    '.sig img{height:60px}.k{font-size:8.5px;color:#555;text-transform:uppercase;font-weight:bold}.box{border:1px solid #888;padding:5px 7px;margin:4px 0;white-space:pre-wrap}';
-  const bits = String(sub || '').split(' \u00b7 '), head = pdfHdr_(title, kind || 'staff', { name: bits[0], date: bits[bits.length - 1], label: label });
-  return '<html><head><meta charset="utf-8"><style>' + css + '</style></head><body>' + head + safeHtml_(body) + '</body></html>';
+    '.sig img{height:60px}.k{font-size:8.5px;color:#555;text-transform:uppercase;font-weight:bold}.box{border:1px solid #888;padding:5px 7px;margin:4px 0;white-space:pre-wrap;min-height:56px}table.sig{width:100%;table-layout:fixed}table.sig td{vertical-align:top;padding-right:14px}';
+  const bits = String(sub || '').split(' \u00b7 '), head = pdfHdr_(title, kind || 'staff', { name: bits[0], date: usdate_(bits[bits.length - 1]), label: label });
+  // The heading sits in a table header group so it repeats at the top of every page.
+  return '<html><head><meta charset="utf-8"><style>' + css + '</style></head><body><table style="width:100%;border-collapse:collapse"><thead style="display:table-header-group"><tr><td style="padding:0;border:0">' + head + '</td></tr></thead><tbody><tr><td style="padding:0;border:0">' + safeHtml_(body) + '</td></tr></tbody></table></body></html>';
 }
 
 function reportSave_(d, u) {

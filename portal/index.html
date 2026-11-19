@@ -1031,7 +1031,7 @@ async function doLogin(ev){
       const r=await fetch(SUBMIT_URL,{method:'POST',body:JSON.stringify({action:'login',email:email,password:pw})});
       const j=await r.json();
       if(!j.ok){ throw new Error(j.error==='locked'?'Too many attempts. Try again in 15 minutes.':'Incorrect email or password.'); }
-      AUTH={token:j.token,name:j.name||email,roles:j.roles||[],exp:j.exp};
+      AUTH={token:j.token,name:j.name||email,roles:j.roles||[],signers:j.signers||[],exp:j.exp};
     }
     try{ sessionStorage.setItem('chhc_auth',JSON.stringify(AUTH)); }catch(e){}
     document.getElementById('authPass').value='';
@@ -1060,7 +1060,7 @@ async function portalResetSet(){
   try{
     const r=await fetch(SUBMIT_URL,{method:'POST',body:JSON.stringify({action:'resetConfirm',email:document.getElementById('arEm').value.trim(),code:code,password:p1})}); const j=await r.json();
     if(!j.ok) return arFail(j.error==='weak password'?'Choose a stronger password (at least 10 characters).':'That code is not valid or has expired. Go back and request a new one.');
-    AUTH={token:j.token,name:j.name,roles:j.roles||[],exp:j.exp}; try{ sessionStorage.setItem('chhc_auth',JSON.stringify(AUTH)); }catch(e){}
+    AUTH={token:j.token,name:j.name,roles:j.roles||[],signers:j.signers||[],exp:j.exp}; try{ sessionStorage.setItem('chhc_auth',JSON.stringify(AUTH)); }catch(e){}
     ['arCode','arP1','arP2'].forEach(i=>document.getElementById(i).value=''); document.getElementById('authReset').style.display='none'; showLoginState(); resetIdle();
   }catch(e){ arFail('Could not reach the sign-in service. Check your connection.'); }
 }
@@ -2455,8 +2455,9 @@ async function openReport(kind,id,email){
   let dj=null; try{ dj=await api('draftGet',kind==='chha'?{kind:kind,aideEmail:id}:{kind:kind,patientId:id}); }catch(e){}
   ({pn:formPN,ra:formRA,dc:formDC,chha:formCHHA})[kind]();
   ['repSigA','repSigB','repSigC'].forEach(s=>bindSig(s));
+  rnInit();
   REP.subject=id; _draftSig='';
-  if(dj&&dj.ok&&dj.draft){ draftApply(dj.draft.data); const n=document.getElementById('draftNote'); if(n) n.textContent='Draft restored (saved '+(dj.draft.updatedAt||'').slice(0,10)+' by '+(dj.draft.by||'')+'). Signatures must be added again.'; _draftSig=JSON.stringify(draftCollect()); }
+  if(dj&&dj.ok&&dj.draft){ draftApply(dj.draft.data); rnSync(); const n=document.getElementById('draftNote'); if(n) n.textContent='Draft restored (saved '+(dj.draft.updatedAt||'').slice(0,10)+' by '+(dj.draft.by||'')+'). Signatures must be added again.'; _draftSig=JSON.stringify(draftCollect()); }
 }
 async function drawHistory(pid,email){
   const body=document.getElementById('repBody'), j=await api('reports',email?{aideEmail:email}:{patientId:pid}); document.getElementById('repTitle').textContent='Filed reports';
@@ -2469,6 +2470,23 @@ function repShell(title,inner,btn){
 }
 function repMsg(ico,t){ document.getElementById('repMsg').innerHTML='<div class="info-box"><span class="ico">'+ico+'</span><p>'+t+'</p></div>'; }
 
+// RN name and title dropdown for every nurse-signed report. The list comes from RN_SIGNERS in the script settings; "Other…" lets any nurse type hers.
+const RN_DEFAULT=[{name:'Abigail Ayitiah',title:'ARN MSN, A-GNP-C'}];
+const rnList=()=>(AUTH.signers&&AUTH.signers.length?AUTH.signers:RN_DEFAULT);
+function RNPICK(label){
+  const L=rnList();
+  return '<div class="fgroup s2"><label class="lbl">'+label+' — name and title</label><select id="rp_signer" onchange="rnSync()">'+L.map((s,i)=>'<option value="'+i+'">'+E_(s.name+', '+s.title)+'</option>').join('')+'<option value="other">Other… (type name and title)</option></select></div>'+
+   '<div id="rpOther" style="display:none;grid-column:1/-1;gap:12px;grid-template-columns:1fr 1fr">'+RI('rp_sname','Name',AUTH.name)+RI('rp_stitle','Title','RN')+'</div>';
+}
+function rnInit(){
+  const sel=document.getElementById('rp_signer'); if(!sel) return; const L=rnList(), me=String(AUTH.name||'').trim().toLowerCase();
+  const i=L.findIndex(s=>s.name.toLowerCase()===me); sel.value=i>=0?String(i):'other'; if(i<0&&L.length===1&&!me) sel.value='0'; rnSync();
+}
+function rnSync(){
+  const sel=document.getElementById('rp_signer'); if(!sel) return; const L=rnList(), o=document.getElementById('rpOther'), n=document.getElementById('rp_sname'), ti=document.getElementById('rp_stitle');
+  if(sel.value==='other'){ if(o) o.style.display='grid'; }
+  else{ const s=L[+sel.value]||L[0]; if(n) n.value=s.name; if(ti) ti.value=s.title; if(o) o.style.display='none'; }
+}
 // 1) Supplemental progress note (extra entry; the 60-day note is the Re-Assessment)
 function formPN(){
   const p=REP.p, now=new Date(), loc=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);
@@ -2477,7 +2495,7 @@ function formPN(){
    '<div class="card"><div class="card-header"><div class="card-icon">📝</div><div class="card-title"><h2>Supplemental Progress Note / Narrative</h2><p>60-day supervisory report. Each entry is signed and filed to the patient’s Drive folder.</p></div></div>'+
    '<div class="fg">'+RI('rp_name','Patient name',p.name)+RI('rp_dob','Date of birth',usDate(p.dob))+RI('rp_dt','Date / time',loc,'datetime-local')+
    '<div class="fgroup s2"><label class="lbl">Progress notes / narrative</label><textarea id="rp_narr" rows="12" placeholder="Indicate care provided, complications, consultations, changes in condition, and instructions to patient and/or significant other."></textarea></div>'+
-   RI('rp_sname','Nurse name',AUTH.name)+RI('rp_stitle','Title','RN')+sigBox('repSigA','Nurse signature')+'</div>'+
+   RNPICK('Nurse name')+sigBox('repSigA','Nurse signature')+'</div>'+
    (prev?'<div class="sh">Recent entries</div><ul style="margin:6px 0 0 18px">'+prev+'</ul>':'')+'</div>','Sign &amp; file note');
 }
 // 1b) 60-day Re-Assessment (the 60-day note). The Supplemental Progress Note above is an extra, stand-alone entry.
@@ -2509,7 +2527,7 @@ function formRA(){
    RDF('Reviewed POC with',RC('rp_rev_pt','Patient / S.O.')+RC('rp_rev_hha','HHA'),'s2')+'</div>'+
    '<div class="sh">Progress note / response to care / goals met</div><textarea id="rp_narr" rows="6" style="width:100%" placeholder="Response to care, goals met, changes in condition."></textarea>'+
    '<div class="fg" style="margin-top:8px">'+RDF('Disaster plan update',RD('rp_dp',['No change','Changes'])+' <input type="text" id="rp_dp_t" placeholder="Changes" style="margin-top:6px">','s2')+RI('rp_ref','Additional services needed / referrals made','','text','s2')+'</div>'+
-   '<div class="sh">Signature</div><div class="fg">'+RI('rp_sname','RN name',AUTH.name)+RI('rp_stitle','Title','RN')+sigBox('repSigA','RN signature')+'</div>'+
+   '<div class="sh">Signature</div><div class="fg">'+RNPICK('RN name')+sigBox('repSigA','RN signature')+'</div>'+
    (prev?'<div class="sh">Earlier re-assessments</div><ul style="margin:6px 0 0 18px">'+prev+'</ul>':'')+'</div>','Sign &amp; file re-assessment');
   const d=document.querySelector('input[name="rp_type"][value="60-day Reassessment"]'); if(d) d.checked=true;
 }
@@ -2566,7 +2584,7 @@ function formDC(){
    '<div class="sh">Referrals and continuing services</div><div class="chk-group">'+col(DC_REFS,'rp_f_')+'</div>'+
    '<div class="sh">Condition / response to care</div><div class="chk-group">'+DC_COND.map((c,i)=>'<label class="chk-item" style="padding:7px 12px"><input type="radio" name="rp_cond" value="'+E_(c)+'"><div><div class="chk-label">'+c+'</div></div></label>').join('')+'</div>'+
    '<div class="sh">Comments / follow-up instructions</div><textarea id="rp_cmt" rows="4" style="width:100%"></textarea>'+
-   '<div class="sh">Signatures</div><div class="fg">'+RI('rp_sname','RN name',AUTH.name)+RI('rp_stitle','Title','RN')+sigBox('repSigA','RN signature')+sigBox('repSigB','Patient signature (if available)')+'</div></div>','Sign &amp; file discharge');
+   '<div class="sh">Signatures</div><div class="fg">'+RNPICK('RN name')+sigBox('repSigA','RN signature')+sigBox('repSigB','Patient signature (if available)')+'</div></div>','Sign &amp; file discharge');
   document.getElementById('rp_s_chha').checked=svc.includes('CHHHA'); const ot=svc.filter(x=>x==='Companion'); if(ot.length){ document.getElementById('rp_s_oth').checked=true; document.getElementById('rp_s_oth_t').value=ot.join(', '); }
 }
 // 3) CHHA performance evaluation (filed under the aide)
@@ -2595,7 +2613,7 @@ function formCHHA(){
    CH_GROUPS.map((g,gi)=>'<tr><td><strong>'+g[0]+'</strong>'+g[1].map((b,bi)=>'<label style="display:flex;gap:6px;margin-top:4px;font-size:12.5px"><input type="checkbox" id="rp_cg'+gi+'_'+bi+'"> '+b+'</label>').join('')+'</td><td>'+rsel('rp_cgr'+gi)+'</td></tr>').join('')+
    CH_LINES.map((x,i)=>'<tr><td>'+x+'</td><td>'+rsel('rp_cl'+i)+'</td></tr>').join('')+'</tbody></table>'+
    '<div class="sh">Evaluator comments</div><textarea id="rp_cmt" rows="5" style="width:100%"></textarea>'+
-   '<div class="sh">Signatures</div><div class="fg">'+RI('rp_sname','RN evaluator',AUTH.name)+RI('rp_stitle','Title','RN')+sigBox('repSigA','RN evaluator signature')+sigBox('repSigB','Employee signature (if present)')+'</div></div>','Sign &amp; file evaluation');
+   '<div class="sh">Signatures</div><div class="fg">'+RNPICK('RN evaluator')+sigBox('repSigA','RN evaluator signature')+sigBox('repSigB','Employee signature (if present)')+'</div></div>','Sign &amp; file evaluation');
 }
 
 // ── build the PDF body for each report and file it ──
@@ -2626,10 +2644,11 @@ function bodyCHHA(){
   const doc=REP.rows.length?'<table class="g"><tr><th>Patient</th><th>Week of</th><th>Hours</th><th>Activities done</th><th>Refused</th><th>Notes</th><th>Submitted</th></tr>'+REP.rows.map(r=>'<tr><td>'+E_(r.patient)+'</td><td>'+usDate(r.week)+'</td><td>'+r.hours+'</td><td>'+r.ticks+'</td><td>'+r.refused+'</td><td>'+r.notes+'</td><td>'+(r.submitted?(r.onTime?'On time':'Late'):'No')+'</td></tr>').join('')+'</table>':'<p>No weekly activity sheets in this period.</p>';
   return '<h2>CHHA Performance Evaluation</h2><p>'+CH_TYPES.map(t=>BX(et===t)+' '+t.toUpperCase()).join(' &nbsp; ')+' EVALUATION</p><p><b>EMPLOYEE NAME:</b> '+E_(rv('rp_emp'))+' &nbsp; <b>DATE OF FIRST CASE:</b> '+E_(usDate(rv('rp_fc')))+' &nbsp; <b>EVALUATION DATE:</b> '+E_(usDate(rv('rp_date')))+'</p>'+
    '<h3>ADMINISTRATIVE ASSESSMENT</h3><table class="g">'+head.replace('%s','ITEM')+adm+'</table>'+
-   '<h3>CLINICAL AND WORK COMPETENCIES</h3><p style="font-size:9px">Direct observations and client feedback should support these assessments.</p><table class="g">'+head.replace('%s','STANDARD')+clin+'</table>'+
-   '<h3>Documentation review (weekly activity sheets since '+E_(usDate(REP.from))+')</h3>'+doc+
-   '<p><b>EVALUATOR COMMENTS:</b></p><div class="box">'+E_(rv('rp_cmt'))+'</div>'+
-   '<table class="sig" style="margin-top:12px"><tr><td><div class="k">RN evaluator signature</div>'+(sigData('repSigA')?'<img src="'+sigData('repSigA')+'">':'')+'<div>'+E_(rv('rp_sname'))+', '+E_(rv('rp_stitle'))+'</div></td><td><div class="k">Employee signature</div>'+(sigData('repSigB')?'<img src="'+sigData('repSigB')+'">':'<i>not obtained</i>')+'<div>'+E_(a.name)+'</div></td></tr></table><p>Date: '+E_(usDate(rv('rp_date')))+'</p>';
+   '<h3 style="page-break-before:always">CLINICAL AND WORK COMPETENCIES</h3><p style="font-size:9px">Direct observations and client feedback should support these assessments.</p><table class="g">'+head.replace('%s','STANDARD')+clin+'</table>'+
+   '<h3 style="page-break-before:always">Documentation review (weekly activity sheets since '+E_(usDate(REP.from))+')</h3>'+doc+
+   '<p><b>EVALUATOR COMMENTS:</b></p><div class="box">'+(rv('rp_cmt')?E_(rv('rp_cmt')):'<span style="color:#777">No comments.</span>')+'</div>'+
+   '<table class="sig" style="width:100%;table-layout:fixed;margin-top:14px"><tr><td style="width:56%;vertical-align:top;padding-right:16px"><div class="k">RN evaluator signature</div><div style="height:52px;border-bottom:1px solid #444">'+(sigData('repSigA')?'<img src="'+sigData('repSigA')+'" style="height:48px">':'')+'</div><div style="margin-top:3px">'+E_(rv('rp_sname'))+', '+E_(rv('rp_stitle'))+'</div><div class="k" style="margin-top:6px">Date</div><div>'+E_(usDate(rv('rp_date')))+'</div></td>'+
+   '<td style="vertical-align:top"><div class="k">Employee signature</div><div style="height:52px;border-bottom:1px solid #444">'+(sigData('repSigB')?'<img src="'+sigData('repSigB')+'" style="height:48px">':'<i style="color:#555;line-height:64px">not obtained</i>')+'</div><div style="margin-top:3px">'+E_(a.name)+'</div></td></tr></table>';
 }
 async function saveReport(){
   const k=REP.kind, btn=document.getElementById('repSaveBtn');
