@@ -365,17 +365,23 @@ const Core=(function(){
   function descKey(desc){return words(desc).slice(0,2).join(' ')}
   function overlap(a,b){const set=new Set(words(b));return words(a).filter(w=>set.has(w)).length}
   const KEYWORDS=[
+    [/XFER TRANSFER TO CC/i,'Credit card payment'],
+    [/XFER TRANSFER TO (CK|SV)/i,'Transfer'],
+    [/PAYROLL-HOMEBASE/i,'Payroll (in Payroll tab)'],
+    [/JOINHOMEBASE/i,'Software'],
+    [/C3 INTELLIGENCE/i,'Background checks'],
+    [/SHELL|EXXON|SUNOCO|WAWA|MOBIL|GASOLINE|CONOCO|UNION 76|\b76 - |CHEVRON|SPEEDWAY|CIRCLE ?K|COSTCO GAS|SUPERCHARGER|US GAS|ROYAL FARMS|TRAVEL PLAZA/i,'Vehicle fuel'],
     [/STAPLES|OFFICE DEPOT|AMAZON|WALMART|WAL-MART|COSTCO|DOLLAR TREE|CVS|WALGREENS/i,'Supplies'],
     [/VERIZON|AT&T|COMCAST|XFINITY|PSE&G|ELECTRIC|WATER|UTILIT|T-MOBILE/i,'Utilities'],
     [/INSURANCE|GEICO|PROGRESSIVE|HARTFORD|LIBERTY MUTUAL/i,'Insurance'],
     [/QUICKBOOKS|INTUIT|GOOGLE|MICROSOFT|ZOOM|DROPBOX|GODADDY|WORDPRESS|AVAILITY|METROFAX|ELEMENTOR/i,'Software'],
-    [/SHELL|EXXON|SUNOCO|WAWA|MOBIL|GASOLINE/i,'Vehicle and mileage'],
-    [/HOMEBASE|GUSTO|PAYCHEX|\bADP\b/i,'Payroll (in Payroll tab)']
+    [/GUSTO|PAYCHEX|\bADP\b/i,'Payroll (in Payroll tab)']
   ];
   function suggestCategory(desc,rules,amount){
     const k=descKey(desc);
     if(k&&rules&&rules[k])return{category:rules[k],src:'rule'};
     if(amount<0)for(const kw of KEYWORDS)if(kw[0].test(desc))return{category:kw[1],src:'keyword'};
+    if(amount>0){if(/PAYMENT RECEIVED|PAYMENT - THANK YOU/i.test(desc))return{category:'Credit card payment',src:'keyword'};if(/XFER TRANSFER FROM/i.test(desc))return{category:'Transfer',src:'keyword'}}
     return null;
   }
   function paymentGroups(remits){
@@ -947,7 +953,7 @@ function claimsCsv(){
 }
 
 /* ---------- bills ---------- */
-const CATS=['Rent','Utilities','Insurance','Supplies','Software','Professional fees','Vehicle and mileage','Marketing','Licenses and fees','Other'];
+const CATS=['Rent','Utilities','Insurance','Supplies','Software','Professional fees','Vehicle and mileage','Vehicle fuel','Marketing','Licenses and fees','Office food','Entertainment','Background checks','Other'];
 function vBills(){
   const now=todayIso();
   $('#view').innerHTML=
@@ -1134,9 +1140,9 @@ function reportsCsv(){
 }
 
 /* ---------- statements ---------- */
-const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Owner draw'],IN_SPECIAL=['Other income','Transfer','Owner contribution'];
+const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Credit card payment','Owner draw'],IN_SPECIAL=['Other income','Transfer','Credit card payment','Owner contribution'];
 function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL;return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')}
-function learn(t,cat){const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
+function learn(t,cat){const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
 function acctLabel(id){const a=db.accounts.find(x=>x.id===id);return a?a.name+(a.last4?' ···'+a.last4:''):'Unknown account'}
 function vStatements(){
   const u=ui.st;const accts=db.accounts;
