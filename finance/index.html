@@ -366,17 +366,21 @@ const Core=(function(){
   function overlap(a,b){const set=new Set(words(b));return words(a).filter(w=>set.has(w)).length}
   const KEYWORDS=[
     [/XFER TRANSFER TO CC/i,'Credit card payment'],
-    [/XFER TRANSFER TO (CK|SV)/i,'Transfer'],
+    [/XFER TRANSFER TO (CK|SV)/i,'Owner draw'],
     [/PAYROLL-HOMEBASE/i,'Payroll (in Payroll tab)'],
     [/JOINHOMEBASE/i,'Software'],
     [/C3 INTELLIGENCE/i,'Background checks'],
+    [/VIRTUAL ?LEARN|TWILIO/i,'Software'],
+    [/SIMPLY ?BUSINES/i,'Insurance'],
+    [/TESLA SUBSCRIPTION|TESLA MOTORS|TESLA SERVICE/i,'Vehicle and mileage'],
+    [/TESLA INC|HAMILTON TOWNSHIP/i,'Other'],
     [/EZPASS|E-ZPASS/i,'Vehicle and mileage'],
     [/BLUE LOT|AIRPORT|AIRLINES|DELTA AIR|UNITED AIR|JETBLUE|SOUTHWEST|AMERICAN AIR|HOTEL|MARRIOTT|HILTON|HYATT|CROWNE PLAZA|BOOKING\.COM|TRIVAGO|PRICELN|UBER|LYFT|AMTRAK/i,'Travel'],
     [/PARKING/i,'Vehicle and mileage'],
     [/STARBUCKS|CHICK.?FIL|DOMINO|PANERA|BURGER KING|TEXAS ROADHOUSE|BORGATA|PHO CALI|NOODLE|BUFFET|RESTAURANT|PIZZA|DUNKIN|MCDONALD|WENDY|SUBWAY|CREPERIE|PRESOTEA/i,'Staff meals and office food'],
     [/SHELL|EXXON|SUNOCO|WAWA|MOBIL|GASOLINE|CONOCO|UNION 76|\b76 - |CHEVRON|SPEEDWAY|CIRCLE ?K|COSTCO GAS|SUPERCHARGER|US GAS|ROYAL FARMS|TRAVEL PLAZA/i,'Vehicle fuel'],
     [/STAPLES|OFFICE DEPOT|AMAZON|WALMART|WAL-MART|COSTCO|DOLLAR TREE|CVS|WALGREENS/i,'Supplies'],
-    [/VERIZON|AT&T|COMCAST|XFINITY|PSE&G|ELECTRIC|WATER|UTILIT|T-MOBILE/i,'Utilities'],
+    [/VERIZON|AT&T|COMCAST|XFINITY|PSE&G|ELECTRIC|WATER|UTILIT|T-?MOBILE/i,'Utilities'],
     [/INSURANCE|GEICO|PROGRESSIVE|HARTFORD|LIBERTY MUTUAL/i,'Insurance'],
     [/QUICKBOOKS|INTUIT|GOOGLE|MICROSOFT|ZOOM|DROPBOX|GODADDY|WORDPRESS|AVAILITY|METROFAX|ELEMENTOR/i,'Software'],
     [/GUSTO|PAYCHEX|\bADP\b/i,'Payroll (in Payroll tab)']
@@ -385,7 +389,7 @@ const Core=(function(){
     const k=descKey(desc);
     if(k&&rules&&rules[k])return{category:rules[k],src:'rule'};
     if(amount<0)for(const kw of KEYWORDS)if(kw[0].test(desc))return{category:kw[1],src:'keyword'};
-    if(amount>0){if(/PAYMENT RECEIVED|PAYMENT - THANK YOU/i.test(desc))return{category:'Credit card payment',src:'keyword'};if(/XFER TRANSFER FROM/i.test(desc))return{category:'Transfer',src:'keyword'}}
+    if(amount>0){if(/PAYMENT RECEIVED|PAYMENT - THANK YOU/i.test(desc))return{category:'Credit card payment',src:'keyword'};if(/XFER TRANSFER FROM (CK|SV)/i.test(desc))return{category:'Owner contribution',src:'keyword'}}
     return null;
   }
   function paymentGroups(remits){
@@ -752,7 +756,7 @@ document.addEventListener('focusout',()=>{tip.hidden=true});
 /* ---------- navigation ---------- */
 const TABS=[['dashboard','Dashboard'],['claims','Claims'],['statements','Statements'],['receipts','Receipts'],['bills','Bills'],['payroll','Payroll'],['draws','Owner draws'],['reports','Reports'],['data','Data']];
 let current='dashboard';
-const ui={rc:{show:'all'},claims:{q:'',status:'all',payer:'',reason:'',range:'all',group:true},bills:{show:'unpaid'},st:{status:'review',acct:'',q:'',month:''},pending:null,dr:{owner:'',year:String(new Date().getFullYear()),type:'',edit:false},rep:{month:todayIso().slice(0,7)}};
+const ui={rc:{show:'all'},claims:{q:'',status:'all',payer:'',reason:'',range:'all',group:true},bills:{show:'unpaid'},st:{status:'review',acct:'',q:'',month:'',split:'',parts:[]},pending:null,dr:{owner:'',year:String(new Date().getFullYear()),type:'',edit:false},rep:{month:todayIso().slice(0,7)}};
 const ROLE_NAME={owner:'Owner',bookkeeper:'Bookkeeper',viewer:'Viewer'};
 function myRole(){return gMode?GStore.role:'owner'}
 function tabsFor(){
@@ -1146,7 +1150,7 @@ function reportsCsv(){
 /* ---------- statements ---------- */
 const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Credit card payment','Owner draw'],IN_SPECIAL=['Other income','Transfer','Credit card payment','Owner contribution'];
 function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL;return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')}
-function learn(t,cat){const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
+function learn(t,cat){if(t.splitOf)return;const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
 function acctLabel(id){const a=db.accounts.find(x=>x.id===id);return a?a.name+(a.last4?' ···'+a.last4:''):'Unknown account'}
 function vStatements(){
   const u=ui.st;const accts=db.accounts;
@@ -1202,7 +1206,7 @@ function doImport(){
   const p=ui.pending;if(!p)return;
   const a=db.accounts.find(x=>x.id===p.aid);if(!a)return;
   if(p.parsed.last4&&a.last4&&p.parsed.last4!==a.last4&&!confirm('This file is for an account ending '+p.parsed.last4+', but you selected '+a.name+' ending '+a.last4+'. Import anyway?'))return;
-  const have=new Set(db.txns.map(t=>t.key));const seen={};const fresh=[];
+  const have=new Set(db.txns.reduce((a,t)=>{a.push(t.key);if(t.origKey)a.push(t.origKey);return a},[]));const seen={};const fresh=[];
   pendingTxns().forEach(t=>{
     const base=[p.aid,t.date,t.amount.toFixed(2),t.fitid||(t.desc.toUpperCase().replace(/\s+/g,' '))].join('|');
     seen[base]=(seen[base]||0)+1;const key=base+'#'+seen[base];
@@ -1241,10 +1245,59 @@ function updateTxns(){
     }else if(t.status==='categorized'){st='<span class="pill gray">'+esc(t.category)+'</span>';ctl=sel(t)}
     else if(t.status==='suggested'){st='<span class="pill amber">Suggested: '+esc(t.category)+'</span>';ctl='<button class="btn sm" data-act="staccept" data-id="'+esc(t.id)+'">Accept</button> '+sel(t)}
     else{st='<span class="pill red">Needs review</span>';ctl=sel(t)}
-    return '<div class="crow"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc||'(no description)')+'</span><b style="'+(t.amount>0?'color:var(--green)':'')+'">'+(t.amount>0?'+':'')+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="margin-top:4px">'+st+'</div><div class="noprint" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+ctl+'</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+rcChips('txn',t.id)+'</div></div>';
+    if(t.splitOf)ctl+=' <button class="btn sm" data-act="stunsplit" data-id="'+esc(t.id)+'">Undo split</button>';
+    else if(t.status!=='matched')ctl+=' <button class="btn sm" data-act="stsplit" data-id="'+esc(t.id)+'">Split</button>';
+    return '<div class="crow"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc||'(no description)')+'</span><b style="'+(t.amount>0?'color:var(--green)':'')+'">'+(t.amount>0?'+':'')+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="margin-top:4px">'+st+'</div><div class="noprint" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+ctl+'</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+rcChips('txn',t.id)+'</div>'+(ui.st.split===t.id?splitForm(t):'')+'</div>';
   };
   list.innerHTML='<div class="flat">'+rows.slice(0,300).map(row).join('').replace(/^<div class="crow">/,'<div class="crow" style="border-top:none">')+'</div>'+(rows.length>300?'<p class="muted small">Showing the first 300 of '+rows.length+'. Narrow the filters to see the rest.</p>':'');
+  bindSplit();
 }
+/* ---------- split a transaction between categories ---------- */
+function splitForm(t){
+  const parts=ui.st.parts,tot=Math.abs(t.amount);
+  return '<div id="splitBox" class="noprint" style="margin-top:8px;padding:10px;border:1px solid var(--p-line);border-radius:10px;background:#fcfbff"><b>Split '+fmt2(tot)+'</b>'+
+    '<div class="small muted" style="margin:2px 0 8px">Divide this transaction between categories. Leave one amount blank to use the rest.</div>'+
+    parts.map((p,i)=>'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center"><select class="spc" data-i="'+i+'" aria-label="Category">'+catOptions(t.amount,p.cat)+'</select><input class="spa" data-i="'+i+'" type="number" min="0" step="0.01" placeholder="Amount" value="'+esc(p.amt)+'" style="width:120px" aria-label="Amount">'+(parts.length>2?'<button class="btn sm" data-act="spdel" data-i="'+i+'">Remove</button>':'')+'</div>').join('')+
+    '<div id="spmsg"></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" data-act="spadd">Add a part</button><button class="btn sm pri" data-act="spsave" data-id="'+esc(t.id)+'">Save split</button><button class="btn sm" data-act="spcancel">Cancel</button></div></div>';
+}
+function bindSplit(){
+  const box=$('#splitBox');if(!box)return;
+  box.querySelectorAll('.spc').forEach(el=>el.addEventListener('change',()=>{ui.st.parts[+el.dataset.i].cat=el.value}));
+  box.querySelectorAll('.spa').forEach(el=>el.addEventListener('input',()=>{ui.st.parts[+el.dataset.i].amt=el.value}));
+}
+function doSplit(id){
+  const x=db.txns.find(y=>y.id===id);if(!x)return;
+  const msg=m=>{const e=$('#spmsg');if(e)e.innerHTML='<div class="msg bad">'+esc(m)+'</div>'};
+  const tot=round(Math.abs(x.amount));
+  const parts=ui.st.parts.map(p=>({cat:p.cat,amt:String(p.amt).trim()===''?null:round(+p.amt)}));
+  if(parts.some(p=>!p.cat))return msg('Choose a category for each part.');
+  const blanks=parts.filter(p=>p.amt===null);
+  if(blanks.length>1)return msg('Leave at most one amount blank.');
+  if(blanks.length===1)blanks[0].amt=round(tot-parts.reduce((s,p)=>s+(p.amt||0),0));
+  if(parts.some(p=>!(p.amt>0)))return msg('Each amount must be above zero.');
+  const sum=round(parts.reduce((s,p)=>s+p.amt,0));
+  if(Math.abs(sum-tot)>0.005)return msg('The parts add up to '+fmt2(sum)+' but the transaction is '+fmt2(tot)+'.');
+  const sign=x.amount<0?-1:1,copy=JSON.parse(JSON.stringify(x));
+  const kids=parts.map((p,i)=>({id:uid(),accountId:x.accountId,date:x.date,desc:x.desc+' (part '+(i+1)+' of '+parts.length+')',amount:round(sign*p.amt),fitid:'',key:x.key+'~s'+i,origKey:x.key,status:'categorized',category:p.cat,matchType:'',matchRef:'',note:'',splitOf:x.id,splitOrig:i===0?copy:null}));
+  db.txns.splice.apply(db.txns,[db.txns.indexOf(x),1].concat(kids));
+  db.receipts.forEach(r=>{if(r.refType==='txn'&&r.refId===x.id)r.refId=kids[0].id});
+  ui.st.split='';Store.save();updateTxns();
+}
+function undoSplit(id){
+  const c=db.txns.find(y=>y.id===id);if(!c||!c.splitOf)return;
+  const sibs=db.txns.filter(y=>y.splitOf===c.splitOf);
+  const orig=(sibs.find(y=>y.splitOrig)||{}).splitOrig;
+  if(!orig)return alert('This split cannot be undone.');
+  if(db.draws.some(d=>sibs.some(s=>s.id===d.txnId)))return alert('One part is in the Owner draws ledger. Remove that ledger entry first, then undo the split.');
+  if(!confirm('Undo this split and put the original transaction back?'))return;
+  const at=db.txns.indexOf(sibs[0]);
+  db.txns=db.txns.filter(y=>y.splitOf!==c.splitOf);
+  orig.status='review';orig.category='';orig.matchType='';orig.matchRef='';
+  db.txns.splice(Math.min(at,db.txns.length),0,orig);
+  db.receipts.forEach(r=>{if(r.refType==='txn'&&sibs.some(s=>s.id===r.refId))r.refId=orig.id});
+  Store.save();updateTxns();
+}
+
 function txnsCsv(){
   const rows=db.txns.slice().sort((a,b)=>b.date.localeCompare(a.date));
   return csv([['Date','Account','Description','Amount','Status','Category or match']].concat(rows.map(t=>{
@@ -1295,6 +1348,8 @@ function vDraws(){
   const cand=db.txns.filter(t=>!db.draws.some(d=>d.txnId===t.id)&&t.note!=='notdraw'&&(
     (t.status==='categorized'&&(t.category==='Owner draw'||t.category==='Owner contribution'))||
     ((t.status==='review'||t.status==='suggested')&&(t.amount<0?/TRANSFER|ZELLE|DRAW|OWNER|VENMO/i:/OWNER|CONTRIB|TRANSFER FROM|ZELLE|VENMO/i).test(t.desc)))).sort((a,b)=>b.date.localeCompare(a.date));
+  const ownerGuess=t=>{const d=t.desc||'';const re=/\b(2480|1002)\b/.test(d)?/abigail/i:(/\b9750\b|KOFI/i.test(d)?/kofi/i:null);const o=re&&db.owners.find(o=>re.test(o.name));return o?o.id:''};
+  const ownerOptsFor=t=>{const g=ownerGuess(t);return db.owners.map(o=>'<option value="'+esc(o.id)+'"'+(o.id===g?' selected':'')+'>'+esc(o.name)+'</option>').join('')};
   const ownerOpts=db.owners.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.name)+'</option>').join('');
   let rows=hist.filter(d=>(u.year==='all'||d.date.slice(0,4)===u.year)&&(!u.owner||d.ownerId===u.owner)&&(!u.type||d.type===u.type)).reverse();
   $('#view').innerHTML=
@@ -1304,7 +1359,7 @@ function vDraws(){
       '<button class="btn" data-act="dredit">Edit owners</button><button class="btn" data-act="csvDraws">'+ic('download')+' Export CSV</button><button class="btn" data-act="print">'+ic('printer')+' Print ledger</button></div>'+
     '<div class="grid2 sect">'+st.map(r=>'<div class="tile"><div class="lab">'+esc(r.o.name)+' · draws '+(u.year==='all'?'all years':esc(u.year))+'</div><div class="val">'+fmt0(r.draw)+'</div><div class="small muted">Tax distributions '+fmt0(r.tax)+' · Contributed '+fmt0(r.con)+'</div></div>').join('')+'</div>'+
     (pctOk&&totalTaken>0?'<div class="card sect" style="margin-top:12px"><h2>Draws compared with ownership</h2><div class="tscroll"><table><thead><tr><th>Owner</th><th class="n">Ownership</th><th class="n">Taken out</th><th class="n">Share of total</th><th class="n">At ownership share</th><th class="n">Difference</th></tr></thead><tbody>'+st.map(r=>{const taken=r.draw+r.tax,exp=totalTaken*r.o.pct/100,diff=taken-exp;return '<tr><td>'+esc(r.o.name)+'</td><td class="n">'+r.o.pct+'%</td><td class="n">'+fmt2(taken)+'</td><td class="n">'+(taken/totalTaken*100).toFixed(1)+'%</td><td class="n">'+fmt2(exp)+'</td><td class="n">'+(Math.abs(diff)<0.005?fmt2(0):(diff>0?'+':'')+fmt2(diff))+'</td></tr>'}).join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Compares what each owner took out (draws and tax distributions) with their ownership share of the total taken out. Contributions are not included. A positive difference means that owner took more than their share.</p></div>':'')+
-    (cand.length?'<div class="card sect noprint" style="margin-top:12px"><h2>From your statements, not yet in the ledger</h2>'+cand.slice(0,30).map(t=>'<div class="crow" style="padding:8px 0"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc)+'</span><b>'+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><select id="dro_'+esc(t.id)+'" aria-label="Owner">'+ownerOpts+'</select><select id="drt_'+esc(t.id)+'" aria-label="Type">'+DR_TYPES.map(x=>'<option'+((t.amount<0?'Draw':'Contribution')===x?' selected':'')+'>'+x+'</option>').join('')+'</select><button class="btn sm pri" data-act="drassign" data-id="'+esc(t.id)+'">Add to ledger</button><button class="btn sm" data-act="drnot" data-id="'+esc(t.id)+'">Not a draw</button></div></div>').join('')+(cand.length>30?'<p class="muted small">Showing 30 of '+cand.length+'.</p>':'')+'</div>':'')+
+    (cand.length?'<div class="card sect noprint" style="margin-top:12px"><h2>From your statements, not yet in the ledger</h2>'+cand.slice(0,30).map(t=>'<div class="crow" style="padding:8px 0"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc)+'</span><b>'+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><select id="dro_'+esc(t.id)+'" aria-label="Owner">'+ownerOptsFor(t)+'</select><select id="drt_'+esc(t.id)+'" aria-label="Type">'+DR_TYPES.map(x=>'<option'+((t.amount<0?'Draw':'Contribution')===x?' selected':'')+'>'+x+'</option>').join('')+'</select><button class="btn sm pri" data-act="drassign" data-id="'+esc(t.id)+'">Add to ledger</button><button class="btn sm" data-act="drnot" data-id="'+esc(t.id)+'">Not a draw</button></div></div>').join('')+(cand.length>30?'<p class="muted small">Showing 30 of '+cand.length+'.</p>':'')+'</div>':'')+
     '<div class="card sect" style="margin-top:12px"><h2>Ledger</h2>'+(rows.length?'<div class="tscroll"><table><thead><tr><th>Date</th><th>Owner</th><th>Type</th><th class="n">Amount</th><th class="n">Owner balance</th><th>Source</th><th class="noprint"></th></tr></thead><tbody>'+rows.map(d=>'<tr><td>'+esc(fmtD(d.date))+'</td><td>'+esc(ownerName(d.ownerId))+'</td><td>'+esc(d.type)+(d.note?'<div class="small muted">'+esc(d.note)+'</div>':'')+'</td><td class="n" style="'+(drSign(d)>0?'color:var(--green)':'')+'">'+(drSign(d)>0?'+':'-')+fmt2(d.amount)+'</td><td class="n">'+fmt2(balOf[d.id])+'</td><td>'+(d.txnId?'Bank transaction':'Entered by hand')+'</td><td class="noprint n"><button class="btn sm danger" data-act="drdel" data-id="'+esc(d.id)+'">Delete</button></td></tr>').join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Owner balance is contributions minus draws and tax distributions, from the first entry to that date. It is a tracking figure, not a capital account statement.</p>':empty('No entries','Add an entry below, or assign transfers from your bank statements.'))+'</div>'+
     '<details class="card noprint"><summary style="cursor:pointer;font-weight:600">Add an entry</summary><form id="addDraw" style="margin-top:10px"><div class="formgrid"><label class="f">Owner<select name="owner">'+ownerOpts+'</select></label><label class="f">Date<input type="date" name="date" value="'+now+'" required></label><label class="f">Type<select name="type">'+DR_TYPES.map(t=>'<option>'+t+'</option>').join('')+'</select></label><label class="f">Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="f" style="grid-column:1/-1">Note<input type="text" name="note"></label></div><button class="btn pri" type="submit" style="margin-top:10px">Add entry</button></form></details>';
   $('#dryear').addEventListener('change',e=>{u.year=e.target.value;vDraws()});
@@ -1536,6 +1591,12 @@ document.addEventListener('click',async function(e){
     x.status='categorized';x.category=type==='Contribution'?'Owner contribution':'Owner draw';
     Store.save();vDraws();
   }
+  else if(a==='stsplit'){ui.st.split=id;ui.st.parts=[{cat:'',amt:''},{cat:'',amt:''}];updateTxns()}
+  else if(a==='spadd'){ui.st.parts.push({cat:'',amt:''});updateTxns()}
+  else if(a==='spdel'){ui.st.parts.splice(+t.dataset.i,1);updateTxns()}
+  else if(a==='spcancel'){ui.st.split='';updateTxns()}
+  else if(a==='spsave'){doSplit(id)}
+  else if(a==='stunsplit'){undoSplit(id)}
   else if(a==='stimport'){doImport()}
   else if(a==='stcancel'){ui.pending=null;renderPending()}
   else if(a==='csvTxns'){download('transactions-'+todayIso()+'.csv',txnsCsv())}
