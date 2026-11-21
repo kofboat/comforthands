@@ -1097,6 +1097,7 @@ function pl(mk){
   expTotal+=wages+taxes;
   db.txns.filter(t=>t.status==='categorized'&&monthOf(t.date)===mk).forEach(t=>{
     if(t.amount<0&&CATS.includes(t.category)){const a=-t.amount;exp[t.category]=(exp[t.category]||0)+a;expTotal+=a}
+    else if(t.amount>0&&CATS.includes(t.category)){exp[t.category]=(exp[t.category]||0)-t.amount;expTotal-=t.amount}
     else if(t.amount>0&&t.category==='Other income'){rev['Other income']=(rev['Other income']||0)+t.amount;revTotal+=t.amount}
   });
   return{rev:rev,revTotal:round(revTotal),exp:exp,wages:round(wages),taxes:round(taxes),expTotal:round(expTotal),net:round(revTotal-expTotal)};
@@ -1150,14 +1151,15 @@ function reportsCsv(){
 
 /* ---------- statements ---------- */
 const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Credit card payment','Owner draw'],IN_SPECIAL=['Other income','Transfer','Credit card payment','Owner contribution'];
-function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL;return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')}
+function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL.concat(CATS);return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')}
 function learn(t,cat){if(t.splitOf)return;const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
 function acctLabel(id){const a=db.accounts.find(x=>x.id===id);return a?a.name+(a.last4?' ···'+a.last4:''):'Unknown account'}
 function refreshSuggestions(){
   let n=0;
   db.txns.forEach(t=>{
     if(t.splitOf||(t.status!=='review'&&t.status!=='suggested'))return;
-    const sg=Core.suggestCategory(t.desc,db.rules,t.amount);
+    let sg=Core.suggestCategory(t.desc,db.rules,t.amount);
+    if(!sg&&t.amount>0){const k=Core.descKey(t.desc).split(' ')[0];const orig=k&&k.length>3&&db.txns.find(o=>o!==t&&o.amount<0&&o.date<=t.date&&CATS.includes(o.category)&&(o.status==='categorized'||o.status==='suggested')&&Core.descKey(o.desc).split(' ')[0]===k);if(orig)sg={category:orig.category}}
     if(sg){if(t.status!=='suggested'||t.category!==sg.category)n++;t.status='suggested';t.category=sg.category}
     else if(t.status==='suggested'){t.status='review';t.category=''}
   });
@@ -1230,6 +1232,7 @@ function doImport(){
   Core.matchTxns(fresh,{groups:Core.paymentGroups(db.remits),bills:db.bills,rules:db.rules,usedGroups:db.txns.filter(t=>t.matchType==='payment').map(t=>t.matchRef),usedBills:db.txns.filter(t=>t.matchType==='bill').map(t=>t.matchRef),others:db.txns});
   fresh.forEach(t=>{if(t.matchType==='bill'){const b=db.bills.find(x=>x.id===t.matchRef);if(b&&b.status!=='paid'){b.status='paid';b.paidDate=t.date;b.txnId=t.id}}});
   db.txns.push.apply(db.txns,fresh);
+  refreshSuggestions();
   if(p.parsed.endBalance!=null&&p.parsed.endDate&&(!a.balanceDate||p.parsed.endDate>=a.balanceDate)){a.balance=p.parsed.endBalance;a.balanceDate=p.parsed.endDate}
   const n=s=>fresh.filter(t=>t.status===s).length;
   const name=p.name;ui.pending=null;Store.save();
