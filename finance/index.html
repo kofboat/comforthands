@@ -989,8 +989,10 @@ function vPayroll(){
     '<label class="f">Hours<input type="number" name="hours" min="0" step="0.01"></label>'+
     '<label class="f">Gross wages ($)<input type="number" name="gross" min="0" step="0.01" required></label><label class="f">Employer taxes and benefits ($)<input type="number" name="taxes" min="0" step="0.01" value="0"></label>'+
     '</div><button class="btn pri" type="submit" style="margin-top:10px">Add</button></form></div>'+
+    '<div class="card sect noprint"><h2>Import Homebase payroll report</h2><p class="muted small" style="margin:-4px 0 10px">Drop the payroll journals file (.csv) from Homebase. It is read in this browser; nothing is saved until you click Import.</p><div class="drop"><b>'+ic('upload')+' Homebase payroll journals</b><span class="muted small">.csv</span><input type="file" id="fHB" accept=".csv,text/csv"></div><div id="hbOut"></div></div>'+
     '<div class="card sect"><h2>Pay runs</h2><div id="plist"></div></div>'+
     '<div class="card sect"><h2>Year to date by aide</h2><div id="pytd"></div></div>';
+  $('#fHB').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)hbRead(f)});
   $('#addPay').addEventListener('submit',e=>{
     e.preventDefault();const f=new FormData(e.target);
     db.payroll.push({id:uid(),payDate:f.get('payDate'),periodEnd:f.get('periodEnd'),aide:String(f.get('aide')).trim(),hours:+f.get('hours')||0,gross:round(+f.get('gross')),taxes:round(+f.get('taxes')||0)});
@@ -1006,6 +1008,68 @@ function vPayroll(){
   db.payroll.filter(p=>p.payDate.slice(0,4)===yr).forEach(p=>{const a=by[p.aide]=by[p.aide]||{h:0,g:0,t:0};a.h+=p.hours;a.g+=p.gross;a.t+=p.taxes});
   const names=Object.keys(by).sort();
   $('#pytd').innerHTML=names.length?'<div class="tscroll"><table><thead><tr><th>Aide</th><th class="n">Hours</th><th class="n">Wages</th><th class="n">Taxes and benefits</th><th class="n">Total cost</th></tr></thead><tbody>'+names.map(n=>'<tr><td>'+esc(n)+'</td><td class="n">'+(Math.round(by[n].h*100)/100)+'</td><td class="n">'+fmt2(by[n].g)+'</td><td class="n">'+fmt2(by[n].t)+'</td><td class="n">'+fmt2(by[n].g+by[n].t)+'</td></tr>').join('')+'</tbody></table></div>':empty('Nothing for '+yr,'Year to date totals appear here once you add payroll.');
+}
+
+/* ---------- Homebase payroll import ---------- */
+let HB=null;
+function hbName(first,last){
+  const fix=w=>(w===w.toUpperCase()||w===w.toLowerCase())?w.charAt(0).toUpperCase()+w.slice(1).toLowerCase():w;
+  first=String(first||'').trim().replace(/\s+/g,' ');last=String(last||'').trim().replace(/\s+/g,' ');
+  if(first&&last&&first.toLowerCase().endsWith(' '+last.toLowerCase()))last='';
+  return (first+' '+last).trim().split(' ').map(fix).join(' ');
+}
+function hbKey(r){return [r.payDate,r.periodEnd,r.aide.toLowerCase(),r.hours.toFixed(2),r.gross.toFixed(2),r.taxes.toFixed(2)].join('|')}
+async function hbRead(file){
+  const out=$('#hbOut');
+  try{
+    const rows=Core.parseCsvRows(await file.text(),',');
+    const head=(rows[0]||[]).map(h=>String(h).trim().toLowerCase());
+    const col=n=>head.indexOf(n);
+    const need=['first name','last name','period end','payday','hourly hrs','gross total','company taxes total'];
+    const miss=need.filter(n=>col(n)<0);
+    if(miss.length)throw new Error('This does not look like the Homebase payroll journals file. Missing columns: '+miss.join(', ')+'.');
+    const roleI=col('role(s)'),num=v=>{const n=Core.parseAmount(v);return isNaN(n)?0:n};
+    const list=[];
+    rows.slice(1).forEach(r=>{
+      const fn=String(r[col('first name')]||'').trim(),ln=String(r[col('last name')]||'').trim();
+      if(!fn&&!ln)return;
+      const payDate=Core.parseDateAny(r[col('payday')]),periodEnd=Core.parseDateAny(r[col('period end')]);
+      if(!payDate||!periodEnd)return;
+      list.push({payDate,periodEnd,aide:hbName(fn,ln),hours:Core.round(num(r[col('hourly hrs')])),gross:Core.round(num(r[col('gross total')])),taxes:Core.round(num(r[col('company taxes total')])),adj:roleI>=0&&!String(r[roleI]||'').trim()&&num(r[col('gross total')])===0});
+    });
+    if(!list.length)throw new Error('No payroll rows were found in this file.');
+    HB={name:file.name,list:list,useAdj:true};hbShow();
+  }catch(e){HB=null;out.innerHTML='<div class="msg bad">'+esc(e.message)+'</div>'}
+}
+function hbPlan(){
+  const have={};db.payroll.forEach(p=>{const k=hbKey(p);have[k]=(have[k]||0)+1});
+  return HB.list.map(r=>{
+    if(r.adj&&!HB.useAdj)return Object.assign({},r,{st:'skip'});
+    const k=hbKey(r);if(have[k]>0){have[k]--;return Object.assign({},r,{st:'dup'})}
+    return Object.assign({},r,{st:'new'});
+  });
+}
+function hbShow(){
+  const out=$('#hbOut');if(!HB)return;
+  const plan=hbPlan(),nw=plan.filter(r=>r.st==='new'),dup=plan.filter(r=>r.st==='dup').length;
+  const adjAll=HB.list.filter(r=>r.adj),sum=(a,k)=>a.reduce((s,x)=>s+x[k],0);
+  const tile=(l,v)=>'<div class="tile"><div class="lab">'+l+'</div><div class="val">'+v+'</div></div>';
+  const runs=new Set(nw.filter(r=>!r.adj).map(r=>r.payDate)).size,ppl=new Set(nw.map(r=>r.aide.toLowerCase())).size;
+  out.innerHTML='<div class="sect" style="margin-top:14px"><h3 style="margin:0 0 8px">Preview: '+esc(HB.name)+'</h3>'+
+    '<div class="grid4" style="margin-bottom:10px">'+tile('New pay runs',runs)+tile('Employees',ppl)+tile('Hours',(Math.round(sum(nw,'hours')*100)/100).toLocaleString('en-US'))+tile('Gross wages',fmt2(sum(nw,'gross')))+tile('Employer taxes',fmt2(sum(nw,'taxes')))+tile('Total cost',fmt2(sum(nw,'gross')+sum(nw,'taxes')))+'</div>'+
+    '<div class="msg ok"><b>'+HB.list.length+' rows found:</b> '+(HB.list.length-adjAll.length)+' pay rows and '+adjAll.length+' quarter-end adjustments. '+nw.length+' new'+(dup?', '+dup+' already imported (skipped)':'')+'.</div>'+
+    (adjAll.length?'<p class="small" style="margin:8px 0"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="hbAdj"'+(HB.useAdj?' checked':'')+'> Include the '+adjAll.length+' adjustments. They have no wages, only small employer-tax corrections, and net to '+fmt2(sum(adjAll,'taxes'))+'.</label></p>':'')+
+    '<div class="tscroll" style="max-height:340px;overflow:auto"><table><thead><tr><th>Pay date</th><th>Period end</th><th>Aide</th><th class="n">Hours</th><th class="n">Gross wages</th><th class="n">Employer taxes</th><th></th></tr></thead><tbody>'+
+    plan.map(r=>'<tr'+(r.st!=='new'?' style="opacity:.5"':'')+'><td>'+esc(fmtD(r.payDate))+'</td><td>'+esc(fmtD(r.periodEnd))+'</td><td>'+esc(r.aide)+'</td><td class="n">'+(r.hours||'')+'</td><td class="n">'+fmt2(r.gross)+'</td><td class="n">'+fmt2(r.taxes)+'</td><td>'+(r.st==='dup'?'<span class="muted small">already imported</span>':r.st==='skip'?'<span class="muted small">skipped</span>':r.adj?'<span class="muted small">adjustment</span>':'')+'</td></tr>').join('')+'</tbody></table></div>'+
+    '<p style="margin-top:10px"><button class="btn pri" id="hbGo"'+(nw.length?'':' disabled')+'>Import '+nw.length+' rows</button> <button class="btn" id="hbNo">Cancel</button></p></div>';
+  const a=$('#hbAdj');if(a)a.addEventListener('change',()=>{HB.useAdj=a.checked;hbShow()});
+  $('#hbNo').addEventListener('click',()=>{HB=null;out.innerHTML=''});
+  $('#hbGo').addEventListener('click',()=>{
+    const add=hbPlan().filter(r=>r.st==='new');
+    add.forEach(r=>db.payroll.push({id:uid(),payDate:r.payDate,periodEnd:r.periodEnd,aide:r.aide,hours:r.hours,gross:r.gross,taxes:r.taxes}));
+    HB=null;Store.save();vPayroll();
+    const o=$('#hbOut');if(o)o.innerHTML='<div class="msg ok">Imported '+add.length+' payroll rows.</div>';
+  });
 }
 
 /* ---------- reports ---------- */
