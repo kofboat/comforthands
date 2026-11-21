@@ -370,6 +370,8 @@ const Core=(function(){
     [/PAYROLL-HOMEBASE/i,'Payroll (in Payroll tab)'],
     [/JOINHOMEBASE/i,'Software'],
     [/C3 INTELLIGENCE/i,'Background checks'],
+    [/EZPASS|E-ZPASS/i,'Vehicle and mileage'],
+    [/PARKING|BLUE LOT|AIRLINES|DELTA AIR|UNITED AIR|JETBLUE|SOUTHWEST|AMERICAN AIR|HOTEL|MARRIOTT|HILTON|HYATT|CROWNE PLAZA|BOOKING\.COM|TRIVAGO|PRICELN|UBER|LYFT|AMTRAK/i,'Travel'],
     [/SHELL|EXXON|SUNOCO|WAWA|MOBIL|GASOLINE|CONOCO|UNION 76|\b76 - |CHEVRON|SPEEDWAY|CIRCLE ?K|COSTCO GAS|SUPERCHARGER|US GAS|ROYAL FARMS|TRAVEL PLAZA/i,'Vehicle fuel'],
     [/STAPLES|OFFICE DEPOT|AMAZON|WALMART|WAL-MART|COSTCO|DOLLAR TREE|CVS|WALGREENS/i,'Supplies'],
     [/VERIZON|AT&T|COMCAST|XFINITY|PSE&G|ELECTRIC|WATER|UTILIT|T-MOBILE/i,'Utilities'],
@@ -953,7 +955,7 @@ function claimsCsv(){
 }
 
 /* ---------- bills ---------- */
-const CATS=['Rent','Utilities','Insurance','Supplies','Software','Professional fees','Vehicle and mileage','Vehicle fuel','Marketing','Licenses and fees','Office food','Entertainment','Background checks','Other'];
+const CATS=['Rent','Utilities','Insurance','Supplies','Software','Professional fees','Vehicle and mileage','Vehicle fuel','Travel','Marketing','Licenses and fees','Office food','Entertainment','Background checks','Other'];
 function vBills(){
   const now=todayIso();
   $('#view').innerHTML=
