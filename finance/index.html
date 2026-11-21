@@ -965,14 +965,20 @@ function claimsCsv(){
 /* ---------- bills ---------- */
 const CATS_BASE=['Rent','Utilities','Insurance','Supplies','Software','Professional fees','Vehicle and mileage','Vehicle fuel','Travel','Marketing','Licenses and fees','Staff meals and office food','Entertainment','Background checks','Other'];
 const CATS=CATS_BASE.slice(),CAT_KEY='~cat~';
+const INCOME_CATS=[];
 function customCats(){return db?Object.keys(db.rules||{}).filter(k=>k.indexOf(CAT_KEY)===0).map(k=>k.slice(CAT_KEY.length)).sort((a,b)=>a.localeCompare(b)):[]}
-function syncCats(){CATS.length=0;CATS_BASE.forEach(c=>CATS.push(c));customCats().forEach(c=>{if(!CATS.includes(c))CATS.push(c)})}
-function askNewCategory(){
+function catIsIncome(c){
+  const v=db.rules[CAT_KEY+c];if(v==='income')return true;if(v!=='custom')return false;
+  const ts=db.txns.filter(t=>t.category===c);
+  return ts.length?ts.every(t=>t.amount>0):/income|revenue/i.test(c);
+}
+function syncCats(){CATS.length=0;INCOME_CATS.length=0;CATS_BASE.forEach(c=>CATS.push(c));customCats().forEach(c=>{if(catIsIncome(c)){if(!INCOME_CATS.includes(c))INCOME_CATS.push(c)}else if(!CATS.includes(c))CATS.push(c)})}
+function askNewCategory(isIncome){
   let n=prompt('Name of the new category');if(n==null)return null;
   n=n.replace(/\s+/g,' ').trim().slice(0,40);if(!n)return null;
-  const all=CATS.concat(OUT_SPECIAL,IN_SPECIAL),hit=all.find(c=>c.toLowerCase()===n.toLowerCase());
+  const all=CATS.concat(INCOME_CATS,OUT_SPECIAL,IN_SPECIAL),hit=all.find(c=>c.toLowerCase()===n.toLowerCase());
   if(hit)return hit==='Payroll (in Payroll tab)'||['Transfer','Credit card payment','Owner draw','Owner contribution','Other income'].includes(hit)?null:hit;
-  db.rules[CAT_KEY+n]='custom';Store.save();syncCats();return n;
+  db.rules[CAT_KEY+n]=isIncome?'income':'expense';Store.save();syncCats();return n;
 }
 function vBills(){
   const now=todayIso();
@@ -1109,6 +1115,7 @@ function pl(mk){
   db.txns.filter(t=>t.status==='categorized'&&monthOf(t.date)===mk).forEach(t=>{
     if(t.amount<0&&CATS.includes(t.category)){const a=-t.amount;exp[t.category]=(exp[t.category]||0)+a;expTotal+=a}
     else if(t.amount>0&&CATS.includes(t.category)){exp[t.category]=(exp[t.category]||0)-t.amount;expTotal-=t.amount}
+    else if(t.amount>0&&INCOME_CATS.includes(t.category)){rev[t.category]=(rev[t.category]||0)+t.amount;revTotal+=t.amount}
     else if(t.amount>0&&t.category==='Other income'){rev['Other income']=(rev['Other income']||0)+t.amount;revTotal+=t.amount}
   });
   return{rev:rev,revTotal:round(revTotal),exp:exp,wages:round(wages),taxes:round(taxes),expTotal:round(expTotal),net:round(revTotal-expTotal)};
@@ -1162,7 +1169,7 @@ function reportsCsv(){
 
 /* ---------- statements ---------- */
 const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Credit card payment','Owner draw'],IN_SPECIAL=['Other income','Transfer','Credit card payment','Owner contribution'];
-function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL.concat(CATS);return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')+'<option value="__new__">+ Add new category…</option>'}
+function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL.concat(INCOME_CATS,CATS);return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')+'<option value="__new__">+ Add new category…</option>'}
 function learn(t,cat){if(t.splitOf)return;const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
 function acctLabel(id){const a=db.accounts.find(x=>x.id===id);return a?a.name+(a.last4?' ···'+a.last4:''):'Unknown account'}
 function refreshSuggestions(){
@@ -1289,7 +1296,7 @@ function splitForm(t){
 }
 function bindSplit(){
   const box=$('#splitBox');if(!box)return;
-  box.querySelectorAll('.spc').forEach(el=>el.addEventListener('change',()=>{if(el.value==='__new__'){const n=askNewCategory();ui.st.parts[+el.dataset.i].cat=n||'';updateTxns()}else ui.st.parts[+el.dataset.i].cat=el.value}));
+  box.querySelectorAll('.spc').forEach(el=>el.addEventListener('change',()=>{if(el.value==='__new__'){const t0=db.txns.find(y=>y.id===ui.st.split);const n=askNewCategory(t0&&t0.amount>0);ui.st.parts[+el.dataset.i].cat=n||'';updateTxns()}else ui.st.parts[+el.dataset.i].cat=el.value}));
   box.querySelectorAll('.spa').forEach(el=>el.addEventListener('input',()=>{ui.st.parts[+el.dataset.i].amt=el.value}));
 }
 function doSplit(id){
@@ -1578,7 +1585,7 @@ function vData(){
   $('#view').innerHTML=
     '<div class="card sect"><h2>Your data</h2><p class="small" style="margin:0 0 8px">'+nC+' claims · '+db.remits.length+' payments · '+db.txns.length+' bank transactions · '+db.files.length+' imported files · '+db.bills.length+' bills · '+db.payroll.length+' payroll lines</p>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="backup">'+ic('download')+' Download backup</button><label class="btn" style="cursor:pointer">'+ic('upload')+' Restore backup<input type="file" id="restore" hidden></label>'+(gMode?'':'<button class="btn" data-act="changepin">Change PIN</button>')+'<button class="btn danger" data-act="wipe">Erase all data</button></div><div id="dmsg"></div></div>'+
-    '<div class="card sect"><h2>Your added categories</h2>'+(customCats().length?'<table><tbody>'+customCats().map(c=>{const used=db.txns.some(t=>t.category===c)||db.bills.some(b=>b.category===c);return '<tr><td>'+esc(c)+'</td><td class="n">'+(used?'<span class="muted small">In use</span>':'<button class="btn sm" data-act="catdel" data-name="'+esc(c)+'">Remove</button>')+'</td></tr>'}).join('')+'</tbody></table>':'<p class="muted small" style="margin:0">None yet. Choose "Add new category" in any category list.</p>')+'</div>'+
+    '<div class="card sect"><h2>Your added categories</h2>'+(customCats().length?'<table><tbody>'+customCats().map(c=>{const kind=catIsIncome(c)?'Income':'Expense';const used=db.txns.some(t=>t.category===c)||db.bills.some(b=>b.category===c);return '<tr><td>'+esc(c)+' <span class="muted small">'+kind+'</span></td><td class="n">'+(used?'<span class="muted small">In use</span>':'<button class="btn sm" data-act="catdel" data-name="'+esc(c)+'">Remove</button>')+'</td></tr>'}).join('')+'</tbody></table>':'<p class="muted small" style="margin:0">None yet. Choose "Add new category" in any category list.</p>')+'</div>'+
     '<div class="card sect"><h2>Imported files</h2>'+(db.files.length?'<table><tbody>'+db.files.slice().reverse().map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files yet','Imported 837 and 835 files are listed here.'))+'</div>'+
     '<div class="card sect"><h2>How your data is stored</h2>'+(gMode?
       '<p class="small" style="margin:0 0 6px">Your data is stored in your finance Google Sheet through the finance script, so both owners see the same numbers on any device.</p><p class="small" style="margin:0 0 6px">The 837, 835 and statement files themselves are not kept; only the claim, payment and transaction details read from them. Account numbers are never stored.</p><div class="warnbox">The sheet holds patient names and member IDs. Share it only with the owners, and make sure your Google Workspace has a signed HIPAA business associate agreement.</div><div style="margin-top:10px"><button class="btn danger sm" data-act="disconnect">Disconnect from Google Sheets</button></div>'
@@ -1683,7 +1690,7 @@ document.addEventListener('change',function(e){
   if(t.name==='cat'&&t.value==='__new__'&&t.form&&t.form.id==='addBill'){const n=askNewCategory();if(n){const o=document.createElement('option');o.textContent=n;t.insertBefore(o,t.lastElementChild);t.value=n}else t.selectedIndex=0}
   else if(t.dataset.act==='work'){const c=db.claims[t.dataset.id];if(c){c.work=t.value;Store.save();updateClaims()}}
   else if(t.dataset.act==='note'){const c=db.claims[t.dataset.id];if(c){c.note=t.value.slice(0,300);Store.save()}}
-  else if(t.dataset.act==='cat'){const x=db.txns.find(y=>y.id===t.dataset.id);if(x&&t.value==='__new__'){const n=askNewCategory();if(n){x.status='categorized';x.category=n;learn(x,n);Store.save()}updateTxns()}else if(x&&t.value){x.status='categorized';x.category=t.value;learn(x,t.value);Store.save();updateTxns()}}
+  else if(t.dataset.act==='cat'){const x=db.txns.find(y=>y.id===t.dataset.id);if(x&&t.value==='__new__'){const n=askNewCategory(x.amount>0);if(n){x.status='categorized';x.category=n;learn(x,n);Store.save()}updateTxns()}else if(x&&t.value){x.status='categorized';x.category=t.value;learn(x,t.value);Store.save();updateTxns()}}
   else if(t.dataset.act==='usrole'){usersPush(ui.us.list.map(x=>x.email===t.dataset.email?Object.assign({},x,{role:t.value}):x))}
   else if(t.dataset.act==='rcadd'){const fs=Array.from(t.files||[]);t.value='';if(fs.length)addReceipts(fs,t.dataset.rt,t.dataset.id)}
   else if(t.dataset.act==='stflip'){if(ui.pending){ui.pending.flip=t.checked;renderPending()}}
