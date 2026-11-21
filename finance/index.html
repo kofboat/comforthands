@@ -390,7 +390,7 @@ const Core=(function(){
     const k=descKey(desc);
     if(k&&rules&&rules[k])return{category:rules[k],src:'rule'};
     if(amount<0)for(const kw of KEYWORDS)if(kw[0].test(desc))return{category:kw[1],src:'keyword'};
-    if(amount>0){if(/PAYMENT RECEIVED|PAYMENT - THANK YOU/i.test(desc))return{category:'Credit card payment',src:'keyword'};if(/XFER TRANSFER FROM (CK|SV)/i.test(desc))return{category:'Owner contribution',src:'keyword'}}
+    if(amount>0){if(/HORIZON|UNITED ?HEALTH|UHC|AETNA|WELL ?POINT/i.test(desc))return{category:'Insurance deposit',src:'keyword'};if(/PAYMENT RECEIVED|PAYMENT - THANK YOU/i.test(desc))return{category:'Credit card payment',src:'keyword'};if(/XFER TRANSFER FROM (CK|SV)/i.test(desc))return{category:'Owner contribution',src:'keyword'}}
     return null;
   }
   function paymentGroups(remits){
@@ -757,7 +757,7 @@ document.addEventListener('focusout',()=>{tip.hidden=true});
 /* ---------- navigation ---------- */
 const TABS=[['dashboard','Dashboard'],['claims','Claims'],['statements','Statements'],['receipts','Receipts'],['bills','Bills'],['payroll','Payroll'],['draws','Owner draws'],['reports','Reports'],['data','Data']];
 let current='dashboard';
-const ui={rc:{show:'all'},claims:{q:'',status:'all',payer:'',reason:'',range:'all',group:true},bills:{show:'unpaid'},st:{status:'review',acct:'',q:'',month:'',split:'',parts:[]},pending:null,dr:{owner:'',year:String(new Date().getFullYear()),type:'',edit:false},rep:{month:todayIso().slice(0,7)}};
+const ui={rc:{show:'all'},claims:{q:'',status:'all',payer:'',reason:'',range:'all',group:true},bills:{show:'unpaid'},st:{status:'review',acct:'',q:'',month:'',split:'',parts:[]},range:{preset:'ytd',from:'',to:''},pending:null,dr:{owner:'',year:String(new Date().getFullYear()),type:'',edit:false},rep:{month:todayIso().slice(0,7)}};
 const ROLE_NAME={owner:'Owner',bookkeeper:'Bookkeeper',viewer:'Viewer'};
 function myRole(){return gMode?GStore.role:'owner'}
 function tabsFor(){
@@ -766,6 +766,43 @@ function tabsFor(){
   if(gMode&&r==='owner')t=t.concat([['users','Users']]);
   return t;
 }
+
+/* ---------- date range ---------- */
+const RANGE_PRESETS=[['ytd','Year to date'],['month','This month'],['last','Last month'],['quarter','This quarter'],['l12','Last 12 months'],['all','All time'],['custom','Custom dates']];
+let RCACHE=null;
+function dataStart(){let m='';const f=d=>{if(d&&(!m||d<m))m=d};db.remits.forEach(r=>f(r.payDate));db.txns.forEach(t=>f(t.date));db.bills.forEach(b=>f(b.billDate));db.payroll.forEach(p=>f(p.payDate));db.draws.forEach(d=>f(d.date));return m}
+function curRange(){
+  if(RCACHE)return RCACHE;
+  const r=ui.range,t=todayIso(),y=+t.slice(0,4),m=+t.slice(5,7),P=pad;
+  const iso=(yy,mm,dd)=>yy+'-'+P(mm)+'-'+P(dd),last=(yy,mm)=>new Date(yy,mm,0).getDate();
+  let f=iso(y,1,1),to=t;
+  if(r.preset==='month'){f=iso(y,m,1);to=iso(y,m,last(y,m))}
+  else if(r.preset==='last'){const d=new Date(y,m-2,1);f=iso(d.getFullYear(),d.getMonth()+1,1);to=iso(d.getFullYear(),d.getMonth()+1,last(d.getFullYear(),d.getMonth()+1))}
+  else if(r.preset==='quarter'){const q=Math.floor((m-1)/3)*3+1;f=iso(y,q,1);to=iso(y,q+2,last(y,q+2))}
+  else if(r.preset==='l12'){const d=new Date(y-1,m-1,+t.slice(8,10)+1);f=iso(d.getFullYear(),d.getMonth()+1,d.getDate())}
+  else if(r.preset==='all'){f=dataStart()||t;if(f>t)f=t}
+  else if(r.preset==='custom'){f=r.from||f;to=r.to||to;if(f>to){const x=f;f=to;to=x}}
+  RCACHE={from:f,to:to};return RCACHE;
+}
+function inR(d){if(!d)return false;const R=curRange();return d>=R.from&&d<=R.to}
+function rangeLabel(){const R=curRange();return fmtD(R.from)+' to '+fmtD(R.to)}
+function rangeBar(){
+  const R=curRange();
+  return '<div class="card sect noprint" id="rangeBar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="min-width:170px">Date range<select id="rgPreset">'+RANGE_PRESETS.map(x=>'<option value="'+x[0]+'"'+(ui.range.preset===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select></label>'+
+    '<label class="f" style="min-width:150px">From<input type="date" id="rgFrom" value="'+esc(R.from)+'"></label><label class="f" style="min-width:150px">To<input type="date" id="rgTo" value="'+esc(R.to)+'"></label>'+
+    '<div class="small muted" style="padding-bottom:10px">Showing '+esc(rangeLabel())+'</div></div>';
+}
+function monthsIn(R){
+  const out=[];let y=+R.from.slice(0,4),m=+R.from.slice(5,7);const ey=+R.to.slice(0,4),em=+R.to.slice(5,7);
+  while(y<ey||(y===ey&&m<=em)){
+    const ms=y+'-'+pad(m)+'-01',me=y+'-'+pad(m)+'-'+pad(new Date(y,m,0).getDate());
+    out.push({k:y+'-'+pad(m),from:ms<R.from?R.from:ms,to:me>R.to?R.to:me});
+    m++;if(m>12){m=1;y++}
+  }
+  return out.slice(-36);
+}
+const _rw=f=>function(){RCACHE=null;f.apply(this,arguments);const v=$('#view');if(v&&!v.querySelector('#ownForm')&&!v.querySelector('#rangeBar'))v.insertAdjacentHTML('afterbegin',rangeBar())};
+vDash=_rw(vDash);vStatements=_rw(vStatements);vBills=_rw(vBills);vPayroll=_rw(vPayroll);vDraws=_rw(vDraws);vReports=_rw(vReports);
 function go(t){
   syncCats();
   const tabs=tabsFor();if(!tabs.some(x=>x[0]===t))t='dashboard';
@@ -779,9 +816,9 @@ function go(t){
 function vDash(){
   const rows=allClaims();const now=todayIso();const mk=now.slice(0,7);
   const out=rows.reduce((s,r)=>s+r.d.owed,0);
-  const paidM=db.remits.filter(r=>monthOf(r.payDate)===mk).reduce((s,r)=>s+r.paid,0);
+  const paidM=db.remits.filter(r=>inR(r.payDate)).reduce((s,r)=>s+r.paid,0);
   const due=db.bills.filter(b=>b.status!=='paid').reduce((s,b)=>s+b.amount,0);
-  const net=pl(mk).net;
+  const net=pl(curRange()).net;
   const den=rows.filter(r=>r.d.state==='denied'),dsum=den.reduce((s,r)=>s+r.d.owed,0);
   const short=rows.filter(r=>r.d.state==='short');
   const old=rows.filter(r=>r.d.state==='unpaid'&&refDate(r.c)&&daysBetween(refDate(r.c),now)>45);
@@ -796,8 +833,8 @@ function vDash(){
   const last=db.files.slice(-3).reverse();
   $('#view').innerHTML=
     '<div id="census"></div>'+
-    '<div class="grid4 sect">'+tile('file','Outstanding claims',fmt0(out))+tile('dollar','Paid this month',fmt0(paidM))+tile('receipt','Bills due',fmt0(due))+tile('trend','Net income (month to date)',fmt0(net))+'</div>'+
-    '<p class="muted small" style="margin:6px 2px 12px">Income and net income are cash basis: they count payments on the date the 835 says they were paid.</p>'+
+    '<div class="grid4 sect">'+tile('file','Outstanding claims',fmt0(out))+tile('dollar','Payments received',fmt0(paidM))+tile('receipt','Bills due',fmt0(due))+tile('trend','Net income',fmt0(net))+'</div>'+
+    '<p class="muted small" style="margin:6px 2px 12px">Payments received and net income cover the date range above. They are cash basis: they count payments on the date the 835 says they were paid.</p>'+
     '<div class="card sect"><h2>Needs attention</h2>'+(items.length?items.join(''):empty('Nothing needs attention','Import your 837 and 835 files from the Claims tab to see what was paid and what is still outstanding.'))+'</div>'+
     '<div class="card sect"><h2>Recent imports</h2>'+(last.length?'<div class="tscroll"><table><tbody>'+last.map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n" style="white-space:nowrap">'+f.count+' '+(f.type==='837'?(f.count===1?'claim':'claims'):(f.count===1?'payment':'payments'))+'</td><td class="n" style="white-space:nowrap">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table></div>':empty('No files imported yet','Upload an 837 or 835 file to start.'))+'</div>';
   censusLoad();
@@ -977,7 +1014,7 @@ function askNewCategory(isIncome){
   let n=prompt('Name of the new category');if(n==null)return null;
   n=n.replace(/\s+/g,' ').trim().slice(0,40);if(!n)return null;
   const all=CATS.concat(INCOME_CATS,OUT_SPECIAL,IN_SPECIAL),hit=all.find(c=>c.toLowerCase()===n.toLowerCase());
-  if(hit)return hit==='Payroll (in Payroll tab)'||['Transfer','Credit card payment','Owner draw','Owner contribution','Other income'].includes(hit)?null:hit;
+  if(hit)return hit==='Payroll (in Payroll tab)'||['Transfer','Credit card payment','Owner draw','Owner contribution','Other income','Insurance deposit'].includes(hit)?null:hit;
   db.rules[CAT_KEY+n]=isIncome?'income':'expense';Store.save();syncCats();return n;
 }
 function vBills(){
@@ -1003,6 +1040,7 @@ function vBills(){
 function updateBills(){
   const now=todayIso();let list=db.bills.slice();
   if(ui.bills.show!=='all')list=list.filter(b=>b.status===ui.bills.show);
+  list=list.filter(b=>b.status!=='paid'||inR(b.paidDate||b.billDate));
   list.sort((a,b)=>(a.status===b.status?(a.due||'').localeCompare(b.due||''):(a.status==='paid'?1:-1)));
   const tot=list.reduce((s,b)=>s+b.amount,0);
   $('#blist').innerHTML=list.length?'<div class="tscroll"><table><thead><tr><th>Vendor</th><th>Category</th><th>Due</th><th class="n">Amount</th><th>Status</th><th class="noprint"></th></tr></thead><tbody>'+list.map(b=>{
@@ -1023,21 +1061,21 @@ function vPayroll(){
     '</div><button class="btn pri" type="submit" style="margin-top:10px">Add</button></form></div>'+
     '<div class="card sect noprint"><h2>Import Homebase payroll report</h2><p class="muted small" style="margin:-4px 0 10px">Drop the payroll journals file (.csv) from Homebase. It is read in this browser; nothing is saved until you click Import.</p><div class="drop"><b>'+ic('upload')+' Homebase payroll journals</b><span class="muted small">.csv</span><input type="file" id="fHB" accept=".csv,text/csv"></div><div id="hbOut"></div></div>'+
     '<div class="card sect"><h2>Pay runs</h2><div id="plist"></div></div>'+
-    '<div class="card sect"><h2>Year to date by aide</h2><div id="pytd"></div></div>';
+    '<div class="card sect"><h2>Totals by aide for the date range</h2><div id="pytd"></div></div>';
   $('#fHB').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)hbRead(f)});
   $('#addPay').addEventListener('submit',e=>{
     e.preventDefault();const f=new FormData(e.target);
     db.payroll.push({id:uid(),payDate:f.get('payDate'),periodEnd:f.get('periodEnd'),aide:String(f.get('aide')).trim(),hours:+f.get('hours')||0,gross:round(+f.get('gross')),taxes:round(+f.get('taxes')||0)});
     Store.save();vPayroll();
   });
-  const runs={};db.payroll.forEach(p=>{(runs[p.payDate]=runs[p.payDate]||[]).push(p)});
+  const runs={};db.payroll.filter(p=>inR(p.payDate)).forEach(p=>{(runs[p.payDate]=runs[p.payDate]||[]).push(p)});
   const dates=Object.keys(runs).sort().reverse();
   $('#plist').innerHTML=dates.length?dates.map(d=>{
     const r=runs[d];const g=r.reduce((s,x)=>s+x.gross,0),t=r.reduce((s,x)=>s+x.taxes,0);
     return '<div class="sect" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between"><b>Paid '+esc(fmtD(d))+'</b><span class="muted small">Total '+fmt2(g+t)+'</span></div><div class="tscroll"><table><thead><tr><th>Aide</th><th>Period end</th><th class="n">Hours</th><th class="n">Wages</th><th class="n">Taxes and benefits</th><th class="noprint"></th></tr></thead><tbody>'+r.map(x=>'<tr><td>'+esc(x.aide)+'</td><td>'+esc(fmtShort(x.periodEnd))+'</td><td class="n">'+(x.hours||'')+'</td><td class="n">'+fmt2(x.gross)+'</td><td class="n">'+fmt2(x.taxes)+'</td><td class="noprint n"><button class="btn sm danger" data-act="delpay" data-id="'+x.id+'">Delete</button></td></tr>').join('')+'<tr class="tot"><td colspan="3">Run total</td><td class="n">'+fmt2(g)+'</td><td class="n">'+fmt2(t)+'</td><td class="noprint"></td></tr></tbody></table></div></div>';
   }).join(''):empty('No payroll entered','Add the totals for each aide after each biweekly run.');
   const yr=now.slice(0,4);const by={};
-  db.payroll.filter(p=>p.payDate.slice(0,4)===yr).forEach(p=>{const a=by[p.aide]=by[p.aide]||{h:0,g:0,t:0};a.h+=p.hours;a.g+=p.gross;a.t+=p.taxes});
+  db.payroll.filter(p=>inR(p.payDate)).forEach(p=>{const a=by[p.aide]=by[p.aide]||{h:0,g:0,t:0};a.h+=p.hours;a.g+=p.gross;a.t+=p.taxes});
   const names=Object.keys(by).sort();
   $('#pytd').innerHTML=names.length?'<div class="tscroll"><table><thead><tr><th>Aide</th><th class="n">Hours</th><th class="n">Wages</th><th class="n">Taxes and benefits</th><th class="n">Total cost</th></tr></thead><tbody>'+names.map(n=>'<tr><td>'+esc(n)+'</td><td class="n">'+(Math.round(by[n].h*100)/100)+'</td><td class="n">'+fmt2(by[n].g)+'</td><td class="n">'+fmt2(by[n].t)+'</td><td class="n">'+fmt2(by[n].g+by[n].t)+'</td></tr>').join('')+'</tbody></table></div>':empty('Nothing for '+yr,'Year to date totals appear here once you add payroll.');
 }
@@ -1106,16 +1144,16 @@ function hbShow(){
 
 /* ---------- reports ---------- */
 function pl(mk){
+  const inr=typeof mk==='string'?(d=>monthOf(d)===mk):(d=>!!d&&d>=mk.from&&d<=mk.to);
   const rev={};let revTotal=0;
-  db.remits.filter(r=>monthOf(r.payDate)===mk&&r.paid!==0).forEach(r=>{const p=r.payer||'Unknown payer';rev[p]=(rev[p]||0)+r.paid;revTotal+=r.paid});
+  db.remits.filter(r=>inr(r.payDate)&&r.paid!==0).forEach(r=>{const p=r.payer||'Unknown payer';rev[p]=(rev[p]||0)+r.paid;revTotal+=r.paid});
   const exp={};let expTotal=0;
-  db.bills.filter(b=>b.status==='paid'&&monthOf(b.paidDate)===mk).forEach(b=>{exp[b.category]=(exp[b.category]||0)+b.amount;expTotal+=b.amount});
-  let wages=0,taxes=0;db.payroll.filter(p=>monthOf(p.payDate)===mk).forEach(p=>{wages+=p.gross;taxes+=p.taxes});
+  db.bills.filter(b=>b.status==='paid'&&inr(b.paidDate)).forEach(b=>{exp[b.category]=(exp[b.category]||0)+b.amount;expTotal+=b.amount});
+  let wages=0,taxes=0;db.payroll.filter(p=>inr(p.payDate)).forEach(p=>{wages+=p.gross;taxes+=p.taxes});
   expTotal+=wages+taxes;
-  db.txns.filter(t=>t.status==='categorized'&&monthOf(t.date)===mk).forEach(t=>{
+  db.txns.filter(t=>t.status==='categorized'&&inr(t.date)).forEach(t=>{
     if(t.amount<0&&CATS.includes(t.category)){const a=-t.amount;exp[t.category]=(exp[t.category]||0)+a;expTotal+=a}
     else if(t.amount>0&&CATS.includes(t.category)){exp[t.category]=(exp[t.category]||0)-t.amount;expTotal-=t.amount}
-    else if(t.amount>0&&INCOME_CATS.includes(t.category)){rev[t.category]=(rev[t.category]||0)+t.amount;revTotal+=t.amount}
     else if(t.amount>0&&t.category==='Other income'){rev['Other income']=(rev['Other income']||0)+t.amount;revTotal+=t.amount}
   });
   return{rev:rev,revTotal:round(revTotal),exp:exp,wages:round(wages),taxes:round(taxes),expTotal:round(expTotal),net:round(revTotal-expTotal)};
@@ -1132,19 +1170,19 @@ function aging(){
   return{B:B,tot:tot,cnt:cnt,byPayer:byPayer};
 }
 function vReports(){
-  const mk=ui.rep.month||todayIso().slice(0,7);const P=pl(mk);const A=aging();
+  const R=curRange();const P=pl(R);const A=aging();
   const revRows=Object.keys(P.rev).sort((a,b)=>P.rev[b]-P.rev[a]);
   const expRows=Object.keys(P.exp).sort();
-  const six=monthKeys(6,mk).map(k=>{const p=pl(k);return{k:k,rev:p.revTotal,out:p.expTotal,net:p.net}});
-  const waiting=db.txns.filter(t=>(t.status==='review'||t.status==='suggested')&&monthOf(t.date)===mk).length;
-  const waitNote=waiting?'<div class="warnbox" style="margin-top:8px">'+waiting+' bank transaction'+(waiting>1?'s':'')+' from this month '+(waiting>1?'have':'has')+' not been categorized yet and '+(waiting>1?'are':'is')+' not in these numbers.</div>':'';
+  const six=monthsIn(R).map(m=>{const p=pl({from:m.from,to:m.to});return{k:m.k,rev:p.revTotal,out:p.expTotal,net:p.net}});
+  const waiting=db.txns.filter(t=>(t.status==='review'||t.status==='suggested')&&inR(t.date)).length;
+  const waitNote=waiting?'<div class="warnbox" style="margin-top:8px">'+waiting+' bank transaction'+(waiting>1?'s':'')+' in this date range '+(waiting>1?'have':'has')+' not been categorized yet and '+(waiting>1?'are':'is')+' not in these numbers.</div>':'';
   const arTotal=A.tot.reduce((a,b)=>a+b,0);
   const payerNames=Object.keys(A.byPayer).sort((a,b)=>A.byPayer[b].reduce((x,y)=>x+y,0)-A.byPayer[a].reduce((x,y)=>x+y,0));
   $('#view').innerHTML=
-    '<div class="card sect noprint" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><label class="f" style="max-width:200px">Month<input type="month" id="rmonth" value="'+mk+'"></label><button class="btn" data-act="csvReports">'+ic('download')+' Export CSV</button><button class="btn" data-act="print">'+ic('printer')+' Print</button></div>'+
-    '<div class="card sect"><h2>Profit and loss · '+monthLabel(mk)+'</h2><div class="tscroll"><table><tbody>'+
+    '<div class="card sect noprint" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="btn" data-act="csvReports">'+ic('download')+' Export CSV</button><button class="btn" data-act="print">'+ic('printer')+' Print</button></div>'+
+    '<div class="card sect"><h2>Profit and loss · '+esc(rangeLabel())+'</h2><div class="tscroll"><table><tbody>'+
       '<tr><th colspan="2">Income (payments received)</th></tr>'+
-      (revRows.length?revRows.map(p=>'<tr><td>'+esc(p)+'</td><td class="n">'+fmt2(P.rev[p])+'</td></tr>').join(''):'<tr><td class="muted">No payments dated this month</td><td class="n">'+fmt2(0)+'</td></tr>')+
+      (revRows.length?revRows.map(p=>'<tr><td>'+esc(p)+'</td><td class="n">'+fmt2(P.rev[p])+'</td></tr>').join(''):'<tr><td class="muted">No payments in this date range</td><td class="n">'+fmt2(0)+'</td></tr>')+
       '<tr class="tot"><td>Total income</td><td class="n">'+fmt2(P.revTotal)+'</td></tr>'+
       '<tr><th colspan="2">Expenses (paid)</th></tr>'+
       expRows.map(c=>'<tr><td>'+esc(c)+'</td><td class="n">'+fmt2(P.exp[c])+'</td></tr>').join('')+
@@ -1152,15 +1190,14 @@ function vReports(){
       '<tr class="tot"><td>Total expenses</td><td class="n">'+fmt2(P.expTotal)+'</td></tr>'+
       '<tr class="tot"><td>Net income</td><td class="n">'+fmt2(P.net)+'</td></tr>'+
     '</tbody></table></div><p class="muted small" style="margin:8px 0 0">Cash basis. Income counts on the payment date from the 835. Expenses count on the date a bill or payroll was paid. Claims not yet paid are in the aging below, not in income. Bank transactions count once they are categorized; deposits matched to 835 payments and payments matched to bills are not counted twice.</p>'+waitNote+'</div>'+
-    '<div class="card sect"><h2>Cash flow · last 6 months</h2><div class="tscroll"><table><thead><tr><th>Month</th><th class="n">Received</th><th class="n">Paid out</th><th class="n">Net</th></tr></thead><tbody>'+six.map(m=>'<tr><td>'+monthLabel(m.k)+'</td><td class="n">'+fmt2(m.rev)+'</td><td class="n">'+fmt2(m.out)+'</td><td class="n">'+fmt2(m.net)+'</td></tr>').join('')+'</tbody></table></div></div>'+
+    '<div class="card sect"><h2>Cash flow · by month</h2><div class="tscroll"><table><thead><tr><th>Month</th><th class="n">Received</th><th class="n">Paid out</th><th class="n">Net</th></tr></thead><tbody>'+six.map(m=>'<tr><td>'+monthLabel(m.k)+'</td><td class="n">'+fmt2(m.rev)+'</td><td class="n">'+fmt2(m.out)+'</td><td class="n">'+fmt2(m.net)+'</td></tr>').join('')+'</tbody></table></div></div>'+
     '<div class="card sect"><h2>Claims owed, by age · '+fmt0(arTotal)+' total</h2>'+
       (arTotal>0?hbar(A.B.map((b,i)=>({label:b[0],value:A.tot[i],sub:A.cnt[i]+' claim'+(A.cnt[i]===1?'':'s')})),'Outstanding claim dollars by age bucket')+tableView(['Age','Claims','Owed'],A.B.map((b,i)=>[b[0],A.cnt[i],fmt2(A.tot[i])])):empty('Nothing outstanding','Import 837 and 835 files to see what is owed.'))+
       (payerNames.length?'<div class="tscroll" style="margin-top:10px"><table><thead><tr><th>Payer</th>'+A.B.map(b=>'<th class="n">'+b[0]+'</th>').join('')+'<th class="n">Total</th></tr></thead><tbody>'+payerNames.map(p=>'<tr><td>'+esc(p)+'</td>'+A.byPayer[p].map(v=>'<td class="n">'+(v?fmt0(v):'')+'</td>').join('')+'<td class="n">'+fmt0(A.byPayer[p].reduce((a,b)=>a+b,0))+'</td></tr>').join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Age counts from the date the claim was submitted (or the service date when the 837 has none).</p>':'')+'</div>'+
-    '<div class="card sect"><h2>Income by payer · '+monthLabel(mk)+'</h2>'+(revRows.length?hbar(revRows.map(p=>({label:p,value:P.rev[p]})),'Payments received by payer')+tableView(['Payer','Received'],revRows.map(p=>[p,fmt2(P.rev[p])])):empty('No payments this month','Payments appear here after you import 835 files.'))+'</div>';
-  $('#rmonth').addEventListener('change',e=>{if(e.target.value){ui.rep.month=e.target.value;vReports()}});
+    '<div class="card sect"><h2>Income by payer · '+esc(rangeLabel())+'</h2>'+(revRows.length?hbar(revRows.map(p=>({label:p,value:P.rev[p]})),'Payments received by payer')+tableView(['Payer','Received'],revRows.map(p=>[p,fmt2(P.rev[p])])):empty('No payments in this date range','Payments appear here after you import 835 files.'))+'</div>';
 }
 function reportsCsv(){
-  const mk=ui.rep.month||todayIso().slice(0,7);const P=pl(mk);const A=aging();const rows=[['Profit and loss',monthLabel(mk)],[]];
+  const R=curRange();const P=pl(R);const A=aging();const rows=[['Profit and loss',rangeLabel()],[]];
   rows.push(['Income']);Object.keys(P.rev).forEach(p=>rows.push([p,P.rev[p].toFixed(2)]));rows.push(['Total income',P.revTotal.toFixed(2)],[],['Expenses']);
   Object.keys(P.exp).forEach(c=>rows.push([c,P.exp[c].toFixed(2)]));rows.push(['Payroll wages',P.wages.toFixed(2)],['Payroll taxes and benefits',P.taxes.toFixed(2)],['Total expenses',P.expTotal.toFixed(2)],['Net income',P.net.toFixed(2)],[],['Claims owed by age','Claims','Owed']);
   A.B.forEach((b,i)=>rows.push([b[0],A.cnt[i],A.tot[i].toFixed(2)]));
@@ -1168,9 +1205,9 @@ function reportsCsv(){
 }
 
 /* ---------- statements ---------- */
-const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Credit card payment','Owner draw'],IN_SPECIAL=['Other income','Transfer','Credit card payment','Owner contribution'];
+const OUT_SPECIAL=['Payroll (in Payroll tab)','Transfer','Credit card payment','Owner draw'],IN_SPECIAL=['Other income','Insurance deposit','Transfer','Credit card payment','Owner contribution'];
 function catOptions(amount,sel){const list=amount<0?CATS.concat(OUT_SPECIAL):IN_SPECIAL.concat(INCOME_CATS,CATS);return '<option value="">Choose category…</option>'+list.map(c=>'<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>').join('')+'<option value="__new__">+ Add new category…</option>'}
-function learn(t,cat){if(t.splitOf)return;const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution'].includes(cat))db.rules[k]=cat}
+function learn(t,cat){if(t.splitOf)return;const k=Core.descKey(t.desc);if(k&&cat&&!['Transfer','Credit card payment','Owner draw','Owner contribution','Insurance deposit'].includes(cat))db.rules[k]=cat}
 function acctLabel(id){const a=db.accounts.find(x=>x.id===id);return a?a.name+(a.last4?' ···'+a.last4:''):'Unknown account'}
 function refreshSuggestions(){
   let n=0;
@@ -1199,7 +1236,7 @@ function vStatements(){
     '<div class="card sect noprint" style="margin-top:12px"><div class="filters" style="grid-template-columns:2fr 1fr 1fr">'+
       '<label class="f">Search description or category<input type="text" id="stq" value="'+esc(u.q)+'" placeholder="Search"></label>'+
       '<label class="f">Account<select id="stacct"><option value="">All accounts</option>'+accts.map(a=>'<option value="'+esc(a.id)+'"'+(u.acct===a.id?' selected':'')+'>'+esc(a.name)+'</option>').join('')+'</select></label>'+
-      '<label class="f">Month<input type="month" id="stmonth" value="'+esc(u.month)+'"></label></div>'+
+      '</div>'+
       '<div class="chips" id="stChips"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="strefresh">Refresh suggestions</button><button class="btn sm" data-act="staccall">Accept all suggestions</button><button class="btn sm" data-act="csvTxns">'+ic('download')+' Export CSV</button><button class="btn sm" data-act="print">'+ic('printer')+' Print list</button></div></div>'+
     '<div id="stList"></div>';
   $('#addAcct').addEventListener('submit',e=>{
@@ -1220,7 +1257,6 @@ function vStatements(){
   });
   $('#stq').addEventListener('input',e=>{u.q=e.target.value;updateTxns()});
   $('#stacct').addEventListener('change',e=>{u.acct=e.target.value;updateTxns()});
-  $('#stmonth').addEventListener('change',e=>{u.month=e.target.value;updateTxns()});
   renderPending();updateTxns();
 }
 function pendingTxns(){const p=ui.pending,sg=p.flip?-1:1;return p.parsed.txns.map(t=>Object.assign({},t,{amount:round(t.amount*sg)}))}
@@ -1260,12 +1296,13 @@ function doImport(){
 function updateTxns(){
   const u=ui.st;const list=$('#stList');if(!list)return;
   const q=u.q.trim().toLowerCase();
-  const base=db.txns.filter(t=>(!u.acct||t.accountId===u.acct)&&(!u.month||monthOf(t.date)===u.month)&&(!q||(t.desc+' '+t.category).toLowerCase().includes(q)));
+  const base=db.txns.filter(t=>(!u.acct||t.accountId===u.acct)&&inR(t.date)&&(!q||(t.desc+' '+t.category).toLowerCase().includes(q)));
   const cnt=s=>s==='all'?base.length:base.filter(t=>t.status===s).length;
   const rows=(u.status==='all'?base:base.filter(t=>t.status===u.status)).slice().sort((a,b)=>b.date.localeCompare(a.date));
   $('#stChips').innerHTML=[['review','Needs review'],['suggested','Suggested'],['matched','Matched'],['categorized','Categorized'],['all','All']].map(x=>'<button class="chipb" data-act="stchip" data-st="'+x[0]+'" aria-pressed="'+(u.status===x[0])+'">'+x[1]+' '+cnt(x[0])+'</button>').join('');
   const mIn=base.filter(t=>t.amount>0).reduce((x,t)=>x+t.amount,0),mOut=base.filter(t=>t.amount<0).reduce((x,t)=>x-t.amount,0);
   $('#stTiles').innerHTML=tile('file','Transactions',String(base.length))+tile('receipt','Needs review',String(cnt('review')+cnt('suggested')))+tile('dollar','Money in',fmt0(mIn))+tile('trend','Money out',fmt0(mOut));
+  {const dep=base.filter(t=>t.amount>0&&(t.category==='Insurance deposit'||t.matchType==='payment'||INCOME_CATS.includes(t.category))).reduce((x,t)=>x+t.amount,0);const r835=db.remits.filter(r=>inR(r.payDate)).reduce((x,r)=>x+r.paid,0);if(dep||r835)$('#stTiles').insertAdjacentHTML('beforeend','<div class="small muted" style="grid-column:1/-1;margin-top:4px">Insurer deposits in the bank: <b>'+fmt2(dep)+'</b> · 835 payments in this range: <b>'+fmt2(r835)+'</b>. Income in the profit and loss comes from the 835 payments only.</div>')}
   if(!db.txns.length){list.innerHTML='<div class="card">'+empty('No transactions yet','Import a bank or card statement above.')+'</div>';return}
   if(!rows.length){list.innerHTML='<div class="card">'+empty(u.status==='review'?'Nothing needs review':'No transactions match','Try a different filter.')+'</div>';return}
   const G={};Core.paymentGroups(db.remits).forEach(g=>{G[g.key]=g});
@@ -1333,7 +1370,7 @@ function undoSplit(id){
 }
 
 function txnsCsv(){
-  const rows=db.txns.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const rows=db.txns.filter(t=>inR(t.date)).sort((a,b)=>b.date.localeCompare(a.date));
   return csv([['Date','Account','Description','Amount','Status','Category or match']].concat(rows.map(t=>{
     let m=t.category;
     if(t.status==='matched'){if(t.matchType==='bill'){const b=db.bills.find(x=>x.id===t.matchRef);m='Bill: '+(b?b.vendor:'')}else{const g=Core.paymentGroups(db.remits).find(x=>x.key===t.matchRef);m='835 payment: '+(g?g.payer:'')}}
@@ -1370,7 +1407,7 @@ function vDraws(){
   const run={},balOf={};
   hist.forEach(d=>{run[d.ownerId]=round((run[d.ownerId]||0)+drSign(d)*d.amount);balOf[d.id]=run[d.ownerId]});
   const years=[...new Set(db.draws.map(d=>d.date.slice(0,4)).concat([String(new Date().getFullYear())]))].sort().reverse();
-  const inYear=db.draws.filter(d=>u.year==='all'||d.date.slice(0,4)===u.year);
+  const inYear=db.draws.filter(d=>inR(d.date));
   const stat=o=>{
     const mine=inYear.filter(d=>d.ownerId===o.id);
     const sum=t=>round(mine.filter(d=>d.type===t).reduce((x,d)=>x+d.amount,0));
@@ -1385,18 +1422,17 @@ function vDraws(){
   const ownerGuess=t=>{const d=t.desc||'';const re=/\b(2480|1002)\b/.test(d)?/abigail/i:(/\b9750\b|KOFI/i.test(d)?/kofi/i:null);const o=re&&db.owners.find(o=>re.test(o.name));return o?o.id:''};
   const ownerOptsFor=t=>{const g=ownerGuess(t);return db.owners.map(o=>'<option value="'+esc(o.id)+'"'+(o.id===g?' selected':'')+'>'+esc(o.name)+'</option>').join('')};
   const ownerOpts=db.owners.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.name)+'</option>').join('');
-  let rows=hist.filter(d=>(u.year==='all'||d.date.slice(0,4)===u.year)&&(!u.owner||d.ownerId===u.owner)&&(!u.type||d.type===u.type)).reverse();
+  let rows=hist.filter(d=>inR(d.date)&&(!u.owner||d.ownerId===u.owner)&&(!u.type||d.type===u.type)).reverse();
   $('#view').innerHTML=
-    '<div class="card sect noprint" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><label class="f" style="min-width:130px">Year<select id="dryear">'+years.map(y=>'<option'+(u.year===y?' selected':'')+'>'+y+'</option>').join('')+'<option value="all"'+(u.year==='all'?' selected':'')+'>All years</option></select></label>'+
+    '<div class="card sect noprint" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">'+
       '<label class="f" style="min-width:150px">Owner<select id="drown"><option value="">All owners</option>'+db.owners.map(o=>'<option value="'+esc(o.id)+'"'+(u.owner===o.id?' selected':'')+'>'+esc(o.name)+'</option>').join('')+'</select></label>'+
       '<label class="f" style="min-width:170px">Type<select id="drtype"><option value="">All types</option>'+DR_TYPES.map(t=>'<option'+(u.type===t?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'+
       '<button class="btn" data-act="dredit">Edit owners</button><button class="btn" data-act="csvDraws">'+ic('download')+' Export CSV</button><button class="btn" data-act="print">'+ic('printer')+' Print ledger</button></div>'+
-    '<div class="grid2 sect">'+st.map(r=>'<div class="tile"><div class="lab">'+esc(r.o.name)+' · draws '+(u.year==='all'?'all years':esc(u.year))+'</div><div class="val">'+fmt0(r.draw)+'</div><div class="small muted">Tax distributions '+fmt0(r.tax)+' · Contributed '+fmt0(r.con)+'</div></div>').join('')+'</div>'+
+    '<div class="grid2 sect">'+st.map(r=>'<div class="tile"><div class="lab">'+esc(r.o.name)+' · draws in range</div><div class="val">'+fmt0(r.draw)+'</div><div class="small muted">Tax distributions '+fmt0(r.tax)+' · Contributed '+fmt0(r.con)+'</div></div>').join('')+'</div>'+
     (pctOk&&totalTaken>0?'<div class="card sect" style="margin-top:12px"><h2>Draws compared with ownership</h2><div class="tscroll"><table><thead><tr><th>Owner</th><th class="n">Ownership</th><th class="n">Taken out</th><th class="n">Share of total</th><th class="n">At ownership share</th><th class="n">Difference</th></tr></thead><tbody>'+st.map(r=>{const taken=r.draw+r.tax,exp=totalTaken*r.o.pct/100,diff=taken-exp;return '<tr><td>'+esc(r.o.name)+'</td><td class="n">'+r.o.pct+'%</td><td class="n">'+fmt2(taken)+'</td><td class="n">'+(taken/totalTaken*100).toFixed(1)+'%</td><td class="n">'+fmt2(exp)+'</td><td class="n">'+(Math.abs(diff)<0.005?fmt2(0):(diff>0?'+':'')+fmt2(diff))+'</td></tr>'}).join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Compares what each owner took out (draws and tax distributions) with their ownership share of the total taken out. Contributions are not included. A positive difference means that owner took more than their share.</p></div>':'')+
     (cand.length?'<div class="card sect noprint" style="margin-top:12px"><h2>From your statements, not yet in the ledger</h2>'+cand.slice(0,30).map(t=>'<div class="crow" style="padding:8px 0"><div class="l1"><span>'+esc(fmtShort(t.date))+' · '+esc(t.desc)+'</span><b>'+fmt2(t.amount)+'</b></div><div class="small muted">'+esc(acctLabel(t.accountId))+'</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><select id="dro_'+esc(t.id)+'" aria-label="Owner">'+ownerOptsFor(t)+'</select><select id="drt_'+esc(t.id)+'" aria-label="Type">'+DR_TYPES.map(x=>'<option'+((t.amount<0?'Draw':'Contribution')===x?' selected':'')+'>'+x+'</option>').join('')+'</select><button class="btn sm pri" data-act="drassign" data-id="'+esc(t.id)+'">Add to ledger</button><button class="btn sm" data-act="drnot" data-id="'+esc(t.id)+'">Not a draw</button></div></div>').join('')+(cand.length>30?'<p class="muted small">Showing 30 of '+cand.length+'.</p>':'')+'</div>':'')+
     '<div class="card sect" style="margin-top:12px"><h2>Ledger</h2>'+(rows.length?'<div class="tscroll"><table><thead><tr><th>Date</th><th>Owner</th><th>Type</th><th class="n">Amount</th><th class="n">Owner balance</th><th>Source</th><th class="noprint"></th></tr></thead><tbody>'+rows.map(d=>'<tr><td>'+esc(fmtD(d.date))+'</td><td>'+esc(ownerName(d.ownerId))+'</td><td>'+esc(d.type)+(d.note?'<div class="small muted">'+esc(d.note)+'</div>':'')+'</td><td class="n" style="'+(drSign(d)>0?'color:var(--green)':'')+'">'+(drSign(d)>0?'+':'-')+fmt2(d.amount)+'</td><td class="n">'+fmt2(balOf[d.id])+'</td><td>'+(d.txnId?'Bank transaction':'Entered by hand')+'</td><td class="noprint n"><button class="btn sm danger" data-act="drdel" data-id="'+esc(d.id)+'">Delete</button></td></tr>').join('')+'</tbody></table></div><p class="muted small" style="margin:6px 0 0">Owner balance is contributions minus draws and tax distributions, from the first entry to that date. It is a tracking figure, not a capital account statement.</p>':empty('No entries','Add an entry below, or assign transfers from your bank statements.'))+'</div>'+
     '<details class="card noprint"><summary style="cursor:pointer;font-weight:600">Add an entry</summary><form id="addDraw" style="margin-top:10px"><div class="formgrid"><label class="f">Owner<select name="owner">'+ownerOpts+'</select></label><label class="f">Date<input type="date" name="date" value="'+now+'" required></label><label class="f">Type<select name="type">'+DR_TYPES.map(t=>'<option>'+t+'</option>').join('')+'</select></label><label class="f">Amount ($)<input type="number" name="amount" min="0.01" step="0.01" required></label><label class="f" style="grid-column:1/-1">Note<input type="text" name="note"></label></div><button class="btn pri" type="submit" style="margin-top:10px">Add entry</button></form></details>';
-  $('#dryear').addEventListener('change',e=>{u.year=e.target.value;vDraws()});
   $('#drown').addEventListener('change',e=>{u.owner=e.target.value;vDraws()});
   $('#drtype').addEventListener('change',e=>{u.type=e.target.value;vDraws()});
   $('#addDraw').addEventListener('submit',e=>{
@@ -1585,7 +1621,7 @@ function vData(){
   $('#view').innerHTML=
     '<div class="card sect"><h2>Your data</h2><p class="small" style="margin:0 0 8px">'+nC+' claims · '+db.remits.length+' payments · '+db.txns.length+' bank transactions · '+db.files.length+' imported files · '+db.bills.length+' bills · '+db.payroll.length+' payroll lines</p>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="backup">'+ic('download')+' Download backup</button><label class="btn" style="cursor:pointer">'+ic('upload')+' Restore backup<input type="file" id="restore" hidden></label>'+(gMode?'':'<button class="btn" data-act="changepin">Change PIN</button>')+'<button class="btn danger" data-act="wipe">Erase all data</button></div><div id="dmsg"></div></div>'+
-    '<div class="card sect"><h2>Your added categories</h2>'+(customCats().length?'<table><tbody>'+customCats().map(c=>{const kind=catIsIncome(c)?'Income':'Expense';const used=db.txns.some(t=>t.category===c)||db.bills.some(b=>b.category===c);return '<tr><td>'+esc(c)+' <span class="muted small">'+kind+'</span></td><td class="n">'+(used?'<span class="muted small">In use</span>':'<button class="btn sm" data-act="catdel" data-name="'+esc(c)+'">Remove</button>')+'</td></tr>'}).join('')+'</tbody></table>':'<p class="muted small" style="margin:0">None yet. Choose "Add new category" in any category list.</p>')+'</div>'+
+    '<div class="card sect"><h2>Your added categories</h2>'+(customCats().length?'<table><tbody>'+customCats().map(c=>{const kind=catIsIncome(c)?'Money in, label only (not in report)':'Expense';const used=db.txns.some(t=>t.category===c)||db.bills.some(b=>b.category===c);return '<tr><td>'+esc(c)+' <span class="muted small">'+kind+'</span></td><td class="n">'+(used?'<span class="muted small">In use</span>':'<button class="btn sm" data-act="catdel" data-name="'+esc(c)+'">Remove</button>')+'</td></tr>'}).join('')+'</tbody></table>':'<p class="muted small" style="margin:0">None yet. Choose "Add new category" in any category list.</p>')+'</div>'+
     '<div class="card sect"><h2>Imported files</h2>'+(db.files.length?'<table><tbody>'+db.files.slice().reverse().map(f=>'<tr><td>'+esc(f.name)+'</td><td>'+esc(f.type)+'</td><td class="n">'+f.count+'</td><td class="n">'+esc(fmtD(f.date))+'</td></tr>').join('')+'</tbody></table>':empty('No files yet','Imported 837 and 835 files are listed here.'))+'</div>'+
     '<div class="card sect"><h2>How your data is stored</h2>'+(gMode?
       '<p class="small" style="margin:0 0 6px">Your data is stored in your finance Google Sheet through the finance script, so both owners see the same numbers on any device.</p><p class="small" style="margin:0 0 6px">The 837, 835 and statement files themselves are not kept; only the claim, payment and transaction details read from them. Account numbers are never stored.</p><div class="warnbox">The sheet holds patient names and member IDs. Share it only with the owners, and make sure your Google Workspace has a signed HIPAA business associate agreement.</div><div style="margin-top:10px"><button class="btn danger sm" data-act="disconnect">Disconnect from Google Sheets</button></div>'
@@ -1657,7 +1693,7 @@ document.addEventListener('click',async function(e){
     }
   }
   else if(a==='csvClaims'){download('claims-'+todayIso()+'.csv',claimsCsv())}
-  else if(a==='csvReports'){download('reports-'+(ui.rep.month||todayIso().slice(0,7))+'.csv',reportsCsv())}
+  else if(a==='csvReports'){download('reports-'+curRange().from+'_to_'+curRange().to+'.csv',reportsCsv())}
   else if(a==='delclaim'){if(confirm('Remove claim '+id+'?')){delete db.claims[id];Store.save();buildFilters();updateClaims()}}
   else if(a==='billshow'){ui.bills.show=t.dataset.v;vBills()}
   else if(a==='paybill'){const b=db.bills.find(x=>x.id===id);const d=$('#pd'+id).value||todayIso();if(b){b.status='paid';b.paidDate=d;Store.save();vBills()}}
@@ -1687,6 +1723,12 @@ document.addEventListener('click',async function(e){
 });
 document.addEventListener('change',function(e){
   const t=e.target;if(!db||!t.dataset)return;
+  if(t.id==='rgPreset'||t.id==='rgFrom'||t.id==='rgTo'){
+    const R=curRange();
+    if(t.id==='rgPreset'){ui.range.preset=t.value;if(t.value==='custom'){ui.range.from=R.from;ui.range.to=R.to}}
+    else{ui.range={preset:'custom',from:$('#rgFrom').value||R.from,to:$('#rgTo').value||R.to}}
+    RCACHE=null;go(current);return;
+  }
   if(t.name==='cat'&&t.value==='__new__'&&t.form&&t.form.id==='addBill'){const n=askNewCategory();if(n){const o=document.createElement('option');o.textContent=n;t.insertBefore(o,t.lastElementChild);t.value=n}else t.selectedIndex=0}
   else if(t.dataset.act==='work'){const c=db.claims[t.dataset.id];if(c){c.work=t.value;Store.save();updateClaims()}}
   else if(t.dataset.act==='note'){const c=db.claims[t.dataset.id];if(c){c.note=t.value.slice(0,300);Store.save()}}
