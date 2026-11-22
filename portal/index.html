@@ -421,6 +421,35 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
 .htabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
 .htab{padding:8px 16px;border-radius:9px;border:1.5px solid var(--border);background:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
 .htab.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+/* ── THEME LAYER: soft pill tabs, tiles, chips, selectable option tiles (same purple palette) ── */
+.htab{border-radius:999px;padding:8px 18px;border-width:1px;color:var(--nurse);transition:background .15s,border-color .15s}.htab:hover{background:var(--teal-light);border-color:var(--nurse-border)}.htab.on{background:var(--teal);color:#fff;border-color:var(--teal);box-shadow:0 4px 14px rgba(157,11,214,.25)}
+.card{border-radius:16px}
+.htbl{border-radius:16px;border:1px solid var(--border)}.htbl tbody tr:hover td{background:#fdf7ff}
+.pill{padding:3px 11px;font-weight:600}.mini{border-radius:999px;padding:5px 13px;color:var(--nurse);border-color:var(--nurse-border)}.mini:hover{background:var(--teal-light)}
+.tilegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:6px}
+.tile2{background:#fff;border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 4px 20px rgba(157,11,214,.07)}
+.tile2 .tt{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700}
+.tile2 .ts{font-size:12px;color:var(--muted);margin:2px 0 9px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip2{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px;background:var(--teal-light);color:var(--nurse);border:1px solid transparent;font-family:inherit}
+.chip2 button{border:none;background:none;color:inherit;cursor:pointer;padding:0 0 0 2px;font-size:14px;line-height:1;font-family:inherit}
+.chip2.add{background:#fff;border:1px dashed var(--nurse-border);cursor:pointer}
+.tbtns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.reqgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:4px 0 10px}
+.reqtile{position:relative;display:block;background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:11px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+.reqtile input{position:absolute;opacity:0;pointer-events:none}
+.reqtile b{display:block;font-size:13px}.reqtile span{font-size:12px;color:var(--muted)}
+.reqtile::after{content:'';position:absolute;top:11px;right:12px;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--nurse-border);background:#fff}
+.reqtile:has(input:checked){border-color:var(--teal);background:var(--teal-light)}
+.reqtile:has(input:checked)::after{background:var(--teal);border-color:var(--teal);box-shadow:inset 0 0 0 3px #fff}
+.reqtile:has(input:focus-visible){outline:2px solid var(--teal);outline-offset:2px}
+.idgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:8px}
+.idtile{background:#fff;border:1px solid var(--nurse-border);border-radius:16px;padding:13px 15px;cursor:pointer;box-shadow:0 4px 20px rgba(157,11,214,.07);transition:transform .1s,border-color .15s;text-align:left;font-family:inherit}
+.idtile:hover{border-color:var(--teal)}.idtile:active{transform:scale(.98)}
+.idtile .il{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700}
+.idtile .iv{font-size:19px;font-weight:700;color:var(--admin);margin:3px 0 6px;word-break:break-word;font-variant-numeric:tabular-nums}
+.idtile .ic{font-size:12px;font-weight:700;color:var(--nurse)}
+
 .htbl{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
 .htbl th{background:var(--teal-light);text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted);padding:9px 11px}
 .htbl td{padding:10px 11px;border-top:1px solid var(--border);font-size:13px;vertical-align:top}
@@ -2718,13 +2747,13 @@ async function drawIds(box){
   catch(e){ box.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>Could not load the agency details ('+escAct(e.message||'error')+').</p></div>'; return; }
   const p=a.providerIds||{}, addr=[a.addr,[a.city,a.state].filter(Boolean).join(', ')+' '+(a.zip||'')].filter(x=>x&&x.trim()).join(', ');
   const rows=[['Agency name',a.name],['Address',addr],['Phone',a.phone],['Fax',a.fax],['Email',a.email],['NPI',a.npi],['EIN / Tax ID',a.tin],['Medicaid ID',a.medicaidId],['CareBridge ID',a.carebridgeId],['Horizon NJ provider ID',p.hnjh],['UnitedHealthcare provider ID',p.uhc],['Wellpoint provider ID',p.wellpoint],['Aetna provider ID',p.aetna],['HPP provider ID',p.hpp]].filter(r=>r[1]&&String(r[1]).trim());
-  box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Agency IDs</div><p class="tmuted" style="margin:0 0 10px">Keep this handy when an insurer asks for an ID. Visible only after sign-in. To change a value, edit the AGENCY settings in Code.gs.</p>'+
-   (rows.length?'<table class="htbl"><tbody>'+rows.map((r,i)=>'<tr><td style="width:36%"><strong>'+escAct(r[0])+'</strong></td><td style="font-variant-numeric:tabular-nums">'+escAct(String(r[1]))+'</td><td style="text-align:right"><button class="mini" data-v="'+escAct(String(r[1]))+'" onclick="copyId(this)">Copy</button></td></tr>').join('')+'</tbody></table>':'<p class="tmuted">No agency details are set in Code.gs yet.</p>')+'</div>';
+  box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Agency IDs</div><p class="tmuted" style="margin:0 0 4px">Keep this handy when an insurer asks for an ID. Tap a tile to copy it. Visible only after sign-in. To change a value, edit the AGENCY settings in Code.gs.</p>'+
+   (rows.length?'<div class="idgrid">'+rows.map(r=>'<button class="idtile" data-v="'+escAct(String(r[1]))+'" onclick="copyId(this)"><div class="il">'+escAct(r[0])+'</div><div class="iv">'+escAct(String(r[1]))+'</div><div class="ic">Copy</div></button>').join('')+'</div>':'<p class="tmuted">No agency details are set in Code.gs yet.</p>')+'</div>';
 }
 async function copyId(b){
   const v=b.dataset.v; let ok=false;
   try{ await navigator.clipboard.writeText(v); ok=true; }catch(e){ try{ const t=document.createElement('textarea'); t.value=v; document.body.appendChild(t); t.select(); ok=document.execCommand('copy'); t.remove(); }catch(e2){} }
-  const old=b.textContent; b.textContent=ok?'Copied ✓':'Press Ctrl+C'; setTimeout(()=>{ b.textContent=old; },1500);
+  const c=b.querySelector('.ic')||b, old=c.textContent; c.textContent=ok?'Copied ✓':'Press Ctrl+C'; setTimeout(()=>{ c.textContent=old; },1500);
 }
 /* ---------- Activity sheets: admin attaches aides to a published sheet ---------- */
 let PLANS=null;
@@ -2736,13 +2765,19 @@ async function drawPlans(box,force){
   }
   const q=HOME_Q.trim().toLowerCase(), list=PLANS.plans.filter(p=>!q||p.name.toLowerCase().includes(q));
   box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Activity sheets</div><p class="tmuted" style="margin:0 0 10px">The nurse publishes each patient\'s activities in the care plan. Here you attach the aides who will see the sheet, then Publish or Update. Unpublish hides it from aides without deleting it.</p>'+
-   (list.length?'<table class="htbl"><thead><tr><th>Patient</th><th>Activities</th><th>Aides</th><th>Actions</th></tr></thead><tbody>'+list.map((p,i)=>{
-     const names=p.aides.map(e=>{ const a=PLANS.aides.find(x=>x.email===e); return a?a.name:e; });
-     return '<tr><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">'+(p.active?'<span class="pill ok">Published</span>':'<span class="pill">Hidden from aides</span>')+(p.updatedAt?' '+escAct(usDate(p.updatedAt.slice(0,10))):'')+'</span></td>'+
-       '<td>'+p.activities.length+' ordered'+(p.activities.length?'<br><span class="tmuted">'+escAct(p.activities.slice(0,3).join(', '))+(p.activities.length>3?'…':'')+'</span>':'')+'</td>'+
-       '<td>'+(names.length?names.map(escAct).join(', '):'<span class="tmuted">none attached</span>')+'</td>'+
-       '<td><button class="mini" onclick="editPlanAides('+i+')">Attach aides</button>'+(p.active?'<button class="mini" onclick="planAidesSave('+i+',null,false)">Unpublish</button>':'')+'</td></tr>';
-   }).join('')+'</tbody></table>':'<p class="tmuted">No activity sheets yet. They appear here after the nurse publishes a patient\'s activities in the care plan.</p>')+'<div id="planEdit"></div></div>';
+   (list.length?'<div class="tilegrid">'+list.map(p=>{
+     const i=PLANS.plans.indexOf(p);
+     return '<div class="tile2"><div class="tt"><span>'+escAct(p.name)+'</span>'+(p.active?'<span class="pill ok">Published</span>':'<span class="pill">Hidden from aides</span>')+'</div>'+
+       '<div class="ts">'+p.activities.length+' ordered'+(p.updatedAt?' · '+escAct(usDate(p.updatedAt.slice(0,10))):'')+(p.activities.length?'<br>'+escAct(p.activities.slice(0,3).join(', '))+(p.activities.length>3?'…':''):'')+'</div>'+
+       '<div class="chips">'+p.aides.map(e=>{ const a=PLANS.aides.find(x=>x.email===e); return '<span class="chip2">'+escAct(a?a.name:e)+'<button title="Remove" aria-label="Remove '+escAct(a?a.name:e)+'" onclick="removeAide('+i+',\''+escAct(e).replace(/\'/g,'')+'\')">×</button></span>'; }).join('')+'<span class="chip2 add" onclick="editPlanAides('+i+')">+ Add aide</span></div>'+
+       '<div class="tbtns">'+(p.active?'<button class="mini" onclick="planAidesSave('+i+',null,true,true)">Update</button><button class="mini" onclick="planAidesSave('+i+',null,false)">Unpublish</button>':'<button class="mini" onclick="editPlanAides('+i+')">Publish…</button>')+'</div></div>';
+   }).join('')+'</div>':'<p class="tmuted">No activity sheets yet. They appear here after the nurse publishes a patient\'s activities in the care plan.</p>')+'<div id="planEdit"></div></div>';
+}
+async function removeAide(i,email){
+  const p=PLANS.plans[i], a=PLANS.aides.find(x=>x.email===email), nm=a?a.name:email, rest=p.aides.filter(e=>e!==email);
+  if(!rest.length&&p.active){ if(!confirm('Remove '+nm+'? They are the last aide, so '+p.name+'\'s sheet will be hidden from aides until you add someone.')) return; return planAidesSave(i,'',false,true); }
+  if(!confirm('Remove '+nm+' from '+p.name+'\'s activity sheet?')) return;
+  planAidesSave(i,rest.join(','),p.active,true);
 }
 function editPlanAides(i){
   const p=PLANS.plans[i], sel=new Set(p.aides), known=new Set(PLANS.aides.map(a=>a.email));
@@ -2757,9 +2792,9 @@ function collectPlanAides(){
   const ch=[...document.querySelectorAll('.plAide:checked')].map(c=>c.value), ex=(document.getElementById('plExtra').value||'').split(/[\s,;]+/).filter(Boolean);
   return [...new Set(ch.concat(ex))].join(',');
 }
-async function planAidesSave(i,aides,active){
+async function planAidesSave(i,aides,active,skip){
   const p=PLANS.plans[i], msg=document.getElementById('plMsg');
-  if(!active&&!confirm('Hide '+p.name+'\'s activity sheet from aides? Nothing is deleted. You can publish it again.')) return;
+  if(!active&&!skip&&!confirm('Hide '+p.name+'\'s activity sheet from aides? Nothing is deleted. You can publish it again.')) return;
   try{ const j=await api('planAides',{key:p.key,aides:aides==null?p.aides.join(','):aides,active:active}); if(!j.ok){ if(msg) msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>'+escAct(j.error||'Could not save.')+'</p></div>'; else alert(j.error||'Could not save.'); return; }
     drawPlans(document.getElementById('homeList'),true); }
   catch(e){ if(msg) msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>'+escAct(e.message||'Could not reach the office system.')+'</p></div>'; else alert(e.message||'Could not reach the office system.'); }
@@ -2784,9 +2819,10 @@ function reqDone(o,k){
   if(k==='bgforms') return !!(has.bg1&&has.bg2&&has.bg3&&has.bgnj);
   return !!has[k];
 }
+const REQ_SUB={details:'Review and update',w4:'Signed on screen',ssncard:'Photo or scan',i9a:'Photo or scan',i9b:'Photo or scan',i9c:'Photo or scan',contract:'Signed contract',physical:'Upload',other:'Upload',standards:'Sign on screen',jobdesc:'Sign on screen',bgforms:'Four forms, signed',crimatt:'Sign on screen',policies:'Sign on screen',refrelease:'Sign on screen'};
 function reqChecks(sel){
   const L=ONB.reqItems||{};
-  return REQ_GROUPS.map(g=>'<div style="margin:6px 0"><div class="tmuted" style="font-weight:700">'+g[0]+'</div><div style="display:flex;flex-wrap:wrap;gap:4px 18px">'+g[1].filter(k=>L[k]).map(k=>'<label style="display:flex;gap:6px;align-items:center;min-width:260px"><input type="checkbox" class="rqk" value="'+k+'" '+((sel||[]).includes(k)?'checked':'')+'> '+escAct(L[k])+'</label>').join('')+'</div></div>').join('');
+  return REQ_GROUPS.map(g=>'<div style="margin:8px 0"><div class="tmuted" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:11px">'+g[0]+'</div><div class="reqgrid">'+g[1].filter(k=>L[k]).map(k=>'<label class="reqtile"><input type="checkbox" class="rqk" value="'+k+'" '+((sel||[]).includes(k)?'checked':'')+'><b>'+escAct(String(L[k]).replace(/ \(.*\)$/,'').replace(/, completed and signed on screen$/,''))+'</b><span>'+(REQ_SUB[k]||'')+'</span></label>').join('')+'</div></div>').join('');
 }
 function reqPanel(o){
   const q=(o.app||{})._req, cur=q&&q.items?q.items:[], miss=cur.filter(k=>!reqDone(o,k));
