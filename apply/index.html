@@ -170,11 +170,12 @@ function renderTasks(msg){
      '<input type="file" id="up_'+k+'" accept=".pdf,image/*" style="max-width:260px"><button class="btn o" onclick="upload(\''+k+'\')">Upload</button></div></div>';
   $('main').innerHTML=(msg?'<div class="msg ok">'+msg+'</div>':'')+'<div class="card"><h2>Hello '+esc(ST.first)+'</h2><p class="sub">Position: '+esc(ST.position||'')+'. Your details from the application are already filled in. Review each form, sign it on screen, then upload your documents. You can stop and come back with the same link.</p>'+
    '<h3>1. Forms to sign'+(left?' ('+left+' left)':' (all done)')+'</h3>'+ST.forms.map(f=>'<div class="task"><div class="t">'+esc(f.title)+'</div>'+pill(f.done)+(f.done?'':'<button class="btn" onclick="openForm(\''+f.k+'\')">Review &amp; sign</button>')+'</div>').join('')+
-   '<h3>2. Signed employment contract</h3>'+upRow('contract','Upload your signed contract','The contract was attached to your offer email. Sign it, then upload a scan or clear photo of every page as one PDF, or call the office if you need help.')+
-   '<h3>3. Identification documents</h3><p class="sub">For Form I-9 you choose which documents to show: <b>one document from List A</b>, or <b>one from List B plus one from List C</b>. See the <a href="'+esc(ST.i9Url)+'" target="_blank" rel="noopener">official list of acceptable documents</a>. Upload a clear photo or scan of each. Bring the originals on your first day.</p>'+
+   '<h3>2. Form W-4 (tax withholding)</h3><div class="task"><div class="t">Form W-4: Employee\'s Withholding Certificate<div class="sub" style="font-weight:400;margin:2px 0 0">Your name and address are filled in. Add your Social Security number and filing status, then sign on screen.</div></div>'+pill(up.w4&&up.w4.done)+(up.w4&&up.w4.done?'':'<button class="btn" onclick="openW4()">Complete &amp; sign</button>')+'</div>'+
+   '<h3>3. Signed employment contract</h3>'+upRow('contract','Upload your signed contract','The contract was attached to your offer email. Sign it, then upload a scan or clear photo of every page as one PDF, or call the office if you need help.')+
+   '<h3>4. Identification documents</h3><p class="sub">For Form I-9 you choose which documents to show: <b>one document from List A</b>, or <b>one from List B plus one from List C</b>. See the <a href="'+esc(ST.i9Url)+'" target="_blank" rel="noopener">official list of acceptable documents</a>. Upload a clear photo or scan of each. Bring the originals on your first day.</p>'+
    upRow('ssncard','Social Security card','Needed for payroll. It also counts as your List C document.')+upRow('i9a','List A document (identity and work authorization)','Choose this, or List B and C below.',I9A)+upRow('i9b','List B document (identity)','',I9B)+upRow('i9c','List C document (work authorization)','Only if you are not using your Social Security card.',I9C)+
-   '<h3>4. Other</h3>'+upRow('physical','Completed physical examination (if you have it)','')+upRow('other','Any other document the office asked for','')+
-   '<div id="tmsg"></div><p class="foot">Form W-4 and Form I-9 are completed with the office. Questions? Call 609-277-3032.</p></div>';
+   '<h3>5. Other</h3>'+upRow('physical','Completed physical examination (if you have it)','')+upRow('other','Any other document the office asked for','')+
+   '<div id="tmsg"></div><p class="foot">Form I-9 is completed at the office: please bring the original documents you listed above on your first visit. Questions? Call 609-277-3032.</p></div>';
   window.scrollTo(0,0);
 }
 async function upload(k){
@@ -198,6 +199,45 @@ function bindPad(){ const c=$('pad'), r=window.devicePixelRatio||1; c.width=c.cl
   c.onpointerdown=e=>{ e.preventDefault(); on=true; l=p(e); try{c.setPointerCapture(e.pointerId);}catch(_){} x.beginPath(); x.arc(l.x,l.y,1.1,0,6.3); x.fill(); ink=true; };
   c.onpointermove=e=>{ if(!on) return; const q=p(e); x.beginPath(); x.moveTo(l.x,l.y); x.lineTo(q.x,q.y); x.stroke(); l=q; };
   c.onpointerup=c.onpointercancel=()=>{ on=false; }; }
+
+/* ───────── Form W-4: completed and signed on screen ───────── */
+function loadJs(u){ return new Promise((res,rej)=>{ const t=document.createElement('script'); t.src=u; t.onload=res; t.onerror=()=>rej(new Error('Could not load '+u)); document.head.appendChild(t); }); }
+function openW4(){
+  ink=false; const a=ST.w4||{};
+  const num=(id,label,help)=>'<div><label class="l" for="'+id+'">'+label+'</label><input type="number" id="'+id+'" min="0" step="1" inputmode="numeric" placeholder="0">'+(help?'<div class="sub" style="margin:2px 0 0">'+help+'</div>':'')+'</div>';
+  const amt=(id,label,help)=>'<div><label class="l" for="'+id+'">'+label+'</label><input type="number" id="'+id+'" min="0" step="0.01" inputmode="decimal" placeholder="$0.00">'+(help?'<div class="sub" style="margin:2px 0 0">'+help+'</div>':'')+'</div>';
+  $('main').innerHTML='<div class="card"><h2>Form W-4: Employee\'s Withholding Certificate</h2><p class="sub">Complete Steps 2 to 4 only if they apply to you. Skip to the signature if not. The official form with your answers is saved to your file. <a href="https://www.irs.gov/individuals/tax-withholding-estimator" target="_blank" rel="noopener">IRS withholding estimator</a></p>'+
+   '<h3>Step 1: Your information</h3><div class="g"><div><label class="l">First name</label><div class="doc" style="padding:8px 10px">'+esc(a.firstName||'')+'</div></div><div><label class="l">Last name</label><div class="doc" style="padding:8px 10px">'+esc(a.lastName||'')+'</div></div>'+
+   '<div class="s2"><label class="l">Address</label><div class="doc" style="padding:8px 10px">'+esc([a.addr1,a.addr2].filter(Boolean).join(', ')+', '+[a.city,a.state,a.zip].filter(Boolean).join(' '))+'</div></div>'+
+   '<div><label class="l" for="w_ssn">Social Security number <span class="req">*</span></label><input type="text" id="w_ssn" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="123-45-6789"></div>'+
+   '<div><label class="l" for="w_status">Filing status <span class="req">*</span></label><select id="w_status"><option value="">— Choose —</option><option value="single">Single or Married filing separately</option><option value="married">Married filing jointly or Qualifying surviving spouse</option><option value="head">Head of household</option></select></div></div>'+
+   '<h3>Step 2: Multiple jobs or spouse works</h3><label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="w_s2" style="width:auto;margin-top:4px"><span>Only two jobs total (you and your spouse combined): check this box. Do the same on the W-4 for the other job.</span></label>'+
+   '<h3>Step 3: Dependents and other credits</h3><div class="g">'+num('w_kids','Qualifying children under age 17','Multiplied by $2,200')+num('w_deps','Other dependents','Multiplied by $500')+amt('w_cred','Other credits (optional)','Only if you have them. See the form instructions.')+'</div>'+
+   '<h3>Step 4: Other adjustments</h3><div class="g">'+amt('w_inc','(a) Other income not from jobs')+amt('w_ded','(b) Deductions')+amt('w_ext','(c) Extra withholding each pay period')+'</div>'+
+   '<h3>Exemption</h3><label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="w_ex" style="width:auto;margin-top:4px"><span>I claim exemption from withholding for this year. Check only if you meet both conditions described on the form.</span></label>'+
+   '<h3>Step 5: Signature</h3><p class="sub">Under penalties of perjury, I declare that this certificate, to the best of my knowledge and belief, is true, correct, and complete.</p><div class="sig"><canvas id="pad"></canvas></div><p class="sub"><button class="btn o" style="padding:6px 14px" onclick="clearPad()">Clear</button> Sign with your finger or mouse. Signing here has the same effect as signing on paper. You may ask the office for a paper copy.</p><div id="fmsg"></div>'+
+   '<p><button class="btn" id="sbtn" onclick="signW4()">Sign and submit</button> <button class="btn o" onclick="renderTasks()">Back</button></p></div>';
+  window.scrollTo(0,0); bindPad();
+}
+async function signW4(){
+  const v=id=>($(id)||{}).value||'', ssn=v('w_ssn').replace(/\D/g,'');
+  if(ssn.length!==9) return say('fmsg','bad','Enter your 9-digit Social Security number.');
+  if(!v('w_status')) return say('fmsg','bad','Choose your filing status.');
+  const n=id=>{ const x=Number(v(id)); return isFinite(x)&&x>=0?x:0; };
+  if(!ink) return say('fmsg','bad','Please sign in the box.');
+  $('sbtn').disabled=true; say('fmsg','','Preparing your form…');
+  try{
+    if(!window.PDFLib) await loadJs('../portal/hr-pdf/pdf-lib.min.js'); if(!window.HRFILL) await loadJs('../portal/hr-pdf/hrfill.js');
+    const r=await fetch('../portal/hr-pdf/w4.pdf'); if(!r.ok) throw new Error('form');
+    const d=new Date(), date=String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+'/'+d.getFullYear();
+    const bytes=await HRFILL.fillW4Signed(PDFLib,await r.arrayBuffer(),ST.w4||{},{ssn:ssn.slice(0,3)+'-'+ssn.slice(3,5)+'-'+ssn.slice(5),status:v('w_status'),step2:$('w_s2').checked,kids:n('w_kids'),deps:n('w_deps'),otherCredits:n('w_cred'),otherIncome:n('w_inc'),deductions:n('w_ded'),extra:n('w_ext'),exempt:$('w_ex').checked,sig:$('pad').toDataURL('image/png'),date:date});
+    let bin=''; for(let i=0;i<bytes.length;i+=8192) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));
+    say('fmsg','','Sending…');
+    const j=await call({action:'applicantUpload',kind:'w4',docType:'',file:{name:'W-4.pdf',mime:'application/pdf',b64:btoa(bin)}});
+    if(!j.ok){ $('sbtn').disabled=false; return say('fmsg','bad',esc(j.error||'Could not send the form.')); }
+    ST=j; renderTasks('Form W-4 signed and saved. Thank you.');
+  }catch(e){ if(e.message!=='expired'){ $('sbtn').disabled=false; say('fmsg','bad','Could not complete the form. Check your connection and try again, or call the office.'); } }
+}
 function clearPad(){ const c=$('pad'); c.getContext('2d').clearRect(0,0,c.width,c.height); ink=false; }
 async function signForm(k){
   const f=ST.forms.find(x=>x.k===k), fields={};

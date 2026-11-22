@@ -1639,7 +1639,7 @@ const APP_FIELDS_ = [['firstName', 'First Name', 'Demographic Information'], ['l
   ['eduLevel', 'Highest Level of Education', 'Education History'], ['eduGrad', 'Graduation Date'], ['eduSchool', 'School Name'], ['eduAddr', 'School Address'], ['eduCity', 'City'], ['eduState', 'State'], ['eduZip', 'Zip Code'], ['malpProvider', 'Malpractice Insurance Provider'], ['malpPolicy', 'Malpractice Insurance Policy #'],
   ['ref1Name', 'Reference 1 Name', 'References'], ['ref1Title', 'Title'], ['ref1Addr', 'Address'], ['ref1Contact', 'Telephone / Email'], ['ref2Name', 'Reference 2 Name'], ['ref2Title', 'Title'], ['ref2Addr', 'Address'], ['ref2Contact', 'Telephone / Email'], ['ref3Name', 'Reference 3 Name'], ['ref3Title', 'Title'], ['ref3Addr', 'Address'], ['ref3Contact', 'Telephone / Email'],
   ['consentEmployer', 'Authorization to contact prior employers', 'Consent and Authorizations'], ['consentBackground', 'Authorization for background check'], ['consentDate', 'Date'], ['consentSms', 'Consent to SMS messaging']];
-const UPLOAD_KINDS_ = { ssncard: 'Social Security card', i9a: 'I-9 List A document', i9b: 'I-9 List B document (identity)', i9c: 'I-9 List C document (work authorization)', contract: 'Signed employment contract', physical: 'Completed physical examination', other: 'Other document' };
+const UPLOAD_KINDS_ = { w4: 'Form W-4 (completed and signed)', ssncard: 'Social Security card', i9a: 'I-9 List A document', i9b: 'I-9 List B document (identity)', i9c: 'I-9 List C document (work authorization)', contract: 'Signed employment contract', physical: 'Completed physical examination', other: 'Other document' };
 const DOC_TYPES_ = { 'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx' };
 const FILE_TYPES_ = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
 
@@ -1741,6 +1741,7 @@ function hrState_(x) {
   return { ok: true, name: x[O_.NAME], first: String(x[O_.NAME]).split(/\s+/)[0], position: x[O_.POS],
     forms: hrForms_(x).map(function (f) { return { k: f.k, title: f.title, html: f.html, pre: f.pre || '', post: f.post || '', fields: f.fields, done: !!has[f.k] }; }),
     uploads: Object.keys(UPLOAD_KINDS_).map(function (k) { return { k: k, label: UPLOAD_KINDS_[k], done: !!has[k] }; }),
+    w4: (function () { const a = onbApp_(x), n = String(x[O_.NAME] || '').trim().split(/\s+/); return { firstName: String(a.firstName || n[0] || ''), lastName: String(a.lastName || n.slice(1).join(' ') || ''), addr1: String(a.addr1 || ''), addr2: String(a.addr2 || ''), city: String(a.city || ''), state: String(a.state || ''), zip: String(a.zip || '') }; })(),
     i9Url: CONFIG.I9_DOCUMENTS_URL || 'https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents' };
 }
 function appToken_(id) { const exp = Date.now() + 2 * 3600 * 1000, p = Utilities.base64EncodeWebSafe(JSON.stringify({ a: id, x: exp })); return { token: 'A.' + p + '.' + sign_('A:' + p), exp: exp }; }
@@ -1814,6 +1815,7 @@ function hr_(d) {
       const has = {}; docs.forEach(function (q) { has[q.k] = true; });
       if (has.ssncard && (has.i9a || (has.i9b && (has.i9c || has.ssncard)))) tick('ids');
       if (kind === 'contract') tick('contract');
+      if (kind === 'w4') tick('w4');
     });
     audit_(me, 'applicantUpload', id, kind); return out_(hrState_(x));
   }
@@ -1911,7 +1913,7 @@ function onb_(act, d, u) {
     MailApp.sendEmail({ to: x[O_.EMAIL], replyTo: office, subject: 'Comfort Hands Home Healthcare: provisional offer of employment',
       body: ['Hello ' + first + ',', '', 'Thank you for applying to Comfort Hands Home Healthcare. We have reviewed your application and are pleased to offer you provisional employment' + (x[O_.POS] ? ' as ' + x[O_.POS] : '') + '.', '',
         'This offer is provisional. It is subject to a satisfactory background check and satisfactory reference checks, and to completing the new-hire steps below. A copy of your employment contract is attached for you to read. You will sign it on screen on your new-hire page; there is nothing to print or upload.', '',
-        'Next step: open your personal new-hire page:', link, '', 'On that page you will ask for a 6-digit code by email, then review and sign your forms on screen, including your employment contract, and upload your identification documents. Your details from the application are already filled in.', '',
+        'Next step: open your personal new-hire page:', link, '', 'On that page you will ask for a 6-digit code by email, then review and sign your forms on screen, including your employment contract and Form W-4 (tax withholding), and upload your identification documents. Your details from the application are already filled in.', '', 'Form I-9 is completed at our office. Please bring the original identification documents you listed to your first visit, and we will finish it with you.', '',
         (CONFIG.ONBOARDING_NOTE || ''), 'Call us at 609-277-3032 with any questions.', '', 'Sincerely,', 'Comfort Hands Home Healthcare, LLC'].join('\n'), attachments: att });
     x[O_.OFFER] = today_(); mark('offer'); sh.getRange(r, 1, 1, ONB_N_).setValues([safeRow_(x)]);
     return out_({ ok: true, item: onbObj_(x), sent: att.length });
