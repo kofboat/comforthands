@@ -734,6 +734,7 @@ function restoreForm(){
     if(!el) return;
     if(f.c) el.checked=true; else el.value=f.v;
   });
+  try{ psychSync(); }catch(e){}
 }
 function clearAllData(){
   if(!confirm('Clear all saved admission data from this browser and start a new patient?')) return;
@@ -1429,6 +1430,28 @@ async function sendFax(){
 function prefillFax(){ const f=document.getElementById('ph_fax'); if(f&&!f.value&&SHARED.mdFax) f.value=SHARED.mdFax; _faxArm=null; const b=document.getElementById('faxBtn'); if(b) b.textContent='📠 Send via MetroFax'; }
 
 // ── CARE PLAN OVERVIEW PRE-FILL (from admin intake + nursing assessment) ──
+/* Psychosocial status: several can be ticked. The hidden field cpPsych holds them as "Oriented; Wanders; Other: text". */
+const PSY_OPTS=['Alert','Oriented','Confused','Forgetful','Wanders'];
+function psychSync(){
+  const h=document.getElementById('cpPsych'); if(!h) return;
+  const parts=String(h.value||'').split(/\s*;\s*/).filter(Boolean);
+  document.querySelectorAll('#cpPsychBox .psyopt').forEach(c=>{ c.checked=parts.indexOf(c.value)>=0; });
+  const oth=parts.find(x=>/^Other:?/i.test(x)), chk=document.getElementById('psyOtherChk'), txt=document.getElementById('psyOtherTxt');
+  if(chk&&txt){ chk.checked=!!oth; txt.style.display=oth?'':'none'; txt.value=oth?oth.replace(/^Other:?\s*/i,''):''; }
+}
+function psychRead(){
+  const h=document.getElementById('cpPsych'); if(!h) return;
+  const list=[...document.querySelectorAll('#cpPsychBox .psyopt:checked')].map(c=>c.value);
+  const chk=document.getElementById('psyOtherChk'), txt=document.getElementById('psyOtherTxt');
+  if(chk&&txt){ txt.style.display=chk.checked?'':'none'; if(chk.checked){ const t=txt.value.replace(/;/g,',').trim(); list.push(t?'Other: '+t:'Other'); } }
+  h.value=list.join('; '); h.dataset.edited='1';
+  h.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function psychAuto(list){
+  const h=document.getElementById('cpPsych'); if(!h||h.dataset.edited||!list.length) return;
+  if(h.value&&h.value!==h.dataset.auto) return;
+  h.value=list.join('; '); h.dataset.auto=h.value; psychSync();
+}
 function prefillCarePlan(){
   const v=id=>((document.getElementById(id)||{}).value||'').trim();
   const rv=name=>((document.querySelector('input[name="'+name+'"]:checked')||{}).value||'');
@@ -1444,10 +1467,10 @@ function prefillCarePlan(){
   // Allergies and diet from the nursing assessment
   set('cpAllergies',v('allergies'));
   set('cpDiet',[v('diet'),v('supplement')].filter(Boolean).join('; '));
-  // Psychosocial status: wandering first, else orientation
+  // Psychosocial status: orientation finding plus wandering, both ticked when both apply
   const ori=rv('orientation');
-  const psy=(rv('ia_wander')==='Yes')?'Wanders':{'Alert & Oriented':'Alert','Confused':'Confused','Forgetful':'Forgetful'}[ori];
-  set('cpPsych',psy);
+  const psyList=[{'Alert & Oriented':'Alert','Confused':'Confused','Forgetful':'Forgetful'}[ori],(rv('ia_wander')==='Yes')?'Wanders':''].filter(Boolean);
+  psychAuto(psyList);
   // Incontinence from bladder/bowel control
   const bl=v('adlBladder'), bw=v('adlBowel');
   if(bl||bw){
@@ -1888,7 +1911,7 @@ function nurseSteps(){return[
     <div class="fgroup s2"><label class="lbl">Diagnosis</label><input type="text" id="cpDx"></div>
     <div class="fgroup s2"><label class="lbl">Allergies</label><input type="text" id="cpAllergies"></div>
     <div class="fgroup"><label class="lbl">Diet</label><input type="text" id="cpDiet"></div>
-    <div class="fgroup"><label class="lbl">Psychosocial Status</label><select id="cpPsych"><option value="">— Select —</option><option>Alert</option><option>Oriented</option><option>Confused</option><option>Forgetful</option><option>Wanders</option></select></div>
+    <div class="fgroup s2"><label class="lbl">Psychosocial Status</label><div style="font-size:12px;color:#777">Tick all that apply</div><div id="cpPsychBox" style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:4px"><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="psyopt" value="Alert" onchange="psychRead()"> Alert</label><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="psyopt" value="Oriented" onchange="psychRead()"> Oriented</label><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="psyopt" value="Confused" onchange="psychRead()"> Confused</label><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="psyopt" value="Forgetful" onchange="psychRead()"> Forgetful</label><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" class="psyopt" value="Wanders" onchange="psychRead()"> Wanders</label><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="psyOtherChk" onchange="psychRead()"> Other</label></div><input type="text" id="psyOtherTxt" placeholder="Describe other" style="display:none;margin-top:6px" oninput="psychRead()"><input type="hidden" id="cpPsych"></div>
     <div class="fgroup"><label class="lbl">Incontinence</label><div class="rrow"><label class="rbtn"><input type="radio" name="cpInc" value="none"> None</label><label class="rbtn"><input type="radio" name="cpInc" value="bladder"> Bladder</label><label class="rbtn"><input type="radio" name="cpInc" value="bowel"> Bowel</label><label class="rbtn"><input type="radio" name="cpInc" value="both"> Both</label></div></div>
     <div class="fgroup"><label class="lbl">Primary Language</label><input type="text" id="cpLang"></div>
   </div>
@@ -2319,7 +2342,7 @@ function dueBadge(days){
   if(days<=10) return '<span class="pill warn">Due in '+days+' d</span>';
   return '<span class="pill ok">'+days+' d</span>';
 }
-function navGo(k){ ONB=null; HOME_Q=''; if(k==='overview'){ HOME_TAB='patients'; HOME_FILTER=''; drawHome(); } else if(k==='aides'){ HOME_TAB='aides'; HOME_FILTER=''; drawHome(); } else { HOME_FILTER=''; setHomeFilter(k); } window.scrollTo(0,0); }
+function navGo(k){ ONB=null; PLANS=null; HOME_Q=''; if(k==='overview'){ HOME_TAB='patients'; HOME_FILTER=''; drawHome(); } else if(k==='aides'){ HOME_TAB='aides'; HOME_FILTER=''; drawHome(); } else { HOME_FILTER=''; setHomeFilter(k); } window.scrollTo(0,0); }
 function attentionItems(h){
   const it=[], plural=n=>n+' day'+(n===1?'':'s');
   (h.patients||[]).forEach(p=>{ if(p.status==='discharged'||p.purged) return;
@@ -2335,6 +2358,7 @@ function drawHome(){
   /* sidebar */
   const navItems=[['overview','▦','Overview',0,'',HOME_TAB==='patients'&&!HOME_FILTER],['aides','♥','Aides',0,'',HOME_TAB==='aides'&&!HOME_FILTER],['pcaDue','✎','PCA authorizations',c.pcaDue||0,'',HOME_FILTER==='pcaDue'],['trkOver','✔','Compliance',(c.trkOver||0)+(c.trkSoon||0),(c.trkOver?'r':''),/^trk/.test(HOME_FILTER)],['sheets','▤','Activity sheets',c.sheets||0,'',HOME_TAB==='sheets'],['drafts','✉','Drafts',c.drafts||0,'',HOME_TAB==='drafts']];
   if(isA) navItems.push(['onb','＋','New hires',c.onboarding||0,'',HOME_TAB==='admin']);
+  if(isA) navItems.push(['plans','▤','Activity sheets',0,'',HOME_TAB==='plans']);
   const sn=document.getElementById('sideNav'); if(sn) sn.innerHTML=navItems.map(n=>'<a class="'+(n[5]?'on':'')+'" onclick="navGo(\''+n[0]+'\')"><i>'+n[1]+'</i>'+n[2]+(n[3]?'<span class="b '+n[4]+'">'+n[3]+'</span>':'')+'</a>').join('');
   /* top bar */
   const ti=document.getElementById('homeTop'), nm=String(AUTH.name||''), ini=(nm.trim()[0]||'?').toUpperCase(), td=h.today?new Date(h.today+'T12:00:00'):new Date();
@@ -2360,19 +2384,20 @@ function drawHome(){
   const weekHtml='<div class="dcard"><h2>This week</h2>'+
     '<div class="att" onclick="navGo(\'sheets\')"><div class="dot" style="background:'+(c.sheets?'#b7791f':'#15803d')+'"></div><div>Activity sheets not submitted<small>'+(c.sheets?c.sheets+' still to come in':'All submitted')+'</small></div></div>'+
     '<div class="att" style="cursor:default"><div class="dot" style="background:'+(wk.failed?'var(--danger)':(wk.live?'#15803d':'#9a9a9a'))+'"></div><div>Text messages (last 7 days)<small>'+(wk.live?wk.sent+' sent · '+wk.failed+' failed':(wk.sent?wk.sent+' recorded, not sent (texting is not switched on)':'Texting is not switched on yet'))+'</small></div></div></div>';
-  t+='<div class="dash"><div class="dash-main"><div class="htabs"><button class="htab '+(HOME_TAB==='patients'?'on':'')+'" onclick="setHomeTab(\'patients\')">Patients</button><button class="htab '+(HOME_TAB==='aides'?'on':'')+'" onclick="setHomeTab(\'aides\')">Aides</button>'+(isA?'<button class="htab '+(HOME_TAB==='admin'?'on':'')+'" onclick="setHomeTab(\'admin\')">Admin tasks</button>':'')+
+  t+='<div class="dash"><div class="dash-main"><div class="htabs"><button class="htab '+(HOME_TAB==='patients'?'on':'')+'" onclick="setHomeTab(\'patients\')">Patients</button><button class="htab '+(HOME_TAB==='aides'?'on':'')+'" onclick="setHomeTab(\'aides\')">Aides</button>'+(isA?'<button class="htab '+(HOME_TAB==='admin'?'on':'')+'" onclick="setHomeTab(\'admin\')">Admin tasks</button><button class="htab '+(HOME_TAB==='plans'?'on':'')+'" onclick="setHomeTab(\'plans\')">Activity sheets</button>':'')+
     (HOME_FILTER?'<button class="mini" onclick="setHomeFilter(\'\')">Clear filter ✕</button>':'')+
     (HOME_TAB==='patients'?'<span style="flex:1"></span><button class="btn btn-nurse" style="padding:8px 16px" onclick="newPatient()">＋ New patient admission</button>':'')+'</div><div id="homeList"></div></div>'+
     '<div class="dash-side">'+attHtml+weekHtml+'</div></div>';
   box.innerHTML=t; drawList();
 }
-function setHomeFilter(k){ HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(/^(eval|trk)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
-function setHomeTab(t){ HOME_TAB=t; HOME_FILTER=''; ONB=null; drawHome(); }
+function setHomeFilter(k){ HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(HOME_FILTER==='plans'){ HOME_TAB='plans'; } else if(/^(eval|trk)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
+function setHomeTab(t){ HOME_TAB=t; HOME_FILTER=''; ONB=null; PLANS=null; drawHome(); }
 function newPatient(){ if(!confirm('Start a new admission? The current admission on this device is already saved to the office system.')) return; try{ sessionStorage.setItem('chhc_open',AUTH.roles.includes('admin')?'admin':'nurse'); }catch(e){} clearAllData(); }
 function drawList(){
   const h=HOME, box=document.getElementById('homeList'); if(!box) return; const q=HOME_Q.trim().toLowerCase();
   const hasA=AUTH.roles.includes('admin'), hasN=AUTH.roles.includes('nurse');
   if(HOME_TAB==='admin'){ drawAdmin(box); return; }
+  if(HOME_TAB==='plans'){ drawPlans(box); return; }
   if(HOME_TAB==='drafts'){
     const d=h.drafts||[]; box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Drafts in progress</div>'+(d.length?'<table class="htbl"><thead><tr><th>Report</th><th>For</th><th>Last saved</th><th>Actions</th></tr></thead><tbody>'+d.map(x=>'<tr><td>'+escAct(x.label)+'</td><td><strong>'+escAct(x.subject)+'</strong></td><td>'+escAct((x.updatedAt||'').slice(0,10))+' <span class="tmuted">by '+escAct(x.by||'')+'</span></td><td><button class="mini" onclick="openReport(\''+x.kind+'\',\''+escAct(x.kind==='chha'?x.aideEmail:x.patientId)+'\')">Continue</button><button class="mini" onclick="discardDraft(\''+x.kind+'\',\''+escAct(x.kind==='chha'?x.aideEmail:x.patientId)+'\')">Discard</button></td></tr>').join('')+'</tbody></table>':'<p class="tmuted">No drafts. Use “Save draft” on any report to keep it for later.</p>')+'</div>'; return;
   }
@@ -2684,17 +2709,107 @@ async function saveReport(){
 const ADMIN_LINKS=[['Homebase (payroll)','https://app.joinhomebase.com/'],['HHAeXchange (data entry)','https://hhaexchange.com/']];
 let ONB=null;
 const isAdminNow=()=>isStaffNow()&&AUTH.roles.includes('admin');
+/* ---------- Activity sheets: admin attaches aides to a published sheet ---------- */
+let PLANS=null;
+async function drawPlans(box,force){
+  if(!PLANS||force){
+    box.innerHTML='<p class="tmuted">Loading activity sheets…</p>';
+    try{ const j=await api('planAdmin'); if(!j.ok) throw new Error(j.error||'error'); PLANS=j; }
+    catch(e){ box.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>Could not load activity sheets ('+escAct(e.message||'error')+').</p></div>'; return; }
+  }
+  const q=HOME_Q.trim().toLowerCase(), list=PLANS.plans.filter(p=>!q||p.name.toLowerCase().includes(q));
+  box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Activity sheets</div><p class="tmuted" style="margin:0 0 10px">The nurse publishes each patient\'s activities in the care plan. Here you attach the aides who will see the sheet, then Publish or Update. Unpublish hides it from aides without deleting it.</p>'+
+   (list.length?'<table class="htbl"><thead><tr><th>Patient</th><th>Activities</th><th>Aides</th><th>Actions</th></tr></thead><tbody>'+list.map((p,i)=>{
+     const names=p.aides.map(e=>{ const a=PLANS.aides.find(x=>x.email===e); return a?a.name:e; });
+     return '<tr><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">'+(p.active?'<span class="pill ok">Published</span>':'<span class="pill">Hidden from aides</span>')+(p.updatedAt?' '+escAct(usDate(p.updatedAt.slice(0,10))):'')+'</span></td>'+
+       '<td>'+p.activities.length+' ordered'+(p.activities.length?'<br><span class="tmuted">'+escAct(p.activities.slice(0,3).join(', '))+(p.activities.length>3?'…':'')+'</span>':'')+'</td>'+
+       '<td>'+(names.length?names.map(escAct).join(', '):'<span class="tmuted">none attached</span>')+'</td>'+
+       '<td><button class="mini" onclick="editPlanAides('+i+')">Attach aides</button>'+(p.active?'<button class="mini" onclick="planAidesSave('+i+',null,false)">Unpublish</button>':'')+'</td></tr>';
+   }).join('')+'</tbody></table>':'<p class="tmuted">No activity sheets yet. They appear here after the nurse publishes a patient\'s activities in the care plan.</p>')+'<div id="planEdit"></div></div>';
+}
+function editPlanAides(i){
+  const p=PLANS.plans[i], sel=new Set(p.aides), known=new Set(PLANS.aides.map(a=>a.email));
+  const extra=p.aides.filter(e=>!known.has(e));
+  document.getElementById('planEdit').innerHTML='<div style="margin-top:14px;padding:12px;border:1px solid #d8c4e6;border-radius:10px"><strong>Aides for '+escAct(p.name)+'</strong>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0">'+PLANS.aides.map(a=>'<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="plAide" value="'+escAct(a.email)+'" '+(sel.has(a.email)?'checked':'')+'> '+escAct(a.name)+'</label>').join('')+(PLANS.aides.length?'':'<span class="tmuted">No aides have the aide role yet.</span>')+'</div>'+
+    '<label class="lbl">Other email addresses (comma separated)</label><input type="text" id="plExtra" value="'+escAct(extra.join(', '))+'" placeholder="name@example.com" style="width:100%;max-width:420px">'+
+    '<div id="plMsg" style="margin-top:8px"></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-nurse" onclick="planAidesSave('+i+',collectPlanAides(),true)">'+(p.active?'Update':'Publish')+'</button><button class="btn btn-outline" onclick="document.getElementById(\'planEdit\').innerHTML=\'\'">Cancel</button></div></div>';
+  document.getElementById('planEdit').scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function collectPlanAides(){
+  const ch=[...document.querySelectorAll('.plAide:checked')].map(c=>c.value), ex=(document.getElementById('plExtra').value||'').split(/[\s,;]+/).filter(Boolean);
+  return [...new Set(ch.concat(ex))].join(',');
+}
+async function planAidesSave(i,aides,active){
+  const p=PLANS.plans[i], msg=document.getElementById('plMsg');
+  if(!active&&!confirm('Hide '+p.name+'\'s activity sheet from aides? Nothing is deleted. You can publish it again.')) return;
+  try{ const j=await api('planAides',{key:p.key,aides:aides==null?p.aides.join(','):aides,active:active}); if(!j.ok){ if(msg) msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>'+escAct(j.error||'Could not save.')+'</p></div>'; else alert(j.error||'Could not save.'); return; }
+    drawPlans(document.getElementById('homeList'),true); }
+  catch(e){ if(msg) msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>'+escAct(e.message||'Could not reach the office system.')+'</p></div>'; else alert(e.message||'Could not reach the office system.'); }
+}
 async function drawAdmin(box){
   const links='<div class="card"><div class="sh" style="margin-top:0">Payroll and scheduling systems</div><p class="tmuted" style="margin-bottom:10px">These open in a new tab. Payroll processing and data entry are done there.</p><div style="display:flex;gap:10px;flex-wrap:wrap">'+ADMIN_LINKS.map(l=>'<a class="btn btn-outline" style="text-decoration:none" href="'+l[1]+'" target="_blank" rel="noopener">'+l[0]+' ↗</a>').join('')+'</div></div>';
   box.innerHTML=links+'<p class="tmuted">Loading new hires…</p>';
   if(!ONB) try{ const j=await api('onbList'); if(!j.ok) throw new Error(j.error||'error'); ONB=j; }
   catch(e){ box.innerHTML=links+'<div class="info-box"><span class="ico">⚠️</span><p>Could not load onboarding ('+escAct(e.message||'error')+').</p></div>'; return; }
   const q=HOME_Q.trim().toLowerCase(), items=ONB.items.filter(o=>(!q||(o.name+o.email).toLowerCase().includes(q))).sort((a,b)=>(a.status==='in progress'?0:1)-(b.status==='in progress'?0:1)||(a.createdAt<b.createdAt?1:-1));
-  box.innerHTML=links+'<div class="htabs"><strong style="font-family:\'Playfair Display\',serif;font-size:16px">New aide onboarding</strong><span style="flex:1"></span><select id="pkPos" title="Which job description to include" style="padding:8px;border:1px solid #bbb;border-radius:8px;font-size:13px"><option value="">Packet: both job descriptions</option><option value="Companion">Packet: Companion only</option><option value="Certified Home Health Aide">Packet: CHHA / PCA only</option></select><button class="btn btn-outline" style="padding:8px 16px" onclick="printPacket()">🖨 Print application packet</button><button class="btn btn-nurse" style="padding:8px 16px" onclick="openOnboarding(\'\')">＋ New applicant</button></div>'+
+  box.innerHTML=links+'<div class="htabs"><strong style="font-family:\'Playfair Display\',serif;font-size:16px">New aide onboarding</strong><span style="flex:1"></span><select id="pkPos" title="Which job description to include" style="padding:8px;border:1px solid #bbb;border-radius:8px;font-size:13px"><option value="">Packet: both job descriptions</option><option value="Companion">Packet: Companion only</option><option value="Certified Home Health Aide">Packet: CHHA / PCA only</option></select><button class="btn btn-outline" style="padding:8px 16px" onclick="printPacket()">🖨 Print application packet</button><button class="btn btn-nurse" style="padding:8px 16px" onclick="openOnboarding(\'\')">＋ New applicant</button><button class="btn btn-outline" style="padding:8px 16px" onclick="openImport()">＋ Add existing employee</button></div>'+
    (items.length?'<table class="htbl"><thead><tr><th>Applicant</th><th>Progress</th><th>Next step</th><th>Actions</th></tr></thead><tbody>'+items.map(o=>{
      const pill=o.status==='hired'?'<span class="pill ok">Hired</span>':o.status==='in progress'?'<span class="pill warn">'+o.done+' / '+o.total+' steps</span>':'<span class="pill">'+escAct(o.status)+'</span>';
      return '<tr><td><strong>'+escAct(o.name)+'</strong><br><span class="tmuted">'+escAct(o.position||'')+(o.position?' · ':'')+escAct(o.email||'no email')+'</span></td><td>'+pill+'</td><td>'+(o.status==='in progress'?escAct(o.next):'—')+'</td><td><button class="mini" onclick="openOnboarding(\''+o.id+'\')">Open</button></td></tr>';
    }).join('')+'</tbody></table>':'<p class="tmuted">No applicants yet. They appear here when someone submits the Apply page.</p>');
+}
+/* ---------- Ask an employee for chosen items only; add existing employees from the tracker ---------- */
+const REQ_GROUPS=[['Personal details',['details']],['Tax and identity',['w4','ssncard','i9a','i9b','i9c']],['Signed on screen',['contract','standards','jobdesc','bgforms','crimatt','policies','refrelease']],['Other',['physical','other']]];
+function reqDone(o,k){
+  const has={}, app=o.app||{}; (o.docs||[]).forEach(d=>{ has[d.k]=true; });
+  if(k==='details') return !!(app._log&&app._log.length);
+  if(k==='bgforms') return !!(has.bg1&&has.bg2&&has.bg3&&has.bgnj);
+  return !!has[k];
+}
+function reqChecks(sel){
+  const L=ONB.reqItems||{};
+  return REQ_GROUPS.map(g=>'<div style="margin:6px 0"><div class="tmuted" style="font-weight:700">'+g[0]+'</div><div style="display:flex;flex-wrap:wrap;gap:4px 18px">'+g[1].filter(k=>L[k]).map(k=>'<label style="display:flex;gap:6px;align-items:center;min-width:260px"><input type="checkbox" class="rqk" value="'+k+'" '+((sel||[]).includes(k)?'checked':'')+'> '+escAct(L[k])+'</label>').join('')+'</div></div>').join('');
+}
+function reqPanel(o){
+  const q=(o.app||{})._req, cur=q&&q.items?q.items:[], miss=cur.filter(k=>!reqDone(o,k));
+  return '<div class="sh">Ask for specific items</div><div style="padding:12px;border:1px solid #d8c4e6;border-radius:10px"><p class="tmuted" style="margin:0 0 6px">Tick only what this person should see. Their page then shows just those items, and the email lists just those. Leave everything unticked and save to give them the full page again.</p>'+
+   reqChecks(cur)+
+   (q?'<p class="tmuted" style="margin-top:6px">Requested '+usDate(q.at)+(q.sentAt?' · link sent '+usDate(q.sentAt):' · not sent yet')+(miss.length?' · still missing: '+miss.map(k=>escAct((ONB.reqItems||{})[k]||k)).join('; '):' · everything received')+'</p>':'')+
+   '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-nurse" onclick="sendReq(\''+o.id+'\',false,true)">Send link</button>'+(miss.length?'<button class="btn btn-outline" onclick="sendReq(\''+o.id+'\',true,true)">Send again (missing items only)</button>':'')+'<button class="btn btn-outline" onclick="sendReq(\''+o.id+'\',false,false)">Save without sending</button></div></div>';
+}
+function detailsLog(o){
+  const log=((o.app||{})._log)||[]; if(!log.length) return '';
+  return '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Details changed by the employee ('+log.length+' update'+(log.length>1?'s':'')+')</summary>'+log.slice().reverse().map(e=>'<p class="tmuted" style="margin:8px 0 2px">'+escAct(usDate((e.at||'').slice(0,10)))+'</p><table class="rate"><tbody>'+(e.c||[]).map(c=>'<tr><td style="width:34%">'+escAct(c.l||c.k)+'</td><td><span style="text-decoration:line-through;color:#999">'+escAct(c.o||'(empty)')+'</span> → <strong>'+escAct(c.n||'(cleared)')+'</strong></td></tr>').join('')+'</tbody></table>').join('')+'</details>';
+}
+function pickedReq(){ return [...document.querySelectorAll('.rqk:checked')].map(c=>c.value); }
+async function sendReq(id,missingOnly,send){
+  let items=pickedReq(); const o=ONB.items.find(x=>x.id===id);
+  if(missingOnly&&o) items=items.filter(k=>!reqDone(o,k));
+  if(send&&!items.length) return repMsg('⚠️',missingOnly?'Nothing is missing.':'Tick at least one item to request.');
+  if(send&&!confirm('Email '+((o&&o.email)||'this employee')+' a link for '+items.length+' item'+(items.length>1?'s':'')+' only?')) return;
+  repMsg('⏳',send?'Sending…':'Saving…');
+  const j=await onbCall('onbRequest',id,{items:items,send:send}); if(!j.ok) return repMsg('⚠️',escAct(j.error||'Could not save.'));
+  const i=ONB.items.findIndex(x=>x.id===id); if(i>=0) ONB.items[i]=j.item; openOnboarding(id); repMsg('✅',send?'Link sent for '+items.length+' item'+(items.length>1?'s':'')+'.':'Saved.');
+}
+function openImport(){
+  const have=new Set((ONB.items||[]).map(o=>String(o.email||'').toLowerCase())), aides=((HOME&&HOME.aides)||[]).filter(a=>a.email&&!have.has(String(a.email).toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
+  REP=null; showOnly('repScreen'); document.getElementById('repTitle').textContent='Add existing employee';
+  document.getElementById('repBody').innerHTML='<div class="card"><div class="card-header"><div class="card-icon">🧑‍⚕️</div><div class="card-title"><h2>Add an existing employee</h2><p>Choose someone already in the aide tracker and the items you still need from them. They get a short email and see only those items.</p></div></div>'+
+   '<div class="fg"><div class="fgroup"><label class="lbl">Employee (from the aide tracker)</label><select id="im_who"><option value="">— Choose —</option>'+aides.map(a=>'<option value="'+escAct(a.email)+'" data-n="'+escAct(a.name)+'">'+escAct(a.name)+' — '+escAct(a.email)+'</option>').join('')+'</select></div>'+
+   '<div class="fgroup"><label class="lbl">Position (needed only for the contract or job description)</label><select id="im_pos"><option value="">— Select —</option>'+(ONB.positions||[]).map(x=>'<option>'+escAct(x)+'</option>').join('')+'</select></div></div>'+
+   (aides.length?'':'<p class="tmuted">Every aide in the tracker is already in this list, or no aides have been imported yet.</p>')+
+   '<div class="sh">Items to request</div>'+reqChecks(['w4','ssncard','i9a'])+
+   '<div id="repMsg"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-nurse" onclick="doImport(true)">Send link</button><button class="btn btn-outline" onclick="doImport(false)">Save without sending</button><button class="btn btn-outline" onclick="closeOnb()">Close</button></div></div>';
+}
+async function doImport(send){
+  const sel=document.getElementById('im_who'), email=sel.value, name=(sel.options[sel.selectedIndex]||{}).dataset?sel.options[sel.selectedIndex].dataset.n:'', items=pickedReq();
+  if(!email) return repMsg('⚠️','Choose an employee.'); if(send&&!items.length) return repMsg('⚠️','Tick at least one item to request.');
+  if(send&&!confirm('Email '+name+' ('+email+') a link for '+items.length+' item'+(items.length>1?'s':'')+' only?')) return;
+  repMsg('⏳',send?'Sending…':'Saving…');
+  const j=await onbCall('onbRequest','',{name:name,email:email,position:rv('im_pos'),items:items,send:send}); if(!j.ok) return repMsg('⚠️',escAct(j.error||'Could not save.'));
+  const i=ONB.items.findIndex(x=>x.id===j.item.id); if(i>=0) ONB.items[i]=j.item; else ONB.items.push(j.item);
+  openOnboarding(j.item.id); repMsg('✅',send?'Link sent to '+name+'.':'Saved.');
 }
 function openOnboarding(id){
   const o=id?ONB.items.find(x=>x.id===id):{id:'',name:'',email:'',phone:'',status:'in progress',steps:{},formsSentAt:'',position:'',app:{},docs:[]};
@@ -2706,9 +2821,9 @@ function openOnboarding(id){
    ((o.id&&(!su.contract||!su.applyUrl))?'<div class="info-box"><span class="ico">⚠️</span><p>Setup needed before an offer can be sent: '+[!su.contract?'CONTRACT_FILE_ID':'',!su.applyUrl?'APPLY_URL':''].filter(Boolean).join(' and ')+' in Code.gs (see SETUP.md).</p></div>':'')+
    '<div class="fg">'+RI('ob_name','Name',o.name)+RI('ob_email','Email',o.email,'email')+RI('ob_phone','Phone',o.phone,'tel')+'<div class="fgroup"><label class="lbl">Position</label><select id="ob_position"><option value="">— Select —</option>'+(ONB.positions||[]).map(x=>'<option'+(o.position===x?' selected':'')+'>'+escAct(x)+'</option>').join('')+'</select></div>'+
    '<div class="fgroup"><label class="lbl">Status</label><select id="ob_status">'+['in progress','hired','not hired','withdrawn'].map(x=>'<option'+(o.status===x?' selected':'')+'>'+x+'</option>').join('')+'</select></div></div>'+
-   (Object.keys(app).length?'<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Application answers</summary><table class="rate" style="margin-top:8px"><tbody>'+Object.keys(app).map(k=>'<tr><td style="width:40%">'+escAct(k.replace(/([A-Z0-9])/g,' $1').replace(/^./,c=>c.toUpperCase()))+'</td><td>'+escAct(app[k])+'</td></tr>').join('')+'</tbody></table><p class="tmuted">The Social Security number is only in the application PDF.</p></details>':'')+
+   (Object.keys(app).filter(k=>k[0]!=='_').length?'<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Application answers</summary><table class="rate" style="margin-top:8px"><tbody>'+Object.keys(app).filter(k=>k[0]!=='_').map(k=>'<tr><td style="width:40%">'+escAct(k.replace(/([A-Z0-9])/g,' $1').replace(/^./,c=>c.toUpperCase()))+'</td><td>'+escAct(app[k])+'</td></tr>').join('')+'</tbody></table><p class="tmuted">The Social Security number is only in the application PDF.</p></details>':'')+
    (docs.length?'<div class="sh">Documents on file'+(o.folderUrl?' — <a href="'+escAct(o.folderUrl)+'" target="_blank" rel="noopener" style="font-family:inherit;font-size:12.5px">open Drive folder</a>':'')+'</div><ul class="hist" style="margin:0 0 0 18px">'+docs.map(d=>'<li><a href="'+escAct(d.url)+'" target="_blank" rel="noopener">'+escAct(d.label)+'</a> <span class="tmuted">'+usDate(d.at)+'</span></li>').join('')+'</ul>':'')+
-   (o.id?refSection(o):'')+'<div class="sh">Hiring checklist</div><table class="rate"><tbody>'+st+'</tbody></table>'+
+   (o.id?detailsLog(o)+reqPanel(o):'')+(o.id?refSection(o):'')+'<div class="sh">Hiring checklist</div><table class="rate"><tbody>'+st+'</tbody></table>'+
    '<div class="info-box" style="margin-top:12px"><span class="ico">ℹ️</span><p>Do not type Social Security numbers or background check results here. Record only the date, who did it, and a short note.</p></div>'+
    '<div id="repMsg"></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-nurse" id="obSave" onclick="saveOnb(\''+o.id+'\')">Save</button>'+
    (o.id?'<button class="btn btn-outline" onclick="sendOnbForms(\''+o.id+'\')">Approve and send offer</button><button class="btn btn-outline" onclick="prefillTax(\''+o.id+'\')">Prefilled I-9 and W-4</button><button class="btn btn-outline" onclick="activateOnb(\''+o.id+'\')">Create aide login</button>':'')+

@@ -246,3 +246,10 @@ Until the secret is set, no check is made. The first time a verification runs, G
 4. Run `updatePatients` to apply. A **Result** column is added on the tab showing what happened to each row.
 
 Patients are found by first + last name (and DOB when you give one). A blank cell never erases what is already saved. A patient not in the portal is added only if the row has a DOB. Insurance company names are matched to Horizon, UnitedHealthcare, Aetna, Wellpoint or HealthPartners; anything else is reported in the Result column and left alone. You can run it again any time.
+
+
+## Employee details, requested items and Activity sheets
+- **Your details**: on the employee link page every application answer can be corrected or filled in (except Social Security number, email and position, which only the office changes). Each change is logged with the old and new value on the employee's onboarding record.
+- **Request items**: on an onboarding record, tick only the items the person should see (W-4, SSN card, I-9 documents, contract, any signed form, physical, details) and press Send link. Send again resends only what is still missing.
+- **Add existing employee**: on the New hires screen, pick someone from the aide tracker and the items you need. These people are not counted as new hires on the home screen.
+- **Activity sheets** (admin home): attach aides to a sheet the nurse published, then Publish, Update or Unpublish.

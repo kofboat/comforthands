@@ -165,18 +165,45 @@ function renderTasks(msg){
   $('hTitle').textContent='Comfort Hands – New Hire Forms';
   const up={}; ST.uploads.forEach(u=>{ up[u.k]=u; }); const left=ST.forms.filter(f=>!f.done).length;
   const pill=d=>'<span class="pill '+(d?'ok':'')+'">'+(d?'Done ✓':'To do')+'</span>';
-  const upRow=(k,label,help,opts)=>'<div class="task" style="flex-wrap:wrap"><div class="t">'+esc(label)+(help?'<div class="sub" style="font-weight:400;margin:2px 0 0">'+help+'</div>':'')+'</div>'+pill(up[k].done)+
+  const upRow=(k,label,help,opts)=>!up[k]?'':'<div class="task" style="flex-wrap:wrap"><div class="t">'+esc(label)+(help?'<div class="sub" style="font-weight:400;margin:2px 0 0">'+help+'</div>':'')+'</div>'+pill(up[k].done)+
      '<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+(opts?'<select id="dt_'+k+'" style="max-width:330px"><option value="">— Which document? —</option>'+opts.map(o=>'<option>'+esc(o)+'</option>').join('')+'</select>':'')+
      '<input type="file" id="up_'+k+'" accept=".pdf,image/*" style="max-width:260px"><button class="btn o" onclick="upload(\''+k+'\')">Upload</button></div></div>';
-  $('main').innerHTML=(msg?'<div class="msg ok">'+msg+'</div>':'')+'<div class="card"><h2>Hello '+esc(ST.first)+'</h2><p class="sub">Position: '+esc(ST.position||'')+'. Your details from the application are already filled in. Review each form, sign it on screen, then upload your documents. You can stop and come back with the same link.</p>'+
-   '<h3>1. Forms to sign'+(left?' ('+left+' left)':' (all done)')+'</h3>'+ST.forms.map(f=>'<div class="task"><div class="t">'+esc(f.title)+'</div>'+pill(f.done)+(f.done?'':'<button class="btn" onclick="openForm(\''+f.k+'\')">Review &amp; sign</button>')+'</div>').join('')+
-   '<h3>2. Form W-4 (tax withholding)</h3><div class="task"><div class="t">Form W-4: Employee\'s Withholding Certificate<div class="sub" style="font-weight:400;margin:2px 0 0">Your name and address are filled in. Add your Social Security number and filing status, then sign on screen.</div></div>'+pill(up.w4&&up.w4.done)+(up.w4&&up.w4.done?'':'<button class="btn" onclick="openW4()">Complete &amp; sign</button>')+'</div>'+
-   '<h3>3. Signed employment contract</h3>'+upRow('contract','Upload your signed contract','The contract was attached to your offer email. Sign it, then upload a scan or clear photo of every page as one PDF, or call the office if you need help.')+
-   '<h3>4. Identification documents</h3><p class="sub">For Form I-9 you choose which documents to show: <b>one document from List A</b>, or <b>one from List B plus one from List C</b>. See the <a href="'+esc(ST.i9Url)+'" target="_blank" rel="noopener">official list of acceptable documents</a>. Upload a clear photo or scan of each. Bring the originals on your first day.</p>'+
-   upRow('ssncard','Social Security card','Needed for payroll. It also counts as your List C document.')+upRow('i9a','List A document (identity and work authorization)','Choose this, or List B and C below.',I9A)+upRow('i9b','List B document (identity)','',I9B)+upRow('i9c','List C document (work authorization)','Only if you are not using your Social Security card.',I9C)+
-   '<h3>5. Other</h3>'+upRow('physical','Completed physical examination (if you have it)','')+upRow('other','Any other document the office asked for','')+
-   '<div id="tmsg"></div><p class="foot">Form I-9 is completed at the office: please bring the original documents you listed above on your first visit. Questions? Call 609-277-3032.</p></div>';
+  const secs=[]; let n=0; const add=(title,html)=>{ if(html) secs.push('<h3>'+(++n)+'. '+title+'</h3>'+html); };
+  add('Your details',ST.details?'<div class="task"><div class="t">Your personal details<div class="sub" style="font-weight:400;margin:2px 0 0">Check your address, phone number and the rest of your application. Fix or fill in anything that is wrong or missing.</div></div><button class="btn" onclick="openDetails()">Review &amp; update</button></div>':'');
+  add('Forms to sign'+(left?' ('+left+' left)':' (all done)'),ST.forms.length?ST.forms.map(f=>'<div class="task"><div class="t">'+esc(f.title)+'</div>'+pill(f.done)+(f.done?'':'<button class="btn" onclick="openForm(\''+f.k+'\')">Review &amp; sign</button>')+'</div>').join(''):'');
+  add('Form W-4 (tax withholding)',up.w4?'<div class="task"><div class="t">Form W-4: Employee\'s Withholding Certificate<div class="sub" style="font-weight:400;margin:2px 0 0">Check your name and address, add your Social Security number and filing status, then sign on screen.</div></div>'+pill(up.w4.done)+(up.w4.done?'':'<button class="btn" onclick="openW4()">Complete &amp; sign</button>')+'</div>':'');
+  add('Signed employment contract',upRow('contract','Upload your signed contract','The contract was attached to your offer email. Sign it, then upload a scan or clear photo of every page as one PDF, or call the office if you need help.'));
+  const ids=upRow('ssncard','Social Security card','Needed for payroll. It also counts as your List C document.')+upRow('i9a','List A document (identity and work authorization)','Choose this, or List B and C below.',I9A)+upRow('i9b','List B document (identity)','',I9B)+upRow('i9c','List C document (work authorization)','Only if you are not using your Social Security card.',I9C);
+  add('Identification documents',ids?'<p class="sub">For Form I-9 you choose which documents to show: <b>one document from List A</b>, or <b>one from List B plus one from List C</b>. See the <a href="'+esc(ST.i9Url)+'" target="_blank" rel="noopener">official list of acceptable documents</a>. Upload a clear photo or scan of each. Bring the originals on your first day.</p>'+ids:'');
+  add('Other',upRow('physical','Completed physical examination'+(ST.req?'':' (if you have it)'),'')+upRow('other','Any other document the office asked for',''));
+  const i9=!!(up.ssncard||up.i9a||up.i9b||up.i9c);
+  $('main').innerHTML=(msg?'<div class="msg ok">'+msg+'</div>':'')+'<div class="card"><h2>Hello '+esc(ST.first)+'</h2><p class="sub">'+(ST.req?'The office asked for the items below. ':'Position: '+esc(ST.position||'')+'. Your details from the application are already filled in. Review each form, sign it on screen, then upload your documents. ')+'You can stop and come back with the same link.</p>'+
+   (secs.length?secs.join(''):'<div class="msg ok">Nothing is waiting on you right now. Thank you.</div>')+
+   '<div id="tmsg"></div><p class="foot">'+(!ST.req||i9?'Form I-9 is completed at the office: please bring the original documents you listed above on your first visit. ':'')+'Questions? Call 609-277-3032.</p></div>';
   window.scrollTo(0,0);
+}
+/* ───────── "Your details": every application answer can be corrected or filled in ───────── */
+const DET_SKIP={ssn:1,email:1,position:1};
+function setVal(f,v){ const k=f[0],t=f[2]; v=v==null?'':String(v);
+  if(t==='radio') document.querySelectorAll('input[name="f_'+k+'"]').forEach(r=>{ r.checked=(r.value===v); });
+  else if(t==='checks'){ const set=v.split(/,\s*/); document.querySelectorAll('input[name="f_'+k+'"]').forEach(c=>{ c.checked=set.includes(c.value); }); }
+  else{ const el=$('f_'+k); if(el) el.value=v; } }
+function detFields(){ const out=[]; SECTIONS.forEach(s=>s[2].forEach(f=>{ if(!DET_SKIP[f[0]]) out.push(f); })); return out; }
+function openDetails(){
+  const a=ST.app||{};
+  let h='<div class="card"><h2>Your details</h2><p class="sub">Everything from your application is below. Change anything that is wrong and fill in anything that is blank. The office keeps a record of what you change. Your Social Security number is not shown here.</p>'+
+    '<div class="g"><div class="s2"><label class="l">Email (to change it, call the office)</label><div class="doc" style="padding:8px 10px">'+esc(a.email||'')+'</div></div></div>';
+  SECTIONS.forEach(s=>{ const fs=s[2].filter(f=>!DET_SKIP[f[0]]); if(!fs.length) return; h+='<h3>'+esc(s[0])+'</h3>'+(s[1]?'<p class="sub">'+esc(s[1])+'</p>':'')+'<div class="g">'+fs.map(f=>fieldHTML(f.slice(0,4).concat([0,f[5]]))).join('')+'</div>'; });
+  h+='<div id="dmsg"></div><p style="margin-top:14px"><button class="btn" id="dbtn" onclick="saveDetails()">Save my details</button> <button class="btn o" onclick="renderTasks()">Back</button></p></div>';
+  $('main').innerHTML=h; detFields().forEach(f=>setVal(f,a[f[0]])); window.scrollTo(0,0);
+}
+async function saveDetails(){
+  const app={}; detFields().forEach(f=>{ app[f[0]]=val(f); });
+  if(!String(app.firstName).trim()||!String(app.lastName).trim()) return say('dmsg','bad','Enter your first and last name.');
+  if(!String(app.phone).trim()) return say('dmsg','bad','Enter your phone number.');
+  $('dbtn').disabled=true; say('dmsg','','Saving…');
+  try{ const j=await call({action:'applicantDetails',app:app}); if(!j.ok){ $('dbtn').disabled=false; return say('dmsg','bad',esc(j.error||'Could not save.')); } ST=j; renderTasks('Your details were saved. Thank you.'); }
+  catch(e){ if(e.message!=='expired'){ $('dbtn').disabled=false; say('dmsg','bad','Could not reach our office system. Try again.'); } }
 }
 async function upload(k){
   const file=$('up_'+k).files[0], dt=($('dt_'+k)||{}).value||''; if(!file) return say('tmsg','bad','Choose a file first.');
@@ -205,10 +232,10 @@ function loadJs(u){ return new Promise((res,rej)=>{ const t=document.createEleme
 function openW4(){
   ink=false; const a=ST.w4||{};
   const num=(id,label,help)=>'<div><label class="l" for="'+id+'">'+label+'</label><input type="number" id="'+id+'" min="0" step="1" inputmode="numeric" placeholder="0">'+(help?'<div class="sub" style="margin:2px 0 0">'+help+'</div>':'')+'</div>';
+  const tin=(id,label,v,req,wide)=>'<div'+(wide?' class="s2"':'')+'><label class="l" for="'+id+'">'+label+(req?' <span class="req">*</span>':'')+'</label><input type="text" id="'+id+'" value="'+esc(v||'')+'" maxlength="100"></div>';
   const amt=(id,label,help)=>'<div><label class="l" for="'+id+'">'+label+'</label><input type="number" id="'+id+'" min="0" step="0.01" inputmode="decimal" placeholder="$0.00">'+(help?'<div class="sub" style="margin:2px 0 0">'+help+'</div>':'')+'</div>';
   $('main').innerHTML='<div class="card"><h2>Form W-4: Employee\'s Withholding Certificate</h2><p class="sub">Complete Steps 2 to 4 only if they apply to you. Skip to the signature if not. The official form with your answers is saved to your file. <a href="https://www.irs.gov/individuals/tax-withholding-estimator" target="_blank" rel="noopener">IRS withholding estimator</a></p>'+
-   '<h3>Step 1: Your information</h3><div class="g"><div><label class="l">First name</label><div class="doc" style="padding:8px 10px">'+esc(a.firstName||'')+'</div></div><div><label class="l">Last name</label><div class="doc" style="padding:8px 10px">'+esc(a.lastName||'')+'</div></div>'+
-   '<div class="s2"><label class="l">Address</label><div class="doc" style="padding:8px 10px">'+esc([a.addr1,a.addr2].filter(Boolean).join(', ')+', '+[a.city,a.state,a.zip].filter(Boolean).join(' '))+'</div></div>'+
+   '<h3>Step 1: Your information</h3><div class="g">'+tin('w_first','First name',a.firstName,1)+tin('w_last','Last name',a.lastName,1)+tin('w_addr1','Address (number and street)',a.addr1,1,1)+tin('w_addr2','Apartment or unit (optional)',a.addr2,0,1)+tin('w_city','City',a.city,1)+tin('w_state','State',a.state,1)+tin('w_zip','Zip code',a.zip,1)+
    '<div><label class="l" for="w_ssn">Social Security number <span class="req">*</span></label><input type="text" id="w_ssn" inputmode="numeric" autocomplete="off" maxlength="11" placeholder="123-45-6789"></div>'+
    '<div><label class="l" for="w_status">Filing status <span class="req">*</span></label><select id="w_status"><option value="">— Choose —</option><option value="single">Single or Married filing separately</option><option value="married">Married filing jointly or Qualifying surviving spouse</option><option value="head">Head of household</option></select></div></div>'+
    '<h3>Step 2: Multiple jobs or spouse works</h3><label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="w_s2" style="width:auto;margin-top:4px"><span>Only two jobs total (you and your spouse combined): check this box. Do the same on the W-4 for the other job.</span></label>'+
@@ -221,6 +248,8 @@ function openW4(){
 }
 async function signW4(){
   const v=id=>($(id)||{}).value||'', ssn=v('w_ssn').replace(/\D/g,'');
+  const wa=Object.assign({},ST.w4||{},{firstName:v('w_first').trim(),lastName:v('w_last').trim(),addr1:v('w_addr1').trim(),addr2:v('w_addr2').trim(),city:v('w_city').trim(),state:v('w_state').trim(),zip:v('w_zip').trim()});
+  if(!wa.firstName||!wa.lastName||!wa.addr1||!wa.city||!wa.state||!wa.zip) return say('fmsg','bad','Fill in your name and full address.');
   if(ssn.length!==9) return say('fmsg','bad','Enter your 9-digit Social Security number.');
   if(!v('w_status')) return say('fmsg','bad','Choose your filing status.');
   const n=id=>{ const x=Number(v(id)); return isFinite(x)&&x>=0?x:0; };
@@ -230,7 +259,7 @@ async function signW4(){
     if(!window.PDFLib) await loadJs('../portal/hr-pdf/pdf-lib.min.js'); if(!window.HRFILL) await loadJs('../portal/hr-pdf/hrfill.js');
     const r=await fetch('../portal/hr-pdf/w4.pdf'); if(!r.ok) throw new Error('form');
     const d=new Date(), date=String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+'/'+d.getFullYear();
-    const bytes=await HRFILL.fillW4Signed(PDFLib,await r.arrayBuffer(),ST.w4||{},{ssn:ssn.slice(0,3)+'-'+ssn.slice(3,5)+'-'+ssn.slice(5),status:v('w_status'),step2:$('w_s2').checked,kids:n('w_kids'),deps:n('w_deps'),otherCredits:n('w_cred'),otherIncome:n('w_inc'),deductions:n('w_ded'),extra:n('w_ext'),exempt:$('w_ex').checked,sig:$('pad').toDataURL('image/png'),date:date});
+    const bytes=await HRFILL.fillW4Signed(PDFLib,await r.arrayBuffer(),wa,{ssn:ssn.slice(0,3)+'-'+ssn.slice(3,5)+'-'+ssn.slice(5),status:v('w_status'),step2:$('w_s2').checked,kids:n('w_kids'),deps:n('w_deps'),otherCredits:n('w_cred'),otherIncome:n('w_inc'),deductions:n('w_ded'),extra:n('w_ext'),exempt:$('w_ex').checked,sig:$('pad').toDataURL('image/png'),date:date});
     let bin=''; for(let i=0;i<bytes.length;i+=8192) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+8192));
     say('fmsg','','Sending…');
     const j=await call({action:'applicantUpload',kind:'w4',docType:'',file:{name:'W-4.pdf',mime:'application/pdf',b64:btoa(bin)}});

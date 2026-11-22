@@ -305,6 +305,31 @@ function aide_(act, d, u) {
       return out_({ ok: true, key: key, aides: emails_(d.aides).length });
     });
   }
+  // Office view of every published sheet with its aides, and attach / remove aides or hide a sheet without touching its activities.
+  if (act === 'planAdmin') {
+    if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
+    const pv = plans.getDataRange().getValues(), list = [];
+    for (let i = 1; i < pv.length; i++) {
+      if (!pv[i][0]) continue; let acts = []; try { acts = JSON.parse(pv[i][3] || '[]'); } catch (e) {}
+      list.push({ key: String(pv[i][0]), name: String(pv[i][1] || ''), address: String(pv[i][2] || ''), activities: acts.map(function (a) { return String(a.t || ''); }), aides: emails_(pv[i][4]),
+        active: !(pv[i][5] === false || String(pv[i][5]).toLowerCase() === 'false'), updatedAt: String(pv[i][6] || '') });
+    }
+    const us = usersAll_(), choices = []; Object.keys(us).forEach(function (e) { if (us[e].roles.indexOf('aide') >= 0) choices.push({ email: e, name: us[e].name || e }); });
+    choices.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return out_({ ok: true, plans: list, aides: choices });
+  }
+  if (act === 'planAides') {
+    if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
+    const pkey = keyOf_(d.key); if (!pkey) return out_({ ok: false, error: 'missing patient' });
+    const list = emails_(d.aides), active = d.active !== false;
+    return withLock_(function () {
+      const r = findRow_(plans, 0, pkey); if (!r) return out_({ ok: false, error: 'No published sheet for this patient yet. The nurse publishes the activities first.' });
+      if (active) { const psh = ptSheet_(), pt = ptRow_(psh, pkey); if (pt && psh.getRange(pt, 5).getValue() === 'discharged') return out_({ ok: false, error: 'This patient is discharged. Reopen the patient before publishing.' }); }
+      if (active && !list.length) return out_({ ok: false, error: 'Attach at least one aide, or choose Unpublish.' });
+      plans.getRange(r, 5).setValue(list.join(',')); plans.getRange(r, 6).setValue(active); plans.getRange(r, 7).setValue(new Date().toISOString());
+      return out_({ ok: true, aides: list.length, active: active });
+    });
+  }
   if (act === 'plans') {
     const v = plans.getDataRange().getValues(), wv = weeks.getDataRange().getValues(), done = {}, res = [];
     for (let i = 1; i < wv.length; i++) if (wv[i][4]) done[wv[i][0]] = true;
@@ -468,7 +493,7 @@ function route_(d, setUser) {
   if (!user) return out_({ ok: false, error: 'unauthorized' });
   setUser(user);
   if (d.action === 'changePassword') return changePassword_(d, user);
-  if (['publishPlan', 'plans', 'week', 'save', 'submit'].indexOf(d.action) >= 0) return aide_(d.action, d, user);
+  if (['publishPlan', 'planAdmin', 'planAides', 'plans', 'week', 'save', 'submit'].indexOf(d.action) >= 0) return aide_(d.action, d, user);
   if (REC_ACTIONS_.indexOf(d.action) >= 0) return records_(d.action, d, user);
   if (!hasRole_(user, ['admin', 'nurse', 'patient'])) return out_({ ok: false, error: 'forbidden' });
   if (d.action === 'patientCopy') return once_(d, function () { return sendCopy_(d); });
@@ -507,7 +532,7 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
@@ -846,7 +871,7 @@ function home_() {
     evalsOver: aides.filter(function (a) { return over(a.daysToEval); }).length,
     sheets: sheets.items.length,
     drafts: drafts.length,
-    onboarding: onbAll_().filter(function (o) { return o.status === 'in progress'; }).length
+    onboarding: onbAll_().filter(function (o) { return o.status === 'in progress' && !(o.app && o.app._imported); }).length
   };
   return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_() };
 }
@@ -1091,7 +1116,7 @@ function dueDigest() {
   const h = home_(), lines = [];
   h.patients.forEach(function (p) { if (p.daysToNote !== null && p.daysToNote <= REC_.WARN_DAYS) lines.push('60-day re-assessment ' + (p.daysToNote < 0 ? 'OVERDUE ' + (-p.daysToNote) + ' days' : 'due in ' + p.daysToNote + ' days') + ': ' + p.name); });
   h.aides.forEach(function (a) { if (a.daysToEval !== null && a.daysToEval <= REC_.WARN_DAYS) lines.push('Aide evaluation ' + (a.daysToEval < 0 ? 'OVERDUE ' + (-a.daysToEval) + ' days' : 'due in ' + a.daysToEval + ' days') + ': ' + a.name); });
-  onbAll_().forEach(function (o) { if (o.status === 'in progress' && o.createdAt && (Date.now() - new Date(o.createdAt).getTime()) > 7 * 86400000) lines.push('New hire still onboarding: ' + o.name + ' (' + o.done + '/' + o.total + ' steps; next: ' + o.next + ')'); });
+  onbAll_().forEach(function (o) { if (o.status === 'in progress' && !(o.app && o.app._imported) && o.createdAt && (Date.now() - new Date(o.createdAt).getTime()) > 7 * 86400000) lines.push('New hire still onboarding: ' + o.name + ' (' + o.done + '/' + o.total + ' steps; next: ' + o.next + ')'); });
   h.aides.forEach(function (a) { a.trk.items.forEach(function (i) { if (i.status === 'over') lines.push('Aide ' + i.label + ' OVERDUE ' + (-i.days) + ' days: ' + a.name); else if (i.status === 'soon') lines.push('Aide ' + i.label + (i.k === 'cert' ? ' expires in ' : ' due in ') + i.days + ' days' + (i.k === 'cert' ? ' (renewal window open)' : '') + ': ' + a.name); else if (i.status === 'unset') lines.push('Aide ' + i.label + ' date not entered: ' + a.name); }); });
   h.patients.forEach(function (p) { if (p.status === 'discharged' || p.purged) return; const q = p.pca; if (q.pcaStatus === 'awaiting insurer' && q.pcaSent && (Date.now() - new Date(q.pcaSent + 'T12:00:00').getTime()) > 14 * 86400000) lines.push('PCA request sent ' + q.pcaSent + ', no insurer answer recorded: ' + p.name); if (q.daysToPca !== null && q.pcaStatus !== 'renewal sent' && q.daysToPca <= REC_.PCA_WARN_DAYS) lines.push('PCA authorization ' + (q.daysToPca < 0 ? 'EXPIRED ' + (-q.daysToPca) + ' days ago' : 'ends in ' + q.daysToPca + ' days') + ', renewal not yet sent: ' + p.name); if (p.status === 'active' && q.pcaStatus === 'none') lines.push('No PCA authorization on file: ' + p.name); });
   h.patients.forEach(function (p) { if (p.status === 'admission') lines.push('Admission still in progress: ' + p.name); });
@@ -1643,6 +1668,12 @@ const UPLOAD_KINDS_ = { w4: 'Form W-4 (completed and signed)', ssncard: 'Social 
 const DOC_TYPES_ = { 'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx' };
 const FILE_TYPES_ = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
 
+// Items the office can ask an employee for (used for "Request items"). A key is a form, an upload, or the details page.
+const REQ_LABELS_ = { details: 'Review and update your personal details', w4: 'Form W-4 (tax withholding), completed and signed on screen', ssncard: 'Photo or scan of your Social Security card',
+  i9a: 'I-9 List A document (identity and work authorization)', i9b: 'I-9 List B document (identity)', i9c: 'I-9 List C document (work authorization)', contract: 'Signed employment contract',
+  physical: 'Completed physical examination', standards: 'Agreement of Standards (sign on screen)', jobdesc: 'Job description (sign on screen)', bgforms: 'Background investigation forms (sign on screen)',
+  crimatt: 'Criminal history attestation (sign on screen)', policies: 'Policy acknowledgments (sign on screen)', refrelease: 'Reference release (sign on screen)', other: 'Other document the office asked for' };
+function reqItems_(x) { const q = onbApp_(x)._req; return q && Array.isArray(q.items) && q.items.length ? q.items : null; }
 function onbSheet_() { return tab_('Onboarding', ONB_COLS_); }
 function onbRow_(sh, r) { const x = sh.getRange(r, 1, 1, ONB_N_).getValues()[0]; while (x.length < ONB_N_) x.push(''); return x; }
 function onbSteps_(x) { let s = {}; try { s = JSON.parse(x[O_.STEPS] || '{}'); } catch (e) {} if (s.formsSent && !s.offer) s.offer = s.formsSent; delete s.formsSent; return s; }
@@ -1738,9 +1769,13 @@ function contractOnscreen_(name, pos, rate) {
 }
 function hrState_(x) {
   const docs = onbDocs_(x), has = {}; docs.forEach(function (d) { has[d.k] = true; });
-  return { ok: true, name: x[O_.NAME], first: String(x[O_.NAME]).split(/\s+/)[0], position: x[O_.POS],
-    forms: hrForms_(x).map(function (f) { return { k: f.k, title: f.title, html: f.html, pre: f.pre || '', post: f.post || '', fields: f.fields, done: !!has[f.k] }; }),
-    uploads: Object.keys(UPLOAD_KINDS_).map(function (k) { return { k: k, label: UPLOAD_KINDS_[k], done: !!has[k] }; }),
+  const req = reqItems_(x), asked = function (k) { return !req || req.indexOf(k) >= 0; };
+  const pub = {}, ap = onbApp_(x), nm = String(x[O_.NAME] || '').trim().split(/\s+/);
+  Object.keys(ap).forEach(function (k) { if (k.charAt(0) !== '_' && k !== 'ssn') pub[k] = ap[k]; });
+  if (!pub.firstName) pub.firstName = nm[0] || ''; if (!pub.lastName) pub.lastName = nm.slice(1).join(' '); if (!pub.phone && x[O_.PHONE]) pub.phone = String(x[O_.PHONE]); pub.email = String(x[O_.EMAIL] || '');
+  return { ok: true, name: x[O_.NAME], first: String(x[O_.NAME]).split(/\s+/)[0], position: x[O_.POS], req: req, details: asked('details'), app: pub,
+    forms: hrForms_(x).filter(function (f) { return asked(f.k) || (/^bg/.test(f.k) && asked('bgforms')); }).map(function (f) { return { k: f.k, title: f.title, html: f.html, pre: f.pre || '', post: f.post || '', fields: f.fields, done: !!has[f.k] }; }),
+    uploads: Object.keys(UPLOAD_KINDS_).filter(function (k) { return asked(k); }).map(function (k) { return { k: k, label: UPLOAD_KINDS_[k], done: !!has[k] }; }),
     w4: (function () { const a = onbApp_(x), n = String(x[O_.NAME] || '').trim().split(/\s+/); return { firstName: String(a.firstName || n[0] || ''), lastName: String(a.lastName || n.slice(1).join(' ') || ''), addr1: String(a.addr1 || ''), addr2: String(a.addr2 || ''), city: String(a.city || ''), state: String(a.state || ''), zip: String(a.zip || '') }; })(),
     i9Url: CONFIG.I9_DOCUMENTS_URL || 'https://www.uscis.gov/i-9-central/form-i-9-acceptable-documents' };
 }
@@ -1757,7 +1792,7 @@ function hr_(d) {
   const sh = onbSheet_();
   if (act === 'applicantCode' || act === 'applicantLogin') {
     const id = keyOf_(d.id), r = id ? findRow_(sh, 0, id) : 0, x = r ? onbRow_(sh, r) : null;
-    const open = x && x[O_.OFFER] && ['in progress', 'hired'].indexOf(String(x[O_.STATUS])) >= 0 && /^\S+@\S+\.\S+$/.test(String(x[O_.EMAIL]));
+    const open = x && (x[O_.OFFER] || x[O_.SENT]) && ['in progress', 'hired'].indexOf(String(x[O_.STATUS])) >= 0 && /^\S+@\S+\.\S+$/.test(String(x[O_.EMAIL]));
     if (act === 'applicantCode') {
       if (open && !cache.get('acool:' + id) && throttle_('acnt:' + id, 5, 3600)) {
         cache.put('acool:' + id, '1', 60);
@@ -1780,6 +1815,31 @@ function hr_(d) {
   let x = onbRow_(sh, r); const who = String(x[O_.NAME]) + ' (applicant)', me = { email: x[O_.EMAIL] };
   if (['in progress', 'hired'].indexOf(String(x[O_.STATUS])) < 0) return out_({ ok: false, error: 'unauthorized' });
   if (act === 'applicantGet') return out_(hrState_(x));
+  if (act === 'applicantDetails') {
+    if (reqItems_(x) && reqItems_(x).indexOf('details') < 0) return out_({ ok: false, error: 'Your details were not requested.' });
+    const inc = d.app || {}, lim = function (k) { return k.slice(-4) === 'Resp' || /Explain$/.test(k) ? 1500 : 200; };
+    const fix = function (k) { let v = inc[k]; if (Array.isArray(v)) v = v.map(String).join(', '); if (v === true) v = 'Yes'; return String(v == null || v === false ? '' : v).trim().slice(0, lim(k)); };
+    if ('firstName' in inc && !fix('firstName')) return out_({ ok: false, error: 'Enter your first name.' });
+    if ('lastName' in inc && !fix('lastName')) return out_({ ok: false, error: 'Enter your last name.' });
+    if ('phone' in inc && !fix('phone')) return out_({ ok: false, error: 'Enter your phone number.' });
+    let n = 0;
+    x = onbUpdate_(id, who, function (y) {
+      const app = onbApp_(y), ch = [], cur = hrState_(y).app;
+      APP_FIELDS_.forEach(function (f) {
+        const k = f[0]; if (k === 'email' || k === 'ssn' || k === 'position' || !(k in inc)) return;
+        const v = fix(k), old = String(cur[k] == null ? '' : cur[k]); if (v === old) return;
+        ch.push({ k: k, l: f[1], o: old.slice(0, 80), n: v.slice(0, 80) }); if (v) app[k] = v; else delete app[k];
+      });
+      if (!ch.length) return;
+      n = ch.length;
+      const log = Array.isArray(app._log) ? app._log : []; log.push({ at: new Date().toISOString(), c: ch }); app._log = log.slice(-12);
+      while (JSON.stringify(app).length > CELL_MAX_ - 50 && app._log.length > 1) app._log.shift();
+      y[O_.APP] = JSON.stringify(app).slice(0, CELL_MAX_);
+      const fn = app.firstName || cur.firstName, ln = app.lastName || cur.lastName; if (fn || ln) y[O_.NAME] = (fn + ' ' + ln).trim();
+      if (app.phone) y[O_.PHONE] = app.phone;
+    });
+    audit_(me, 'applicantDetails', id, n + ' fields'); return out_(hrState_(x));
+  }
   if (act === 'applicantSign') {
     const f = hrForms_(x).filter(function (q) { return q.k === d.form; })[0]; if (!f) return out_({ ok: false, error: 'unknown form' });
     if (onbDocs_(x).some(function (q) { return q.k === f.k; })) return out_({ ok: false, error: 'This form is already signed.' });
@@ -1876,9 +1936,42 @@ function applySubmit_(d) {
 // Staff actions (admin only; called through records_ under the lock, except onbList).
 function onb_(act, d, u) {
   const sh = onbSheet_(), who = u.name || u.email, now = new Date().toISOString();
-  if (act === 'onbList') return out_({ ok: true, items: onbAll_(), steps: ONB_STEPS_.map(function (s) { return { k: s[0], l: s[1], auto: s[2] === 'auto' }; }), positions: HR_POSITIONS_,
+  if (act === 'onbList') return out_({ ok: true, items: onbAll_(), steps: ONB_STEPS_.map(function (s) { return { k: s[0], l: s[1], auto: s[2] === 'auto' }; }), positions: HR_POSITIONS_, reqItems: REQ_LABELS_,
     setup: { contract: true, applyUrl: !!CONFIG.APPLY_URL, fcra: !!CONFIG.FCRA_SUMMARY_URL } });
   if (act === 'onbPacket') return out_({ ok: true, sections: packetSections_(d.position) });
+  // Ask an employee (new, or an existing aide added from the tracker) for chosen items only, and email a link that lists just those.
+  if (act === 'onbRequest') {
+    let id = keyOf_(d.id), r = id ? findRow_(sh, 0, id) : 0, x, seen = {};
+    const items = (Array.isArray(d.items) ? d.items : []).map(String).filter(function (k) { if (!REQ_LABELS_[k] || seen[k]) return false; seen[k] = 1; return true; });
+    if (r) x = onbRow_(sh, r);
+    else {
+      const name = String(d.name || '').trim().slice(0, 100), em = String(d.email || '').trim().toLowerCase();
+      if (!name || !/^\S+@\S+\.\S+$/.test(em)) return out_({ ok: false, error: 'An existing employee needs a name and a valid email address.' });
+      const dup = onbAll_().filter(function (o) { return String(o.email).toLowerCase() === em; })[0]; if (dup) { id = dup.id; r = findRow_(sh, 0, id); x = onbRow_(sh, r); }
+      else {
+        id = 'o' + Utilities.getUuid().replace(/-/g, '').slice(0, 14); x = []; for (let i = 0; i < ONB_N_; i++) x.push('');
+        const nm = name.split(/\s+/), ph = String(d.phone || '').slice(0, 30);
+        x[O_.ID] = id; x[O_.NAME] = name; x[O_.EMAIL] = em; x[O_.PHONE] = ph; x[O_.STATUS] = 'in progress'; x[O_.CREATED] = now; x[O_.STEPS] = '{}';
+        if (HR_POSITIONS_.indexOf(String(d.position)) >= 0) x[O_.POS] = d.position;
+        x[O_.APP] = JSON.stringify({ _imported: true, firstName: nm[0], lastName: nm.slice(1).join(' '), phone: ph });
+      }
+    }
+    if (!/^\S+@\S+\.\S+$/.test(String(x[O_.EMAIL]))) return out_({ ok: false, error: 'Add the employee’s email first.' });
+    const app = onbApp_(x);
+    if (items.length) app._req = { items: items, at: today_(), by: who, sentAt: (app._req && app._req.sentAt) || '' }; else delete app._req;
+    if (d.send) {
+      if (!items.length) return out_({ ok: false, error: 'Choose at least one item to request.' });
+      if (!CONFIG.APPLY_URL) return out_({ ok: false, error: 'APPLY_URL is not set in Code.gs. It is the web address of the Apply page on your site.' });
+      const first = String(x[O_.NAME]).split(/\s+/)[0], office = String(CONFIG.OFFICE_EMAIL).split(/[,;\s]+/)[0], link = String(CONFIG.APPLY_URL) + (String(CONFIG.APPLY_URL).indexOf('?') >= 0 ? '&' : '?') + 'a=' + x[O_.ID];
+      MailApp.sendEmail({ to: x[O_.EMAIL], replyTo: office, subject: 'Comfort Hands Home Healthcare: items we need from you',
+        body: ['Hello ' + first + ',', '', 'We need the following from you for your Comfort Hands file:', '', items.map(function (k) { return '  • ' + REQ_LABELS_[k]; }).join('\n'), '',
+          'Open your personal page to complete them:', link, '', 'You will ask for a 6-digit code by email, then sign forms on screen and upload documents. Nothing else is needed.', 'Call us at 609-277-3032 with any questions.', '', 'Sincerely,', 'Comfort Hands Home Healthcare, LLC'].join('\n') });
+      app._req.sentAt = today_(); x[O_.SENT] = today_();
+    }
+    x[O_.APP] = JSON.stringify(app).slice(0, CELL_MAX_); x[O_.UPDATED] = now; x[O_.BY] = who;
+    if (r) sh.getRange(r, 1, 1, ONB_N_).setValues([safeRow_(x)]); else sh.appendRow(safeRow_(x));
+    return out_({ ok: true, item: onbObj_(x), sent: !!d.send });
+  }
   if (act === 'onbSave') {
     const name = String(d.name || '').trim().slice(0, 100), email = String(d.email || '').trim().toLowerCase();
     if (!name) return out_({ ok: false, error: 'name required' });
