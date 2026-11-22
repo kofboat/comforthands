@@ -2359,6 +2359,7 @@ function drawHome(){
   const navItems=[['overview','▦','Overview',0,'',HOME_TAB==='patients'&&!HOME_FILTER],['aides','♥','Aides',0,'',HOME_TAB==='aides'&&!HOME_FILTER],['pcaDue','✎','PCA authorizations',c.pcaDue||0,'',HOME_FILTER==='pcaDue'],['trkOver','✔','Compliance',(c.trkOver||0)+(c.trkSoon||0),(c.trkOver?'r':''),/^trk/.test(HOME_FILTER)],['sheets','▤','Activity sheets',c.sheets||0,'',HOME_TAB==='sheets'],['drafts','✉','Drafts',c.drafts||0,'',HOME_TAB==='drafts']];
   if(isA) navItems.push(['onb','＋','New hires',c.onboarding||0,'',HOME_TAB==='admin']);
   if(isA) navItems.push(['plans','▤','Activity sheets',0,'',HOME_TAB==='plans']);
+  navItems.push(['ids','#','Agency IDs',0,'',HOME_TAB==='ids']);
   const sn=document.getElementById('sideNav'); if(sn) sn.innerHTML=navItems.map(n=>'<a class="'+(n[5]?'on':'')+'" onclick="navGo(\''+n[0]+'\')"><i>'+n[1]+'</i>'+n[2]+(n[3]?'<span class="b '+n[4]+'">'+n[3]+'</span>':'')+'</a>').join('');
   /* top bar */
   const ti=document.getElementById('homeTop'), nm=String(AUTH.name||''), ini=(nm.trim()[0]||'?').toUpperCase(), td=h.today?new Date(h.today+'T12:00:00'):new Date();
@@ -2390,12 +2391,13 @@ function drawHome(){
     '<div class="dash-side">'+attHtml+weekHtml+'</div></div>';
   box.innerHTML=t; drawList();
 }
-function setHomeFilter(k){ HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(HOME_FILTER==='plans'){ HOME_TAB='plans'; } else if(/^(eval|trk)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
+function setHomeFilter(k){ HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(HOME_FILTER==='plans'){ HOME_TAB='plans'; } else if(HOME_FILTER==='ids'){ HOME_TAB='ids'; } else if(/^(eval|trk)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
 function setHomeTab(t){ HOME_TAB=t; HOME_FILTER=''; ONB=null; PLANS=null; drawHome(); }
 function newPatient(){ if(!confirm('Start a new admission? The current admission on this device is already saved to the office system.')) return; try{ sessionStorage.setItem('chhc_open',AUTH.roles.includes('admin')?'admin':'nurse'); }catch(e){} clearAllData(); }
 function drawList(){
   const h=HOME, box=document.getElementById('homeList'); if(!box) return; const q=HOME_Q.trim().toLowerCase();
   const hasA=AUTH.roles.includes('admin'), hasN=AUTH.roles.includes('nurse');
+  if(HOME_TAB==='ids'){ drawIds(box); return; }
   if(HOME_TAB==='admin'){ drawAdmin(box); return; }
   if(HOME_TAB==='plans'){ drawPlans(box); return; }
   if(HOME_TAB==='drafts'){
@@ -2709,6 +2711,21 @@ async function saveReport(){
 const ADMIN_LINKS=[['Homebase (payroll)','https://app.joinhomebase.com/'],['HHAeXchange (data entry)','https://hhaexchange.com/']];
 let ONB=null;
 const isAdminNow=()=>isStaffNow()&&AUTH.roles.includes('admin');
+/* ---------- Agency IDs: quick reference with copy buttons (for calls to the insurers) ---------- */
+async function drawIds(box){
+  box.innerHTML='<p class="tmuted">Loading…</p>';
+  let a; try{ const j=await api('agencyIds'); if(!j.ok) throw new Error(j.error||'error'); a=j.agency||{}; }
+  catch(e){ box.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>Could not load the agency details ('+escAct(e.message||'error')+').</p></div>'; return; }
+  const p=a.providerIds||{}, addr=[a.addr,[a.city,a.state].filter(Boolean).join(', ')+' '+(a.zip||'')].filter(x=>x&&x.trim()).join(', ');
+  const rows=[['Agency name',a.name],['Address',addr],['Phone',a.phone],['Fax',a.fax],['Email',a.email],['NPI',a.npi],['EIN / Tax ID',a.tin],['Medicaid ID',a.medicaidId],['CareBridge ID',a.carebridgeId],['Horizon NJ provider ID',p.hnjh],['UnitedHealthcare provider ID',p.uhc],['Wellpoint provider ID',p.wellpoint],['Aetna provider ID',p.aetna],['HPP provider ID',p.hpp]].filter(r=>r[1]&&String(r[1]).trim());
+  box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Agency IDs</div><p class="tmuted" style="margin:0 0 10px">Keep this handy when an insurer asks for an ID. Visible only after sign-in. To change a value, edit the AGENCY settings in Code.gs.</p>'+
+   (rows.length?'<table class="htbl"><tbody>'+rows.map((r,i)=>'<tr><td style="width:36%"><strong>'+escAct(r[0])+'</strong></td><td style="font-variant-numeric:tabular-nums">'+escAct(String(r[1]))+'</td><td style="text-align:right"><button class="mini" data-v="'+escAct(String(r[1]))+'" onclick="copyId(this)">Copy</button></td></tr>').join('')+'</tbody></table>':'<p class="tmuted">No agency details are set in Code.gs yet.</p>')+'</div>';
+}
+async function copyId(b){
+  const v=b.dataset.v; let ok=false;
+  try{ await navigator.clipboard.writeText(v); ok=true; }catch(e){ try{ const t=document.createElement('textarea'); t.value=v; document.body.appendChild(t); t.select(); ok=document.execCommand('copy'); t.remove(); }catch(e2){} }
+  const old=b.textContent; b.textContent=ok?'Copied ✓':'Press Ctrl+C'; setTimeout(()=>{ b.textContent=old; },1500);
+}
 /* ---------- Activity sheets: admin attaches aides to a published sheet ---------- */
 let PLANS=null;
 async function drawPlans(box,force){

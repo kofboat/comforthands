@@ -27,6 +27,7 @@ const CONFIG = {
   AGENCY: {
     name: 'Comfort Hands Home Healthcare LLC', addr: '505 Hamilton Ave Ste 200', city: 'Linwood', state: 'NJ', zip: '08221', phone: '609-277-3032', fax: '609-479-5931',
     npi: '', tin: '', promise: '',
+    email: '', medicaidId: '', carebridgeId: '',
     providerIds: { hnjh: '', uhc: '', wellpoint: '', aetna: '', hpp: '' }   // Aetna's form says not to give a provider ID
   },
   // Faxing PCA requests through MetroFax (email-to-fax), the same way the Physician Order Request is faxed: the form is emailed to
@@ -532,7 +533,7 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['home', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ACTIONS_ = ['home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
@@ -879,6 +880,7 @@ function home_() {
 // Reading never takes the lock. Each change takes it only for the moment it writes.
 function records_(act, d, u) {
   if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
+  if (act === 'agencyIds') return out_({ ok: true, agency: CONFIG.AGENCY || {} });
   if (/^onb/.test(act)) {
     if (!hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' });
     return act === 'onbList' ? onb_(act, d, u) : withLock_(function () { return onb_(act, d, u); });
