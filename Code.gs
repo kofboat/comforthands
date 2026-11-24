@@ -1526,6 +1526,40 @@ function complianceTexts() {
   try { const cut = new Date(now_().getTime() - 120 * 86400000).toISOString(); delRows_(textLogTab_(), function (row) { return String(row[0]) < cut; }); } catch (e) {}
   return n;
 }
+// Broadcast texts from the Notifications tab (columns: Text, Status, Started, Sends). Run daily at 9 am by installTextReminders().
+// Status "active": sent to every active aide on days 1, 3, 5 and 7 of the run (4 texts), then the row changes to "done".
+// Status "inactive" (or anything else) stops it and clears Started/Sends, so setting it back to active starts a fresh run.
+function notificationTexts() {
+  if (!tzOk_()) return 0;
+  const hr = now_().getHours(); if (hr < 6 || hr >= 21) return 0;
+  return withLock_(function () {
+    const sh = tab_('Notifications', ['Text', 'Status', 'Started', 'Sends']), v = sh.getDataRange().getValues(); if (v.length < 2) return 0;
+    const users = usersAll_(), trk = trkMap_(), idx = smsIndex_(), today = today_(), TOTAL = 4; let total = 0, recips = null;
+    function recipients() {
+      if (recips) return recips; recips = [];
+      Object.keys(users).forEach(function (e) { if (users[e].roles.indexOf('aide') < 0) return; const o = trk[e]; if (o && o.phone && o.smsOk) recips.push({ email: e, phone: o.phone }); });
+      return recips;
+    }
+    for (let i = 1; i < v.length; i++) {
+      const row = i + 1, text = String(v[i][0] || '').replace(/\s+/g, ' ').trim(), st = String(v[i][1] || '').trim().toLowerCase(), started = iso_(v[i][2]), sends = String(v[i][3] || '');
+      if (!text && !st) continue;
+      if (st !== 'active') { if ((v[i][2] || v[i][3]) && st !== 'done' && st !== 'too long') sh.getRange(row, 3, 1, 2).setValues([['', '']]); continue; }
+      if (!text) continue;
+      if (text.length > 300) { sh.getRange(row, 2).setValue('too long'); continue; }
+      let start = started, offset = 0;
+      if (!start || /^done/.test(sends)) { start = today; sh.getRange(row, 3, 1, 2).setValues([[start, '']]); }
+      else offset = -daysUntil_(start);
+      if (offset > 6) { sh.getRange(row, 2, 1, 3).setValues([['done', start, 'done (' + (sends.match(/^\d+/) || ['0'])[0] + ' of ' + TOTAL + ')']]); continue; }
+      if (offset % 2 !== 0) continue;
+      const n = offset / 2 + 1, body = 'Comfort Hands: ' + text + smsTail_(); let sent = 0;
+      recipients().forEach(function (r) { const s2 = sendSms_(r.phone, body, 'notif|' + row + '|' + start + '|' + offset + '|' + r.email, 'notification', r.email, idx); if (s2 === 'sent' || s2 === 'dry-run') sent++; });
+      total += sent;
+      if (n >= TOTAL) sh.getRange(row, 2, 1, 3).setValues([['done', start, 'done (' + n + ' of ' + TOTAL + ')']]);
+      else sh.getRange(row, 3, 1, 2).setValues([[start, n + ' of ' + TOTAL]]);
+    }
+    return total;
+  });
+}
 function usDate_(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? m[2] + '/' + m[3] + '/' + m[1] : String(s || ''); }
 // A counts-only text to the office phones (no names), sent with the Monday digest.
 function officeSummaryText_(h) {
@@ -1535,11 +1569,12 @@ function officeSummaryText_(h) {
 }
 // Run ONCE after texting is set up (and again if you ever change it).
 function installTextReminders() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (['shiftReminders', 'complianceTexts'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (['shiftReminders', 'complianceTexts', 'notificationTexts'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('shiftReminders').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('complianceTexts').timeBased().everyDays(1).atHour(9).create();
-  schedTab_(); textLogTab_();
-  Logger.log('Installed: shift reminders every 5 minutes and compliance texts daily at 9 am (script time zone ' + Session.getScriptTimeZone() + '). Texting is ' + (smsLive_() ? 'LIVE.' : 'OFF: set CONFIG.SMS and ENABLED to true. Until then texts are only recorded in the TextLog tab as dry-run.'));
+  ScriptApp.newTrigger('notificationTexts').timeBased().everyDays(1).atHour(9).create();
+  schedTab_(); textLogTab_(); tab_('Notifications', ['Text', 'Status', 'Started', 'Sends']);
+  Logger.log('Installed: shift reminders every 5 minutes, compliance texts and Notifications-tab texts daily at 9 am (script time zone ' + Session.getScriptTimeZone() + '). Texting is ' + (smsLive_() ? 'LIVE.' : 'OFF: set CONFIG.SMS and ENABLED to true. Until then texts are only recorded in the TextLog tab as dry-run.'));
 }
 // Sends one real text to CONFIG.SMS.TEST_TO to prove the Twilio details work.
 function sendTestText() {

@@ -61,6 +61,8 @@ Employee portal and weekly aide activity sheets
   Drive folder. Do not share that Sheet; it holds patient data.
 - Project Settings (gear icon) → Time zone: set America/New_York so 8 pm means 8 pm Eastern.
 - Run `installReminder` once from the editor (run it again after updating Code.gs). It sets two reminders: Fridays at 9 am and Sundays at 6 pm, sent only to assigned aides who still have an unsubmitted sheet. Aides get a text; if texting is off, the aide has no phone number or opted out, or the text fails, they get an email instead. The Sunday run also emails the office the list of unsubmitted sheets.
+
+- **Notifications tab (broadcast texts to aides).** Write the message in the Text column and set Status to `active`. Run `installTextReminders` once after updating Code.gs; it adds a 9 am daily check. An active row is texted to every active aide who has a phone number and has not opted out on days 1, 3, 5 and 7 (4 texts), then the Status changes to `done`. Set `inactive` to stop it; setting `active` again starts a fresh run. The Started and Sends columns are filled in by the script. A message over 300 characters is held with Status `too long`. While texting is off, only dry-run entries are recorded in TextLog.
 - Add each aide to `CONFIG.USERS` with `roles: ['aide']` (same makeHash steps as staff). Aides can only open the employee portal; the script refuses everything else.
 - Nurse: on the Activity Sheet step, enter the assigned aide email(s) and press "Publish to aides". Press it again after any care plan change.
 - Aides sign in at /staff/, pick the client, fill in each day, then have the client sign and press Submit. The signed PDF is filed in the patient's Drive folder
