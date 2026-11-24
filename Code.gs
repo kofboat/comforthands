@@ -436,18 +436,22 @@ function sheetHtml_(plan, data, weekStart, sub) {
   return '<html><head><meta charset="utf-8"><style>' + css + '</style></head><body>' + h + '</body></html>';
 }
 
-// ── Sunday 8 pm reminder (run installReminder() once from the editor) ──
+// ── Weekly activity sheet reminders: Friday 9 am and Sunday 6 pm (run installReminder() once from the editor) ──
+// Aides get a text. If texting is off, the aide has no phone number or opted out, or the text fails, they get the same reminder by email instead.
 function installReminder() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'sundayReminder') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('sundayReminder').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(20).create();
-  Logger.log('Reminder installed: Sundays at 8 pm in the script time zone (' + Session.getScriptTimeZone() + '). Set the time zone under Project Settings if it is wrong.');
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (['sundayReminder', 'fridayReminder'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('fridayReminder').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(9).create();
+  ScriptApp.newTrigger('sundayReminder').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(18).create();
+  Logger.log('Reminders installed: Fridays at 9 am and Sundays at 6 pm in the script time zone (' + Session.getScriptTimeZone() + '). Set the time zone under Project Settings if it is wrong.');
 }
 function weekStartNow_() {
   const tz = Session.getScriptTimeZone(), now = new Date();
   const dow = Number(Utilities.formatDate(now, tz, 'u')); // 1 = Monday ... 7 = Sunday
   return Utilities.formatDate(new Date(now.getTime() - (dow - 1) * 86400000), tz, 'yyyy-MM-dd');
 }
-function sundayReminder() {
+function fridayReminder() { return sheetReminder_('fri'); }
+function sundayReminder() { return sheetReminder_('sun'); }
+function sheetReminder_(when) {
   const L = load_(), p = pendingSheets_(L), v = L.plans, pending = [], byAide = {}, open = {};
   p.items.forEach(function (i) { open[i.key] = true; });
   for (let i = 1; i < v.length; i++) {
@@ -455,14 +459,24 @@ function sundayReminder() {
     pending.push(v[i][1]);
     emails_(v[i][4]).forEach(function (e) { (byAide[e] = byAide[e] || []).push(v[i][1]); });
   }
-  if (!pending.length) return;
+  if (!pending.length) return 0;
   const tail = '\n\nActivity sheets must reach the office by Monday 12:00 pm for payroll. Open the employee portal, choose the client, sign with the client and press Submit.';
-  MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Activity sheets not yet submitted — week of ' + p.week,
+  if (when === 'sun') MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Activity sheets not yet submitted — week of ' + p.week,
     body: 'These weekly activity sheets have not been submitted:\n\n- ' + pending.join('\n- ') + tail });
+  const idx = smsIndex_(), trk = trkMap_(); let n = 0;
   Object.keys(byAide).forEach(function (e) {
-    MailApp.sendEmail({ to: e, subject: 'Reminder: submit this week’s activity sheet',
-      body: 'Please finish and submit the weekly activity sheet for:\n\n- ' + byAide[e].join('\n- ') + tail });
+    const list = byAide[e], o = trk[e], names = list.join(', ');
+    const text = when === 'fri'
+      ? 'Comfort Hands: your weekly activity sheet is ready to finish and submit for ' + names + '. Please submit it today.' + smsTail_()
+      : 'Comfort Hands: reminder, your activity sheet for ' + names + ' is not submitted yet. It is due Monday 12:00 pm for payroll.' + smsTail_();
+    let st = 'no-number';
+    if (o && o.phone && o.smsOk) st = sendSms_(o.phone, text, 'sheet|' + when + '|' + p.week + '|' + e, 'sheet-' + when, e, idx);
+    if (st === 'sent') { n++; return; }
+    if (st === 'already') return;
+    MailApp.sendEmail({ to: e, subject: when === 'fri' ? 'Please submit this week’s activity sheet' : 'Reminder: submit this week’s activity sheet',
+      body: (when === 'fri' ? 'Your weekly activity sheet is ready to finish and submit for:\n\n- ' : 'Please finish and submit the weekly activity sheet for:\n\n- ') + list.join('\n- ') + tail });
   });
+  return n;
 }
 
 // Health check: opening the web-app URL in a browser should show this text.
