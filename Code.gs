@@ -964,6 +964,16 @@ function staffLine_() {
   if (!L.length) L = STAFF_LINES_;
   const d = dparse_(today_()); return L[Math.floor(d.getTime() / 86400000) % L.length];
 }
+// Quick messages for the Text buttons: tab "Quick Messages" (Label, Text). Created with three starters; edit the rows freely. Kept to 300 characters.
+const QM_SEED_ = [['Please call the office', 'Comfort Hands: Please call the office at 609-277-3032 when you have a moment. Thank you.'], ['Activity sheet reminder', 'Comfort Hands: Reminder to clock in and out on HHAeXchange and submit your activity sheet by Friday.'], ['Capacity update', 'Comfort Hands: We have capacity for new clients. Call Abigail, 609-277-3032.']];
+function quickMessages_() {
+  try {
+    const ss = db_(); let sh = ss.getSheetByName('Quick Messages');
+    if (!sh) { sh = ss.insertSheet('Quick Messages'); sh.appendRow(['Label', 'Text']); QM_SEED_.forEach(function (r) { sh.appendRow(r); }); }
+    const n = sh.getLastRow(); if (n < 2) return [];
+    return sh.getRange(2, 1, n - 1, 2).getValues().map(function (r) { return { label: String(r[0] || '').trim(), text: String(r[1] || '').trim().slice(0, SMS_MAX_) }; }).filter(function (m) { return m.label && m.text; });
+  } catch (e) { return []; }
+}
 function home_() {
   try { patientIdsBackfill_(); } catch (e) {}
   const L = load_(), pv = ptLight_(), aidesByKey = {};
@@ -994,7 +1004,7 @@ function home_() {
     drafts: drafts.length,
     onboarding: onbAll_().filter(function (o) { return o.status === 'in progress' && !(o.app && o.app._imported); }).length
   };
-  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_(), motive: staffLine_() };
+  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_(), motive: staffLine_(), quick: quickMessages_(), signature: OUTREACH_SIGNATURE_ };
 }
 
 // Reading never takes the lock. Each change takes it only for the moment it writes.

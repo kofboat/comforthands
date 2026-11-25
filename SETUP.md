@@ -269,3 +269,8 @@ Patients are found by first + last name (and DOB when you give one). A blank cel
 - Portal: **Outreach** (side menu and tab). Pick people, choose email and/or text, **Send me a test first**, then **Review and send**. Emails start with "Hi first name," and end with the signature stored in `OUTREACH_SIGNATURE_` in Code.gs. Replies go to the office email. Daily limit 50 emails.
 - Texts stay off until you set `CONFIG.SMS.OUTREACH_FROM` to a separate Twilio number (register it for A2P 10DLC first). Texts need ENABLED true and are kept to 300 characters with "Reply STOP to opt out" added if missing.
 - Re-deploy Code.gs as a **new version** and upload the new `portal/index.html`.
+
+## Text and Email buttons
+- **Text** (aides, patients, case managers): opens that person's Google Voice conversation in a small window and copies their number, or the **Quick message** you picked, to the clipboard. The portal never reads Google Voice. Aide numbers come from the aide tracking sheet, patient numbers from the patient's Cell Phone, case managers from the Case Managers sheet. No number on file greys the button out.
+- **Email** (aides, case managers): opens a draft with your signature.
+- Quick messages live in the **Quick Messages** tab (Label, Text), created automatically with three starters. Edit or add rows freely; each is kept to 300 characters.

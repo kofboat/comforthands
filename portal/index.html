@@ -549,6 +549,9 @@ input[type=checkbox]{width:auto}.listbar input[type=checkbox],#outList input[typ
 .outh{font-size:14px;margin:0 0 8px;text-transform:uppercase;text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:2px;letter-spacing:.04em}
 .outl{display:block;font-weight:700;font-size:13px;color:#4b2a47;margin:8px 0 4px}
 .outsig{white-space:pre-wrap;font:12px/1.5 inherit;background:#fefdfe;border:1px solid #e6d5ee;border-radius:10px;padding:10px;margin:6px 0 0}
+
+.txtb{background:#6b21a8!important;color:#fff!important;border-color:#6b21a8!important;font-weight:700}.txtb:disabled{opacity:.4}
+#vtoast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:#34182d;color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;max-width:min(560px,90vw);opacity:0;pointer-events:none;transition:.2s;z-index:9999}#vtoast.on{opacity:1;transform:translateX(-50%)}
 </style>
 </head>
 <body>
@@ -2478,7 +2481,7 @@ function drawList(){
     box.innerHTML='<div class="card"><div class="sh" style="margin-top:0">Activity sheets not yet submitted — week of '+usDate(h.sheets.week)+'</div>'+(h.sheets.items.length?'<ul style="margin:8px 0 0 18px">'+h.sheets.items.map(i=>'<li>'+escAct(i.name)+'</li>').join('')+'</ul><p class="tmuted" style="margin-top:10px">The office and aides are reminded automatically on Sunday at 8 pm.</p>':'<p class="tmuted">All sheets for this week are submitted.</p>')+'</div>'; return;
   }
   if(HOME_TAB==='patients'){
-    if(!document.getElementById('ptBar')){ box.innerHTML='<div class="listbar" id="ptBar"><label>Status<select id="ptStatus" onchange="PT_STATUS=this.value;PT_SHOW=10;drawList()"><option value="active">Active</option><option value="admission">Admission in progress</option><option value="discharged">Discharged</option><option value="all">All</option></select></label><input type="text" id="ptQ" placeholder="Search name, Patient # or Insurance ID" oninput="HOME_Q=this.value;PT_SHOW=10;drawList()"></div><div id="ptRows"></div>'; }
+    if(!document.getElementById('ptBar')){ box.innerHTML='<div class="listbar" id="ptBar"><label>Status<select id="ptStatus" onchange="PT_STATUS=this.value;PT_SHOW=10;drawList()"><option value="active">Active</option><option value="admission">Admission in progress</option><option value="discharged">Discharged</option><option value="all">All</option></select></label>'+qmBar()+'<input type="text" id="ptQ" placeholder="Search name, Patient # or Insurance ID" oninput="HOME_Q=this.value;PT_SHOW=10;drawList()"></div><div id="ptRows"></div>'; }
     const sel=document.getElementById('ptStatus'); if(sel){ sel.value=PT_STATUS; sel.disabled=!!HOME_FILTER; }
     const qi=document.getElementById('ptQ'); if(qi&&qi!==document.activeElement&&qi.value!==HOME_Q) qi.value=HOME_Q;
     const out=document.getElementById('ptRows');
@@ -2501,7 +2504,7 @@ function drawList(){
         '<button class="mini" '+(dis?'disabled':'')+' onclick="openReport(\'dc\',\''+p.id+'\')">Discharge</button>'+
         (p.status==='admission'?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'active\')">Mark active</button>':'')+
         ((p.status==='discharged'&&!p.purged&&hasA)?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'reopen\')">Reopen</button>':'')+
-        '<button class="mini" onclick="openPcaHub(\''+p.id+'\')" '+(dis?'disabled':'')+'>PCA</button>'+'<button class="mini" onclick="openReport(\'hist\',\''+p.id+'\')">History</button></td></tr>';
+        '<button class="mini txtb" '+(p.status==='discharged'?'disabled':'')+' onclick="vTextPatient(\''+p.id+'\',\''+escAct(p.name).replace(/'/g,'')+'\')">Text</button>'+'<button class="mini" onclick="openPcaHub(\''+p.id+'\')" '+(dis?'disabled':'')+'>PCA</button>'+'<button class="mini" onclick="openReport(\'hist\',\''+p.id+'\')">History</button></td></tr>';
     }).join('')+'</tbody></table>'+moreBar(shown.length,total,what,'PT_SHOW'):'<p class="tmuted">No patients match.</p>');
     return;
   }
@@ -2511,7 +2514,7 @@ function drawList(){
   if(HOME_FILTER==='trkOver') rows=rows.filter(a=>a.trk&&a.trk.items.some(i=>i.status==='over'));
   if(HOME_FILTER==='trkSoon') rows=rows.filter(a=>a.trk&&a.trk.items.some(i=>i.status==='soon'));
   if(HOME_FILTER==='aideOver') rows=rows.filter(a=>(a.daysToEval!==null&&a.daysToEval<0)||(a.trk&&a.trk.items.some(i=>i.status==='over')));
-  if(!document.getElementById('adBar')){ box.innerHTML='<div class="listbar" id="adBar"><input type="text" id="adQ" placeholder="Search aide name or email" oninput="HOME_Q=this.value;AD_SHOW=10;drawList()"></div><div id="adRows"></div>'; }
+  if(!document.getElementById('adBar')){ box.innerHTML='<div class="listbar" id="adBar">'+qmBar()+'<input type="text" id="adQ" placeholder="Search aide name or email" oninput="HOME_Q=this.value;AD_SHOW=10;drawList()"></div><div id="adRows"></div>'; }
   const aq=document.getElementById('adQ'); if(aq&&aq!==document.activeElement&&aq.value!==HOME_Q) aq.value=HOME_Q;
   const aout=document.getElementById('adRows');
   if(q) rows=rows.filter(a=>(a.name+a.email).toLowerCase().includes(q));
@@ -2519,7 +2522,7 @@ function drawList(){
   const atotal=rows.length; rows=rows.slice(0,AD_SHOW);
   aout.innerHTML=rows.length?'<table class="htbl ct"><thead><tr><th>Aide</th><th>Patients served</th><th>Next evaluation</th><th>Compliance</th><th>Actions</th></tr></thead><tbody>'+rows.map(a=>
     '<tr><td><strong>'+escAct(a.name)+'</strong><br><span class="tmuted">'+escAct(a.email)+'</span></td><td>'+(a.patients.length?a.patients.map(escAct).join(', '):'<span class="tmuted">none assigned</span>')+'</td><td>'+(a.nextEvalDue?dueBadge(a.daysToEval)+'<br><span class="tmuted">'+(a.lastEval?'last '+usDate(a.lastEval)+' ('+escAct(a.lastType||'')+')':'first case '+usDate(a.firstCase))+'</span>':'<span class="tmuted">no first case yet</span>')+'</td><td>'+trkPills(a.trk)+'</td><td>'+
-    '<button class="mini" onclick="openTrk(\''+escAct(a.email)+'\')">Compliance</button><button class="mini" onclick="openReport(\'chha\',\''+escAct(a.email)+'\')">Evaluate</button><button class="mini" onclick="openReport(\'hist\',\'\',\''+escAct(a.email)+'\')">History</button></td></tr>').join('')+'</tbody></table>'+moreBar(rows.length,atotal,'aides','AD_SHOW'):'<p class="tmuted">No aides match. Aides appear here once they have the aide role in the Users tab.</p>';
+    '<button class="mini txtb" '+(vDigits(a.trk&&a.trk.phone)?'':'disabled title="No phone number on file"')+' onclick="vText(\''+escAct((a.trk&&a.trk.phone)||'')+'\',\''+escAct(a.name).replace(/'/g,'')+'\')">Text</button><button class="mini" onclick="vMail(\''+escAct(a.email)+'\',\''+escAct(a.name).replace(/'/g,'')+'\')">Email</button><button class="mini" onclick="openTrk(\''+escAct(a.email)+'\')">Compliance</button><button class="mini" onclick="openReport(\'chha\',\''+escAct(a.email)+'\')">Evaluate</button><button class="mini" onclick="openReport(\'hist\',\'\',\''+escAct(a.email)+'\')">History</button></td></tr>').join('')+'</tbody></table>'+moreBar(rows.length,atotal,'aides','AD_SHOW'):'<p class="tmuted">No aides match. Aides appear here once they have the aide role in the Users tab.</p>';
 }
 function moreBar(shown,total,what,v){ return '<div class="morebar"><span class="tmuted">Showing '+shown+' of '+total+' '+what+', A to Z by last name</span>'+(shown<total?'<button class="btn btn-nurse" style="padding:9px 18px" onclick="'+v+'+=10;drawList()">Show 10 more</button>':'')+'</div>'; }
 
@@ -2795,6 +2798,32 @@ let ONB=null;
 const isAdminNow=()=>isStaffNow()&&AUTH.roles.includes('admin');
 /* ---------- Agency IDs: quick reference with copy buttons (for calls to the insurers) ---------- */
 
+
+// ── Text and Email buttons (Google Voice window + mail draft) ──
+let QM_SEL='';
+function vToast(msg){ let t=document.getElementById('vtoast'); if(!t){ t=document.createElement('div'); t.id='vtoast'; document.body.appendChild(t); } t.textContent=msg; t.className='on'; clearTimeout(vToast._t); vToast._t=setTimeout(()=>{t.className='';},4500); }
+function vDigits(num){ const d=String(num||'').replace(/\D/g,''); if(d.length===10) return d; if(d.length===11&&d[0]==='1') return d.slice(1); return ''; }
+async function vText(num,name){
+  const d=vDigits(num); if(!d){ vToast('No usable phone number on file for '+name+'.'); return; }
+  const qm=(HOME&&HOME.quick||[]).find(m=>m.label===QM_SEL), what=qm?qm.text:'('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  try{ await navigator.clipboard.writeText(what); }catch(e){}
+  window.open('https://voice.google.com/u/0/messages?itemId=t.%2B1'+d,'gvoice','popup=yes,width=440,height=780,left='+Math.max(0,screen.width-470)+',top=40');
+  vToast((qm?'Message copied':'Number copied')+'. Opening '+name+' in Google Voice. '+(qm?'Paste it into the message box.':'If there is no thread yet, choose Send new message and paste the number.'));
+}
+async function vTextPatient(id,name){
+  vToast('Looking up the phone number…');
+  try{ const j=await api('ptGet',{id:id}); const f=j.form||{}, sh=j.shared||{}; const cell=(f.cell&&typeof f.cell==='object'?f.cell.v:f.cell)||sh.cell||(f.phone&&f.phone.v)||''; vText(cell,name); }
+  catch(e){ vToast(e.message||'Could not look up the phone number.'); }
+}
+function vMail(email,name){
+  if(!email){ vToast('No email address on file for '+name+'.'); return; }
+  const first=String(name||'').trim().split(/\s+/)[0]||'there', sig=(HOME&&HOME.signature)||(OUT&&OUT.signature)||'';
+  location.href='mailto:'+encodeURIComponent(email).replace(/%40/g,'@')+'?subject='+encodeURIComponent('Comfort Hands Home Healthcare')+'&body='+encodeURIComponent('Hi '+first+',\n\n\n\n'+sig);
+}
+function qmBar(){
+  const q=(HOME&&HOME.quick)||[]; if(!q.length) return '';
+  return '<label style="display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:13px;color:#4b2a47">Quick message<select onchange="QM_SEL=this.value" style="padding:9px 12px;border:1.5px solid #e6d5ee;border-radius:12px;font:inherit;font-size:14px;min-width:230px;background:#fbf6fd"><option value="">Copy the number (no message)</option>'+q.map(m=>'<option '+(QM_SEL===m.label?'selected':'')+' value="'+escAct(m.label)+'">'+escAct(m.label)+'</option>').join('')+'</select></label>';
+}
 // ── Outreach: capacity updates to case managers (admin only) ──
 let OUT=null, OUT_SEL={}, OUT_Q='', OUT_INS='', OUT_SHOW=10, OUT_EDIT=null, OUT_BUSY=false;
 const OUT_TPL={ subject:'Comfort Hands is accepting new clients', body:'We currently have capacity for new clients in [counties or areas]. Please call me at 609-277-3032 with any referrals.', text:'Comfort Hands Home Healthcare (Linwood, NJ): We now have capacity for new clients in [areas]. Questions? Call Abigail, 609-277-3032. This number sends updates only.' };
@@ -2807,8 +2836,8 @@ function outRows(){ const q=OUT_Q.trim().toLowerCase(); let r=OUT.managers.slice
 function drawOutList(){
   const el=document.getElementById('outList'); if(!el) return; const rows=outRows(), shown=rows.slice(0,OUT_SHOW);
   const ins=[...new Set(OUT.managers.map(m=>m.insurance).filter(Boolean))].sort();
-  el.innerHTML='<div class="listbar" style="margin-bottom:8px"><select onchange="OUT_INS=this.value;OUT_SHOW=10;drawOutList();drawOutMsg()"><option value="">All insurance companies</option>'+ins.map(i=>'<option '+(OUT_INS===i?'selected':'')+' value="'+escAct(i)+'">'+escAct(i)+'</option>').join('')+'</select><input type="text" placeholder="Search name, phone or email" value="'+escAct(OUT_Q)+'" oninput="OUT_Q=this.value;OUT_SHOW=10;drawOutList()"></div>'+
-   (rows.length?'<table class="htbl ct"><thead><tr><th><input type="checkbox" onchange="outAll(this.checked)" title="Select everyone shown"></th><th>Name</th><th>Contact</th><th>Insurance</th><th>Last sent</th><th></th></tr></thead><tbody>'+shown.map(m=>'<tr><td><input type="checkbox" '+(m.status!=='Active'?'disabled':(OUT_SEL[m.id]?'checked':''))+' onchange="outPick(\''+m.id+'\',this.checked)"></td><td><strong>'+escAct(m.name)+'</strong><br><span class="pill '+(m.status==='Active'?'ok':'')+'">'+(m.status==='Active'?'Active':'Do not contact')+'</span></td><td>'+escAct(m.phone||'—')+'<br><span class="tmuted">'+escAct(m.email||'no email')+'</span>'+(m.phone&&!m.textOk?'<br><span class="tmuted">Text: off</span>':'')+'</td><td>'+escAct(m.insurance||'—')+'</td><td>'+(m.last?usDate(m.last):'never')+'</td><td><button class="mini" onclick="outEdit(\''+m.id+'\')">Edit</button></td></tr>').join('')+'</tbody></table>':'<p class="tmuted">No case managers yet. Use Add case manager.</p>')+
+  el.innerHTML='<div class="listbar" style="margin-bottom:8px">'+qmBar()+'<select onchange="OUT_INS=this.value;OUT_SHOW=10;drawOutList();drawOutMsg()"><option value="">All insurance companies</option>'+ins.map(i=>'<option '+(OUT_INS===i?'selected':'')+' value="'+escAct(i)+'">'+escAct(i)+'</option>').join('')+'</select><input type="text" placeholder="Search name, phone or email" value="'+escAct(OUT_Q)+'" oninput="OUT_Q=this.value;OUT_SHOW=10;drawOutList()"></div>'+
+   (rows.length?'<table class="htbl ct"><thead><tr><th><input type="checkbox" onchange="outAll(this.checked)" title="Select everyone shown"></th><th>Name</th><th>Contact</th><th>Insurance</th><th>Last sent</th><th></th></tr></thead><tbody>'+shown.map(m=>'<tr><td><input type="checkbox" '+(m.status!=='Active'?'disabled':(OUT_SEL[m.id]?'checked':''))+' onchange="outPick(\''+m.id+'\',this.checked)"></td><td><strong>'+escAct(m.name)+'</strong><br><span class="pill '+(m.status==='Active'?'ok':'')+'">'+(m.status==='Active'?'Active':'Do not contact')+'</span></td><td>'+escAct(m.phone||'—')+'<br><span class="tmuted">'+escAct(m.email||'no email')+'</span>'+(m.phone&&!m.textOk?'<br><span class="tmuted">Text: off</span>':'')+'</td><td>'+escAct(m.insurance||'—')+'</td><td>'+(m.last?usDate(m.last):'never')+'</td><td><button class="mini txtb" '+(vDigits(m.phone)?'':'disabled')+' onclick="vText(\''+escAct(m.phone)+'\',\''+escAct(m.name).replace(/'/g,'')+'\')">Text</button><button class="mini" '+(m.email?'':'disabled')+' onclick="vMail(\''+escAct(m.email)+'\',\''+escAct(m.name).replace(/'/g,'')+'\')">Email</button><button class="mini" onclick="outEdit(\''+m.id+'\')">Edit</button></td></tr>').join('')+'</tbody></table>':'<p class="tmuted">No case managers yet. Use Add case manager.</p>')+
    '<div class="morebar"><span class="tmuted">Showing '+shown.length+' of '+rows.length+' case managers, A to Z by last name</span><span>'+(shown.length<rows.length?'<button class="mini" onclick="OUT_SHOW+=10;drawOutList()">Show 10 more</button> ':'')+'<button class="mini" onclick="outEdit(\'\')">＋ Add case manager</button></span></div>';
 }
 function outAll(on){ outRows().slice(0,OUT_SHOW).forEach(m=>{ if(m.status==='Active') OUT_SEL[m.id]=on; }); drawOutList(); drawOutMsg(); }
