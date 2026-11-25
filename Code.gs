@@ -549,8 +549,8 @@ function packet_(d) {
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
 const REC_ACTIONS_ = ['home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
-const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId'];
-const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18 };
+const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId', 'patientNo', 'insId', 'insurer'];
+const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18, PNO: 19, INSID: 20, INSURER: 21 };
 const PT_N_ = PT_COLS_.length;
 const CELL_MAX_ = 45000; // a Sheet cell holds 50,000 characters; stay under it
 let DB_ = null; const TABS_ = {};
@@ -586,7 +586,8 @@ function ptSheet_() { return tab_('Patients', PT_COLS_); }
 function ptLight_() {
   const sh = ptSheet_(), n = sh.getLastRow(); if (n < 2) return [new Array(PT_N_).fill('')];
   const a = sh.getRange(1, 1, n, 5).getValues(), b = sh.getRange(1, 8, n, 8).getValues(), out = [];
-  for (let i = 0; i < n; i++) { const r = new Array(PT_N_).fill(''); for (let j = 0; j < 5; j++) r[j] = a[i][j]; for (let j = 0; j < 8; j++) r[7 + j] = b[i][j]; out.push(r); }
+  const c3 = sh.getLastColumn() >= 22 ? sh.getRange(1, 20, n, 3).getValues() : null;
+  for (let i = 0; i < n; i++) { const r = new Array(PT_N_).fill(''); for (let j = 0; j < 5; j++) r[j] = a[i][j]; for (let j = 0; j < 8; j++) r[7 + j] = b[i][j]; if (c3) for (let j = 0; j < 3; j++) r[19 + j] = c3[i][j]; out.push(r); }
   return out;
 }
 function repSheet_() { return tab_('Reports', ['id', 'kind', 'patientId', 'aideEmail', 'title', 'date', 'pdfUrl', 'by', 'createdAt', 'data']); }
@@ -780,11 +781,40 @@ function ptFolder_(pid, fallbackName) {
   return folder;
 }
 
+// Last name used to sort the patient list A to Z: the id is built as last_first_dob, so its first piece is the last name.
+function lastNameOf_(id, name) {
+  const m = /^([a-z0-9\-]+)_[a-z0-9\-]*_\d{4}-\d{2}-\d{2}$/i.exec(String(id || ''));
+  if (m) return m[1].toUpperCase();
+  const t = String(name || '').trim().split(/\s+/); return (t[t.length - 1] || '').toUpperCase();
+}
+// Insurance ID and insurer for the patient list. Member ID first, then Medicaid number.
+function insFromBlob_(blob) {
+  const f = blob.form || {}, sh = blob.shared || {}, g = function (k) { const v = f[k]; return String(v && typeof v === 'object' ? (v.v || '') : (v || '')).trim(); };
+  const co = sh.insCompany || g('insCompany');
+  return { ins: g('insNum') || g('medicaidNum'), insurer: String(co || '').trim() };
+}
+// Patient numbers: 3 digits starting at 100, handed out in order and never reused (the highest number ever used is remembered).
+function nextPatientNo_() {
+  const pr = PropertiesService.getScriptProperties(); let n = Number(pr.getProperty('patientNoMax') || 0);
+  if (n < 99) { const sh = ptSheet_(), last = sh.getLastRow(); if (last > 1) { sh.getRange(2, 20, last - 1, 1).getValues().forEach(function (r) { const v = Number(r[0]); if (v > n) n = v; }); } }
+  if (n < 99) n = 99; n++; pr.setProperty('patientNoMax', String(n)); return String(n);
+}
+// Fills Patient #, Insurance ID and insurer for patients that do not have them yet (once; oldest start of care first). Safe to run again.
+function patientIdsBackfill_() {
+  const sh = ptSheet_(), n = sh.getLastRow(); if (n < 2) return 0;
+  if (sh.getLastColumn() < 22) sh.getRange(1, 19, 1, 4).setValues([['folderId', 'patientNo', 'insId', 'insurer']]);
+  const ids = sh.getRange(2, 1, n - 1, 1).getValues(), have = sh.getRange(2, 20, n - 1, 3).getValues(), todo = [];
+  for (let i = 0; i < n - 1; i++) if (ids[i][0] && !String(have[i][0] || '')) todo.push(i);
+  if (!todo.length) return 0;
+  const info = todo.map(function (i) { const r = i + 2, x = ptGetRow_(sh, r); return { i: i, r: r, start: iso_(x[P_.START]) || iso_(x[P_.CREATED]) || '9999', blob: ptBlob_(x) }; }).sort(function (a, b) { return a.start < b.start ? -1 : (a.start > b.start ? 1 : a.r - b.r); });
+  info.forEach(function (o) { const v = insFromBlob_(o.blob); sh.getRange(o.r, 20, 1, 3).setValues([[nextPatientNo_(), v.ins, v.insurer]]); });
+  return info.length;
+}
 function ptSummary_(x, aidesByKey, pcaBy) {
   const status = String(x[P_.STATUS] || 'admission');
   const anchor = iso_(x[P_.LASTNOTE]) || iso_(x[P_.START]) || iso_(x[P_.SUBMITTED]) || iso_(x[P_.CREATED]);
   const due = status === 'active' ? addDays_(anchor, REC_.PN_DAYS) : '';
-  return { id: x[P_.ID], name: x[P_.NAME], dob: iso_(x[P_.DOB]), start: iso_(x[P_.START]), status: status, lastNote: iso_(x[P_.LASTNOTE]), dischargedAt: iso_(x[P_.DISCHARGED]), submittedAt: iso_(x[P_.SUBMITTED]),
+  return { id: x[P_.ID], pn: String(x[P_.PNO] || ''), ins: String(x[P_.INSID] || ''), insurer: String(x[P_.INSURER] || ''), last: lastNameOf_(x[P_.ID], x[P_.NAME]), name: x[P_.NAME], dob: iso_(x[P_.DOB]), start: iso_(x[P_.START]), status: status, lastNote: iso_(x[P_.LASTNOTE]), dischargedAt: iso_(x[P_.DISCHARGED]), submittedAt: iso_(x[P_.SUBMITTED]),
            updatedAt: String(x[P_.UPDATED] || ''), updatedBy: x[P_.BY] || '', ver: Number(x[P_.VER] || 0), purged: isTrue_(x[P_.PURGED]), nextNoteDue: due, daysToNote: due ? daysUntil_(due) : null, aides: (aidesByKey || {})[x[P_.ID]] || [], pca: pcaState_((pcaBy || {})[keyOf_(x[P_.ID])] || []) };
 }
 
@@ -859,7 +889,16 @@ function weekTexts_() {
     return { sent: sent, failed: failed, live: smsLive_() };
   } catch (e) { return { sent: 0, failed: 0, live: false }; }
 }
+// Staff home screen: one motivational line per day, from column C ("Staff home") of the Motivation tab; the same line all day for everyone.
+const STAFF_LINES_ = ['Every visit you coordinate makes someone feel cared for.', 'Careful notes today mean safer care tomorrow.', 'Small details, done well, are the heart of good care.', 'Thank you for keeping our clients and aides supported.', 'A steady day of good work is a gift to our patients.', 'Good care starts with good organization. You have both.'];
+function staffLine_() {
+  let L = [];
+  try { const sh = db_().getSheetByName('Motivation'); if (sh && sh.getLastRow() > 1 && sh.getLastColumn() >= 3) sh.getRange(2, 3, sh.getLastRow() - 1, 1).getValues().forEach(function (r) { const x = String(r[0] || '').replace(/\s+/g, ' ').trim(); if (x) L.push(x); }); } catch (e) {}
+  if (!L.length) L = STAFF_LINES_;
+  const d = dparse_(today_()); return L[Math.floor(d.getTime() / 86400000) % L.length];
+}
 function home_() {
+  try { patientIdsBackfill_(); } catch (e) {}
   const L = load_(), pv = ptLight_(), aidesByKey = {};
   for (let i = 1; i < L.plans.length; i++) aidesByKey[L.plans[i][0]] = emails_(L.plans[i][4]);
   const patients = [], pcaBy = {};
@@ -888,7 +927,7 @@ function home_() {
     drafts: drafts.length,
     onboarding: onbAll_().filter(function (o) { return o.status === 'in progress' && !(o.app && o.app._imported); }).length
   };
-  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_() };
+  return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_(), motive: staffLine_() };
 }
 
 // Reading never takes the lock. Each change takes it only for the moment it writes.
@@ -976,6 +1015,7 @@ function records_(act, d, u) {
         const x = []; for (let i = 0; i < PT_N_; i++) x.push('');
         x[P_.ID] = id; x[P_.NAME] = txt_(d.name); x[P_.DOB] = validDay_(d.dob) ? d.dob : ''; x[P_.START] = validDay_(d.start) ? d.start : ''; x[P_.STATUS] = 'admission';
         x[P_.SHARED] = shared; ptSetForm_(x, form); x[P_.CREATED] = now; x[P_.UPDATED] = now; x[P_.BY] = who; x[P_.PURGED] = false; x[P_.VER] = 1;
+        const iv = insFromBlob_({ shared: stripSensitive_(d.shared), form: stripSensitive_(d.form) }); x[P_.PNO] = nextPatientNo_(); x[P_.INSID] = iv.ins; x[P_.INSURER] = iv.insurer;
         psh.appendRow(x); return out_({ ok: true, id: id, ver: 1 });
       }
       const x = ptGetRow_(psh, r), ver = Number(x[P_.VER] || 0);
@@ -984,6 +1024,7 @@ function records_(act, d, u) {
       if (d.ver === null || d.ver === undefined || Number(d.ver) !== ver) return out_({ ok: false, error: 'conflict', ver: ver, updatedBy: x[P_.BY], updatedAt: String(x[P_.UPDATED] || '') });
       x[P_.NAME] = txt_(d.name); if (validDay_(d.dob)) x[P_.DOB] = d.dob; if (validDay_(d.start)) x[P_.START] = d.start;
       x[P_.SHARED] = shared; ptSetForm_(x, form); x[P_.UPDATED] = now; x[P_.BY] = who; x[P_.VER] = ver + 1;
+      const iv2 = insFromBlob_({ shared: stripSensitive_(d.shared), form: stripSensitive_(d.form) }); x[P_.INSID] = iv2.ins; x[P_.INSURER] = iv2.insurer; if (!x[P_.PNO]) x[P_.PNO] = nextPatientNo_();
       psh.getRange(r, 1, 1, PT_N_).setValues([x]);
       return out_({ ok: true, id: id, ver: ver + 1 });
     });
@@ -1196,7 +1237,7 @@ function importPatients() {
       if (ptRow_(psh, id)) { skipped.push('row ' + (i + 1) + ': ' + first + ' ' + last + ' already exists'); continue; }
       const now = new Date().toISOString(), x = []; for (let k = 0; k < PT_N_; k++) x.push('');
       x[P_.ID] = id; x[P_.NAME] = txt_(first + ' ' + last); x[P_.DOB] = dob; x[P_.START] = start; x[P_.STATUS] = 'active';
-      x[P_.SHARED] = JSON.stringify({ firstName: first, lastName: last, dob: dob }); x[P_.FORM] = '{}'; x[P_.CREATED] = now; x[P_.UPDATED] = now; x[P_.BY] = 'import';
+      x[P_.SHARED] = JSON.stringify({ firstName: first, lastName: last, dob: dob }); x[P_.FORM] = '{}'; x[P_.PNO] = nextPatientNo_(); x[P_.CREATED] = now; x[P_.UPDATED] = now; x[P_.BY] = 'import';
       x[P_.LASTNOTE] = note; x[P_.PURGED] = false; x[P_.SUBMITTED] = start || today_(); x[P_.VER] = 1;
       psh.appendRow(safeRow_(x)); added++;
     }
@@ -1260,7 +1301,7 @@ function patientUpdate_(dry) {
           x = []; for (let k = 0; k < PT_N_; k++) x.push(''); isNew = true;
           const id = keyOf_([last, first, dobIn].join('_').toLowerCase().replace(/[^a-z0-9_-]/g, ''));
           x[P_.ID] = id; x[P_.NAME] = txt_(first + ' ' + last); x[P_.DOB] = dobIn; x[P_.STATUS] = 'active'; x[P_.CREATED] = new Date().toISOString(); x[P_.PURGED] = false; x[P_.SUBMITTED] = today_(); x[P_.VER] = 0;
-          x[P_.SHARED] = JSON.stringify({ firstName: first, lastName: last, dob: dobIn }); x[P_.FORM] = '{}';
+          x[P_.SHARED] = JSON.stringify({ firstName: first, lastName: last, dob: dobIn }); x[P_.FORM] = '{}'; x[P_.PNO] = nextPatientNo_();
         } else { x = ptGetRow_(psh, r); if (isTrue_(x[P_.PURGED])) { msg = 'SKIPPED: this patient record was purged.'; tally.skipped++; results.push(msg); continue; } }
         const b = ptBlob_(x), sh = b.shared, fm = b.form, changed = [], warn = [];
         const setS = function (k, val, label) { val = String(val || '').trim(); if (val && String(sh[k] || '') !== val) { sh[k] = val; changed.push(label); } };

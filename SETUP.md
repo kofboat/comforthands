@@ -256,3 +256,10 @@ Patients are found by first + last name (and DOB when you give one). A blank cel
 - **Request items**: on an onboarding record, tick only the items the person should see (W-4, SSN card, I-9 documents, contract, any signed form, physical, details) and press Send link. Send again resends only what is still missing.
 - **Add existing employee**: on the New hires screen, pick someone from the aide tracker and the items you need. These people are not counted as new hires on the home screen.
 - **Activity sheets** (admin home): attach aides to a sheet the nurse published, then Publish, Update or Unpublish.
+
+## Portal home update
+- **Patient #**: each patient gets a 3-digit number starting at 100 (never reused; 4 digits after 999). Existing patients are numbered once, oldest start of care first, the first time the portal home loads after you deploy.
+- **Insurance ID** column shows the member ID (Medicaid # if none) with the insurer under it; it refreshes whenever the patient form is saved.
+- **Staff home line**: add column C "Staff home" to the Motivation tab (one line per row). One line shows under the date each day; built-in lines are used if the column is empty.
+- Lists show 10 at a time, A to Z by last name. Status filter defaults to Active; the search box finds name, Patient # or Insurance ID.
+- Lilac theme applied to all pages (upload every page folder).
