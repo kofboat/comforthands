@@ -76,10 +76,21 @@ function stretch_(hexHash) {
   for (let i = 0; i < PW_ITER_; i++) b = Utilities.computeHmacSha256Signature(b, key);
   return 'v2$' + hex_(b);
 }
-function pwHash_(email, pw) { return stretch_(hash_(email, pw)); }
+// v3 format: v3$<rounds>$<random salt for this person>$<hex>. The global PASSWORD_SALT stays as a secret pepper. The round count is stored in each hash, so it can be raised later without breaking old passwords.
+const PW_ITER3_ = 1500;
+function stretch3_(base, salt, iter) {
+  const key = Utilities.newBlob(CONFIG.PASSWORD_SALT).getBytes();
+  let b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + base, Utilities.Charset.UTF_8);
+  for (let i = 0; i < iter; i++) b = Utilities.computeHmacSha256Signature(b, key);
+  return 'v3$' + iter + '$' + salt + '$' + hex_(b);
+}
+function pwHash_(email, pw) { return stretch3_(hash_(email, pw), Utilities.getUuid().replace(/-/g, ''), PW_ITER3_); }
+/** Run from the editor to see how long one password check takes (the Execution log shows milliseconds). Keep it well under 3000. */
+function timePw() { const t = Date.now(); pwHash_('test@comforthands.net', 'time-this-password'); Logger.log('One v3 password hash took ' + (Date.now() - t) + ' ms with ' + PW_ITER3_ + ' rounds.'); }
 function pwMatches_(u, pw) {
   const h = String(u.hash || ''); if (!h) return false;
   const base = hash_(u.email, pw);
+  if (h.indexOf('v3$') === 0) { const p = h.split('$'), it = Number(p[1]); if (p.length !== 4 || !(it >= 1 && it <= 20000) || !/^[0-9a-f]{16,64}$/.test(p[2])) return false; return same_(stretch3_(base, p[2], it), h); }
   return h.indexOf('v2$') === 0 ? same_(stretch_(base), h) : same_(base, h);
 }
 function same_(a, b) { a = String(a); b = String(b); if (a.length !== b.length) return false; var r = 0; for (var i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i); return r === 0; }
@@ -151,7 +162,7 @@ function resetConfirm_(d) {
   if (!pwOk_(d.password) || String(d.password).toLowerCase() === email) return out_({ ok: false, error: 'weak password' });
   const u = findUser_(email); if (!u) return out_({ ok: false, error: 'invalid code' });
   setPassword_(u, String(d.password));
-  cache.remove('rcode:' + email); cache.remove('ratt:' + email); cache.remove('fail:' + email);
+  cache.remove('rcode:' + email); cache.remove('ratt:' + email); cache.remove('fail:' + email); cache.remove('lku:' + email); cache.remove('lkl:' + email);
   return out_(session_(u));
 }
 function changePassword_(d, u) {
@@ -171,16 +182,26 @@ function userFromToken_(t) {
     return (u && same_(String(o.f || ''), fp_(u.hash))) ? u : null;
   } catch (e) { return null; }
 }
+// Lockout grows with repeated lockouts (1, then 5, then 15 minutes) so a stranger cannot keep someone out of their account for long. The emailed reset code always works as a way back in.
+const LOCK_STEPS_ = [60, 300, 900];
 function login_(d) {
-  const email = String(d.email || '').trim().toLowerCase(), cache = CacheService.getScriptCache(), key = 'fail:' + email;
-  if (Number(cache.get(key) || 0) >= 5) return out_({ ok: false, error: 'locked' });
+  const email = String(d.email || '').trim().toLowerCase(), cache = CacheService.getScriptCache(), key = 'fail:' + email, now = Date.now();
+  const until = Number(cache.get('lku:' + email) || 0);
+  if (until > now) return out_({ ok: false, error: 'locked', retry: Math.ceil((until - now) / 1000) });
   const u = findUser_(email);
   if (!u || !pwMatches_(u, String(d.password || ''))) {
-    cache.put(key, String(Number(cache.get(key) || 0) + 1), 900);
+    const n = Number(cache.get(key) || 0) + 1;
+    if (n >= 5) {
+      const level = Number(cache.get('lkl:' + email) || 0) + 1, secs = LOCK_STEPS_[Math.min(level, LOCK_STEPS_.length) - 1];
+      cache.remove(key); cache.put('lkl:' + email, String(level), 86400); cache.put('lku:' + email, String(now + secs * 1000), secs + 5);
+      if (level >= 3 && throttle_('lka:' + email, 1, 86400)) { try { MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Repeated failed sign-ins', body: 'The sign-in for ' + email + ' has been locked out ' + level + ' times in the last day. If this was not the owner of the account, someone may be guessing the password.' }); } catch (e) {} }
+      return out_({ ok: false, error: 'locked', retry: secs });
+    }
+    cache.put(key, String(n), 900);
     return out_({ ok: false, error: 'invalid' });
   }
-  cache.remove(key);
-  if (/^[0-9a-f]{64}$/.test(u.hash)) setHash_(u, stretch_(u.hash)); // upgrade an old-style stored password the first time it is used
+  cache.remove(key); cache.remove('lkl:' + email); cache.remove('lku:' + email);
+  if (String(u.hash || '').indexOf('v3$') !== 0) { try { setHash_(u, pwHash_(u.email, String(d.password || ''))); } catch (e) {} } // move an older stored password to the per-person salt the first time it is used
   return out_(session_(u));
 }
 /** Run from the editor to make a password hash: edit the two values, select makeHash, Run, then read the Execution log. */
@@ -196,6 +217,8 @@ function withLock_(fn) {
   try { return fn(); } finally { LOCK_DEPTH_ = 0; lock.releaseLock(); }
 }
 // Text typed by people is stored as plain text, never as a spreadsheet formula.
+// Phone numbers keep only digits and + ( ) - . x and spaces (30 characters at most), so nothing odd can ride along in a phone field.
+function phoneClean_(p) { return String(p == null ? '' : p).replace(/[^\d+()\-. xX]/g, '').replace(/\s+/g, ' ').trim().slice(0, 30); }
 function txt_(s) { s = String(s == null ? '' : s); return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; }
 function safeRow_(r) { return r.map(function (v) { return typeof v === 'string' ? txt_(v) : v; }); }
 function sig_(s) { s = String(s || ''); return (s.length < 600000 && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(s)) ? s : ''; }
@@ -605,11 +628,11 @@ function cmList_() {
     textsReady: live, cap: OUTREACH_DAILY_CAP_, sentToday: outreachSentToday_(), signature: OUTREACH_SIGNATURE_, today: today_() };
 }
 function cmSave_(d, u) {
-  const sh = cmSheet_(), name = String(d.name || '').trim(), email = String(d.email || '').trim(), phone = String(d.phone || '').trim();
+  const sh = cmSheet_(), name = String(d.name || '').trim(), email = String(d.email || '').trim(), phone = phoneClean_(d.phone);
   if (!name) return out_({ ok: false, error: 'Enter a name.' });
   if (!email && !phone) return out_({ ok: false, error: 'Enter an email or a phone number.' });
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return out_({ ok: false, error: 'That email does not look right.' });
-  if (phone && !e164_(phone)) return out_({ ok: false, error: 'That phone number does not look right. Use 10 digits.' });
+  if (String(d.phone || '').trim() && !e164_(phone)) return out_({ ok: false, error: 'That phone number does not look right. Use 10 digits.' });
   const status = /do not/i.test(String(d.status)) ? 'Do not contact' : 'Active', textOk = d.textOk ? 'Yes' : 'No';
   let r = 0; if (d.id) { const rows = cmRows_(); for (let i = 0; i < rows.length; i++) if (rows[i].id === String(d.id)) r = rows[i].row; }
   if (r) { sh.getRange(r, 2, 1, 6).setValues([[txt_(name), txt_(phone), txt_(email), txt_(String(d.insurance || '').trim()), status, textOk]]); if (d.notes != null) sh.getRange(r, 9).setValue(txt_(String(d.notes))); }
@@ -639,13 +662,22 @@ function cmSend_(d, u) {
   if (!pick.length) return out_({ ok: false, error: 'Choose at least one case manager.' });
   const eligible = pick.filter(function (r) { return r.status === 'Active'; }), skipped = pick.length - eligible.length;
   const emailTo = wantE ? eligible.filter(function (r) { return r.email; }) : [], textTo = wantT && textsOn ? eligible.filter(function (r) { return r.textOk && e164_(r.phone); }) : [];
-  const used = outreachSentToday_(); if (used + emailTo.length > OUTREACH_DAILY_CAP_) return out_({ ok: false, error: 'That would be ' + (used + emailTo.length) + ' emails today. The daily limit is ' + OUTREACH_DAILY_CAP_ + '. Pick fewer people or send the rest tomorrow.' });
-  const sh = cmSheet_(), stamp = today_(), res = { emails: 0, texts: 0, failed: 0, skipped: skipped, textsOff: wantT && !textsOn }, touched = {};
-  emailTo.forEach(function (r) { try { MailApp.sendEmail(r.email, subject, mk(outreachFirst_(r.name)), { replyTo: reply, name: 'Comfort Hands Home Healthcare' }); res.emails++; touched[r.row] = 1; } catch (e) { res.failed++; } });
-  textTo.forEach(function (r) { const st = sendSms_(r.phone, sms, 'out|' + r.id + '|' + now_().getTime(), 'outreach', u.email, null, from); if (st === 'sent') { res.texts++; touched[r.row] = 1; } else res.failed++; });
-  Object.keys(touched).forEach(function (row) { sh.getRange(Number(row), 8).setValue(stamp); });
-  PropertiesService.getScriptProperties().setProperty('outDay', stamp + '|' + (used + res.emails));
-  audit_(u, 'OUTREACH SEND', subject, res.emails + ' emails, ' + res.texts + ' texts, ' + res.failed + ' failed, ' + skipped + ' skipped');
+  const stamp = today_(), want = emailTo.length;
+  // Short lock 1: check the daily limit and set aside the emails about to go out, so two people sending at once cannot both slip past it.
+  const used = withLock_(function () { const c = outreachSentToday_(); if (c + want > OUTREACH_DAILY_CAP_) return -(c + want); PropertiesService.getScriptProperties().setProperty('outDay', stamp + '|' + (c + want)); return c; });
+  if (used < 0) return out_({ ok: false, error: 'That would be ' + (-used) + ' emails today. The daily limit is ' + OUTREACH_DAILY_CAP_ + '. Pick fewer people or send the rest tomorrow.' });
+  const res = { emails: 0, texts: 0, failed: 0, skipped: skipped, textsOff: wantT && !textsOn }, touched = {};
+  // No lock while messages go out: other people can keep working.
+  emailTo.forEach(function (r) { try { MailApp.sendEmail(r.email, subject, mk(outreachFirst_(r.name)), { replyTo: reply, name: 'Comfort Hands Home Healthcare' }); res.emails++; touched[r.id] = 1; } catch (e) { res.failed++; } });
+  textTo.forEach(function (r) { const st = sendSms_(r.phone, sms, 'out|' + r.id + '|' + now_().getTime(), 'outreach', u.email, null, from); if (st === 'sent') { res.texts++; touched[r.id] = 1; } else res.failed++; });
+  // Short lock 2: record who was contacted (found again by id, in case rows moved), hand back the places set aside for failed emails, and log it.
+  try { withLock_(function () {
+    const sh = cmSheet_(), rowOf = {}; cmRows_().forEach(function (r) { rowOf[r.id] = r.row; });
+    Object.keys(touched).forEach(function (id) { if (rowOf[id]) sh.getRange(Number(rowOf[id]), 8).setValue(stamp); });
+    const cur = outreachSentToday_(), back = want - res.emails;
+    if (back > 0) PropertiesService.getScriptProperties().setProperty('outDay', stamp + '|' + Math.max(0, cur - back));
+    audit_(u, 'OUTREACH SEND', subject, res.emails + ' emails, ' + res.texts + ' texts, ' + res.failed + ' failed, ' + skipped + ' skipped');
+  }); } catch (e) { res.notRecorded = true; } // the messages already went out; only the 'last contacted' stamps are missing
   return out_({ ok: true, result: res, list: cmList_() });
 }
 function ptSheet_() { return tab_('Patients', PT_COLS_); }
@@ -967,18 +999,37 @@ function staffLine_() {
 // Quick messages for the Text buttons: tab "Quick Messages" (Label, Text). Created with three starters; edit the rows freely. Kept to 300 characters.
 const QM_SEED_ = [['Please call the office', 'Comfort Hands: Please call the office at 609-277-3032 when you have a moment. Thank you.'], ['Activity sheet reminder', 'Comfort Hands: Reminder to clock in and out on HHAeXchange and submit your activity sheet by Friday.'], ['Capacity update', 'Comfort Hands: We have capacity for new clients. Call Abigail, 609-277-3032.']];
 const QM_INTERVIEW_ = [['Schedule interview', 'Comfort Hands: Hi {first}, thank you for applying for {position}. Please call 609-277-3032 to schedule your interview.'], ['Interview reminder', 'Comfort Hands: Hi {first}, this is a reminder about your interview with us. Please call 609-277-3032 if you need to reschedule.']];
+function qmNeedsSeed_() { return !db_().getSheetByName('Quick Messages') || PropertiesService.getScriptProperties().getProperty('qmInterview') !== '1'; }
+function qmSeed_() {
+  const ss = db_(); let sh = ss.getSheetByName('Quick Messages');
+  if (!sh) { sh = ss.insertSheet('Quick Messages'); sh.appendRow(['Label', 'Text']); QM_SEED_.forEach(function (r) { sh.appendRow(r); }); }
+  const pr = PropertiesService.getScriptProperties();
+  if (pr.getProperty('qmInterview') !== '1') { const have = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(function (r) { return String(r[0]).trim().toLowerCase(); }) : []; QM_INTERVIEW_.forEach(function (r) { if (have.indexOf(r[0].toLowerCase()) < 0) sh.appendRow(r); }); pr.setProperty('qmInterview', '1'); }
+}
 function quickMessages_() {
   try {
-    const ss = db_(); let sh = ss.getSheetByName('Quick Messages');
-    if (!sh) { sh = ss.insertSheet('Quick Messages'); sh.appendRow(['Label', 'Text']); QM_SEED_.forEach(function (r) { sh.appendRow(r); }); }
-    const pr = PropertiesService.getScriptProperties();
-    if (pr.getProperty('qmInterview') !== '1') { const have = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(function (r) { return String(r[0]).trim().toLowerCase(); }) : []; QM_INTERVIEW_.forEach(function (r) { if (have.indexOf(r[0].toLowerCase()) < 0) sh.appendRow(r); }); pr.setProperty('qmInterview', '1'); }
+    if (qmNeedsSeed_()) withLockTry_(3000, qmSeed_);
+    const sh = db_().getSheetByName('Quick Messages'); if (!sh) return [];
     const n = sh.getLastRow(); if (n < 2) return [];
     return sh.getRange(2, 1, n - 1, 2).getValues().map(function (r) { return { label: String(r[0] || '').trim(), text: String(r[1] || '').trim().slice(0, SMS_MAX_) }; }).filter(function (m) { return m.label && m.text; });
   } catch (e) { return []; }
 }
+// Like withLock_ but gives up after a few seconds and returns null, so a busy system never holds up a screen.
+function withLockTry_(ms, fn) {
+  if (LOCK_DEPTH_) return fn();
+  const lock = LockService.getScriptLock(); if (!lock.tryLock(ms)) return null; LOCK_DEPTH_ = 1;
+  try { return fn(); } finally { LOCK_DEPTH_ = 0; lock.releaseLock(); }
+}
+function patientIdsPending_() {
+  const sh = ptSheet_(), n = sh.getLastRow(); if (n < 2) return false;
+  if (sh.getLastColumn() < 22) return true;
+  const ids = sh.getRange(2, 1, n - 1, 1).getValues(), have = sh.getRange(2, 20, n - 1, 1).getValues();
+  for (let i = 0; i < n - 1; i++) if (ids[i][0] && !String(have[i][0] || '')) return true;
+  return false;
+}
 function home_() {
-  try { patientIdsBackfill_(); } catch (e) {}
+  // Reading is free; the one-time fill-in of Patient # takes the lock only if something is missing, and is skipped (tried again on the next load) when the system is busy.
+  try { if (patientIdsPending_()) withLockTry_(3000, patientIdsBackfill_); } catch (e) {}
   const L = load_(), pv = ptLight_(), aidesByKey = {};
   for (let i = 1; i < L.plans.length; i++) aidesByKey[L.plans[i][0]] = emails_(L.plans[i][4]);
   const patients = [], pcaBy = {};
@@ -1015,7 +1066,9 @@ function records_(act, d, u) {
   if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
   if (/^cm/.test(act)) {
     if (!hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' });
-    return act === 'cmList' ? out_(cmList_()) : withLock_(function () { return act === 'cmSave' ? cmSave_(d, u) : cmSend_(d, u); });
+    if (act === 'cmList') return out_(cmList_());
+    if (act === 'cmSend') return cmSend_(d, u); // takes the lock itself, only for the moments it writes, never while messages go out
+    return withLock_(function () { return cmSave_(d, u); });
   }
   if (act === 'agencyIds') return out_({ ok: true, agency: CONFIG.AGENCY || {} });
   if (/^onb/.test(act)) {
@@ -2066,7 +2119,7 @@ function hr_(d) {
       while (JSON.stringify(app).length > CELL_MAX_ - 50 && app._log.length > 1) app._log.shift();
       y[O_.APP] = JSON.stringify(app).slice(0, CELL_MAX_);
       const fn = app.firstName || cur.firstName, ln = app.lastName || cur.lastName; if (fn || ln) y[O_.NAME] = (fn + ' ' + ln).trim();
-      if (app.phone) y[O_.PHONE] = app.phone;
+      if (app.phone) y[O_.PHONE] = phoneClean_(app.phone);
     });
     audit_(me, 'applicantDetails', id, n + ' fields'); return out_(hrState_(x));
   }
@@ -2132,14 +2185,18 @@ function applySubmit_(d) {
   if (!captchaOk_(d.captcha)) return out_({ ok: false, error: 'We could not confirm you are not a robot. Please reload the page and try again, or call the office at 609-277-3032.' });
   const a = d.app || {}, app = {};
   APP_FIELDS_.forEach(function (f) { let v = a[f[0]]; if (Array.isArray(v)) v = v.map(String).join(', '); if (v === true) v = 'Yes'; app[f[0]] = String(v == null || v === false ? '' : v).trim().slice(0, f[0].slice(-4) === 'Resp' || /Explain$/.test(f[0]) ? 1500 : 200); });
+  app.phone = phoneClean_(app.phone);
   const email = app.email.toLowerCase(), bad = function (m) { return out_({ ok: false, error: m }); };
   if (!app.firstName || !app.lastName) return bad('Enter your first and last name.');
   if (!/^\S+@\S+\.\S+$/.test(email)) return bad('Enter a valid email address.');
-  if (!app.phone) return bad('Enter your phone number.');
+  const phDigits = app.phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+  if (phDigits.length < 10 || phDigits.length > 15) return bad('Enter a valid phone number with area code.');
   if (HR_POSITIONS_.indexOf(app.position) < 0) return bad('Choose the position you are applying for.');
   if (app.consentEmployer !== 'Yes' && app.consentEmployer !== 'No') return bad('Answer the prior-employer authorization.');
   if (app.consentBackground !== 'Yes' && app.consentBackground !== 'No') return bad('Answer the background check authorization.');
-  if (!throttle_('ap:all', 40, 3600) || !throttle_('ap:' + email, 3, 86400)) return bad('We could not take your application right now. Please call the office at 609-277-3032.');
+  // A spike alerts the office (once an hour); the hard limit is high enough that a flood cannot easily shut out real applicants.
+  if (!throttle_('ap:spike', 30, 3600) && throttle_('ap:spikeMail', 1, 3600)) { try { MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Unusual number of job applications', body: 'More than 30 applications arrived in the last hour. If these are not real applicants, set the reCAPTCHA keys in Code.gs and the Apply page (see SETUP.md).' }); } catch (e) {} }
+  if (!throttle_('ap:all', 200, 3600) || !throttle_('ap:' + email, 3, 86400) || !throttle_('ap:p:' + phDigits, 3, 86400)) return bad('We could not take your application right now. Please call the office at 609-277-3032.');
   let resume = null; if (d.resume && d.resume.b64) { try { resume = fileFrom_(d.resume, 'Resume - ' + app.lastName + ', ' + app.firstName, true); } catch (e) { return bad(String(e.message || e)); } }
   const id = 'o' + Utilities.getUuid().replace(/-/g, '').slice(0, 14), name = app.firstName + ' ' + app.lastName, now = new Date().toISOString();
   // Application PDF (includes the Social Security number) goes to the restricted HR folder; the Sheet copy leaves it out.
@@ -2180,7 +2237,7 @@ function onb_(act, d, u) {
       const dup = onbAll_().filter(function (o) { return String(o.email).toLowerCase() === em; })[0]; if (dup) { id = dup.id; r = findRow_(sh, 0, id); x = onbRow_(sh, r); }
       else {
         id = 'o' + Utilities.getUuid().replace(/-/g, '').slice(0, 14); x = []; for (let i = 0; i < ONB_N_; i++) x.push('');
-        const nm = name.split(/\s+/), ph = String(d.phone || '').slice(0, 30);
+        const nm = name.split(/\s+/), ph = phoneClean_(d.phone);
         x[O_.ID] = id; x[O_.NAME] = name; x[O_.EMAIL] = em; x[O_.PHONE] = ph; x[O_.STATUS] = 'in progress'; x[O_.CREATED] = now; x[O_.STEPS] = '{}';
         if (HR_POSITIONS_.indexOf(String(d.position)) >= 0) x[O_.POS] = d.position;
         x[O_.APP] = JSON.stringify({ _imported: true, firstName: nm[0], lastName: nm.slice(1).join(' '), phone: ph });
@@ -2214,7 +2271,7 @@ function onb_(act, d, u) {
       if (n.done && !cur.done) { cur.done = true; cur.date = today_(); cur.by = who; } else if (!n.done) { cur.done = false; delete cur.date; delete cur.by; }
       cur.note = String(n.note || '').slice(0, 300); steps[k] = cur;
     });
-    x[O_.NAME] = name; x[O_.EMAIL] = email; x[O_.PHONE] = String(d.phone || '').slice(0, 30); x[O_.STEPS] = JSON.stringify(steps); x[O_.UPDATED] = now; x[O_.BY] = who;
+    x[O_.NAME] = name; x[O_.EMAIL] = email; x[O_.PHONE] = phoneClean_(d.phone); x[O_.STEPS] = JSON.stringify(steps); x[O_.UPDATED] = now; x[O_.BY] = who;
     if (HR_POSITIONS_.indexOf(String(d.position)) >= 0) x[O_.POS] = d.position;
     const st = String(d.status || x[O_.STATUS] || 'in progress'); x[O_.STATUS] = ['in progress', 'withdrawn', 'not hired', 'hired'].indexOf(st) >= 0 ? st : 'in progress';
     const all = onbAllDone_(steps);

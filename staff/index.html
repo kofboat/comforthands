@@ -183,7 +183,7 @@ async function doLogin(ev){
   ev.preventDefault(); const er=$('lerr'); er.style.display='none'; $('lbtn').disabled=true; $('lbtn').textContent='Signing in…';
   try{
     const r=await fetch(SUBMIT_URL,{method:'POST',body:JSON.stringify({action:'login',email:$('em').value.trim(),password:$('pw').value})}); const j=await r.json();
-    if(!j.ok) throw new Error(j.error==='locked'?'Too many attempts. Try again in 15 minutes.':'Incorrect email or password.');
+    if(!j.ok) throw new Error(j.error==='locked'?'Too many attempts. Try again in '+(j.retry>90?Math.ceil(j.retry/60)+' minutes':(j.retry||60)+' seconds')+', or use Forgot password.':'Incorrect email or password.');
     startSession(j,$('em').value); $('pw').value='';
   }catch(e){ er.textContent=/fetch|Failed|Network/i.test(e.message)?'Could not reach the sign-in service. Check your connection.':e.message; er.style.display='block'; }
   $('lbtn').disabled=false; $('lbtn').textContent='Sign in';

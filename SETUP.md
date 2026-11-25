@@ -278,3 +278,12 @@ Patients are found by first + last name (and DOB when you give one). A blank cel
 ## Hiring: Interview step
 - The hiring checklist now has **Interview** right after Application review. Use its note box for the date and time. Anyone already past the offer step counts as interviewed, so nobody drops back from hired.
 - New hire page and New hires list: **Text**, **Call** and (detail page) **Email** buttons. The detail page has a "Message for Text" menu, default "Schedule interview". `{first}` and `{position}` in a Quick Messages row fill in automatically. Two rows, Schedule interview and Interview reminder, are added once to the Quick Messages tab.
+
+## Security fixes (November 2026)
+
+After you upload the new Code.gs and deploy it as a new version:
+
+1. **Passwords** now use a random salt for each person (format `v3$`). Nobody needs to reset anything: each person is moved to the new format the first time they sign in. In the editor, run `timePw` once and read the Execution log. One password check should take well under 3 seconds. If it is slower, lower `PW_ITER3_` near the top of the sign-in section.
+2. **Sign-in lockout** is now 1 minute after 5 wrong tries, then 5 minutes, then 15 minutes. "Forgot password" always works as a way back in. The office email gets a notice when the same account is locked out 3 times in a day.
+3. **Job applications**: a phone number with area code is required, and the same phone or email can apply 3 times a day. The office email gets a notice if more than 30 applications arrive in an hour. Set the reCAPTCHA keys (`RECAPTCHA_SECRET` in Code.gs and the site key in `apply/index.html`) to block automated applications. Without them, a determined bot cannot be fully stopped.
+4. **Busy system**: sending outreach no longer holds everyone else up, and the home screen no longer waits when the system is busy.
