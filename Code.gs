@@ -1461,7 +1461,8 @@ function sendSms_(to, body, key, kind, email, idx) {
   const num = e164_(to); if (!num) return 'no-number';
   const live = smsLive_(); if (idx && idx[key]) return 'already';
   let status = live ? 'sent' : 'dry-run', detail = '';
-  if (live) {
+  if (String(body).length > SMS_MAX_) { status = 'too long'; detail = 'over ' + SMS_MAX_ + ' characters'; }
+  if (live && status === 'sent') {
     try {
       const c = smsCfg_(), payload = { To: num, Body: body }; if (/^MG/.test(c.FROM)) payload.MessagingServiceSid = c.FROM; else payload.From = c.FROM;
       const res = UrlFetchApp.fetch('https://api.twilio.com/2010-04-01/Accounts/' + encodeURIComponent(c.TWILIO_SID) + '/Messages.json',
@@ -1471,11 +1472,42 @@ function sendSms_(to, body, key, kind, email, idx) {
     } catch (e) { status = 'failed'; detail = 'send error'; }
   }
   try { textLogTab_().appendRow([now_().toISOString(), txt_(key), kind, email || '', txt_(userName_(email)), num.slice(-4), status, detail]); } catch (e) {}
-  if (idx && status !== 'failed') idx[key] = now_().toISOString();
+  if (idx && status !== 'failed' && status !== 'too long') idx[key] = now_().toISOString();
   return status;
 }
 function clockLink_() { const u = smsCfg_().CLOCK_URL; return u ? ' ' + u : ''; }
 function smsTail_() { return ' Reply STOP to opt out.'; }
+// Every text is kept to 300 characters or less (2 segments). sendSms_ refuses anything longer.
+const SMS_MAX_ = 300;
+const AUTO_LINE_ = ' Automated message. Questions? Call 609-277-3032.';
+// Built-in lines, used only when the Motivation tab is missing or empty. The tab has two columns: Clock in, Clock out (one line per row).
+const MOTIVE_FALLBACK_ = {
+  inn: ['Thank you for caring for our clients today.', 'Your kindness makes a real difference.', 'Have a great shift!', 'Small acts of care add up to big days.', 'You are the heart of Comfort Hands.', 'Clients are lucky to have you today.'],
+  out: ['Great work today, rest well.', 'Thank you for a job well done.', 'Your care made someone\'s day better.', 'Thank you for showing up today.', 'Well done, enjoy your evening!', 'You made a difference today.']
+};
+let MOTIVE_MEMO_ = null;
+function motiveLists_() {
+  if (MOTIVE_MEMO_) return MOTIVE_MEMO_;
+  let a = [], b = [];
+  try {
+    const sh = db_().getSheetByName('Motivation');
+    if (sh && sh.getLastRow() > 1) { const v = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues(); v.forEach(function (r) { const x = String(r[0] || '').replace(/\s+/g, ' ').trim(), y = String(r[1] || '').replace(/\s+/g, ' ').trim(); if (x) a.push(x); if (y) b.push(y); }); }
+  } catch (e) {}
+  return (MOTIVE_MEMO_ = { inn: a.length ? a : MOTIVE_FALLBACK_.inn, out: b.length ? b : MOTIVE_FALLBACK_.out });
+}
+// One line per day, the same for every aide, moving to the next row each day and starting over at the end of the list.
+function motiveLine_(kind) {
+  const L = motiveLists_()[kind === 'in' ? 'inn' : 'out'], d = dparse_(today_()); if (!L.length || !d) return '';
+  return L[Math.floor(d.getTime() / 86400000) % L.length];
+}
+// Clock-in / clock-out text: reminder + link, then a motivational line, then the "automated" line, then STOP. Under 300 characters.
+// If it does not fit, the motivational line is dropped first, then the automated line; the reminder itself always goes out.
+function clockText_(core, kind) {
+  const head = 'Comfort Hands: ' + core + clockLink_(), m = motiveLine_(kind), tail = smsTail_();
+  const tries = [head + (m ? ' ' + m : '') + AUTO_LINE_ + tail, head + AUTO_LINE_ + tail, head + tail];
+  for (let i = 0; i < tries.length; i++) if (tries[i].length <= SMS_MAX_) return tries[i];
+  return tries[2];
+}
 // Shift reminders. Run every 5 minutes by installTextReminders(). Each reminder is sent once; a missed run is caught up within 20 minutes.
 function shiftReminders() {
   if (!tzOk_()) return 0;
@@ -1485,8 +1517,8 @@ function shiftReminders() {
   const occ = occurrences_(sched.shifts, yest).concat(occurrences_(sched.shifts, today)); let sent = 0;
   occ.forEach(function (o) {
     const ph = trk[o.shift.email].phone, inAt = o.start.getTime() - lead * 60000, outAt = o.end.getTime(), t = now.getTime();
-    if (t >= inAt && t < inAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift starts at ' + fmt12_(o.st) + '. Please clock in when you arrive.' + clockLink_() + smsTail_(), 'in|' + o.date + '|' + o.shift.email + '|' + o.st, 'shift-in', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
-    if (t >= outAt && t < outAt + WIN) { const s = sendSms_(ph, 'Comfort Hands: your shift ends at ' + fmt12_(o.en) + '. Please clock out.' + clockLink_() + smsTail_(), 'out|' + o.date + '|' + o.shift.email + '|' + o.en, 'shift-out', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
+    if (t >= inAt && t < inAt + WIN) { const s = sendSms_(ph, clockText_('your shift starts at ' + fmt12_(o.st) + '. Please clock in when you arrive.', 'in'), 'in|' + o.date + '|' + o.shift.email + '|' + o.st, 'shift-in', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
+    if (t >= outAt && t < outAt + WIN) { const s = sendSms_(ph, clockText_('your shift ends at ' + fmt12_(o.en) + '. Please clock out.', 'out'), 'out|' + o.date + '|' + o.shift.email + '|' + o.en, 'shift-out', o.shift.email, idx); if (s === 'sent' || s === 'dry-run') sent++; }
   });
   return sent;
 }
@@ -1526,15 +1558,23 @@ function complianceTexts() {
   try { const cut = new Date(now_().getTime() - 120 * 86400000).toISOString(); delRows_(textLogTab_(), function (row) { return String(row[0]) < cut; }); } catch (e) {}
   return n;
 }
-// Broadcast texts from the Notifications tab (columns: Text, Status, Started, Sends). Run daily at 9 am by installTextReminders().
-// Status "active": sent to every active aide on days 1, 3, 5 and 7 of the run (4 texts), then the row changes to "done".
+// Broadcast texts from the Notifications tab (columns: Text, Status, Started, Sends, Time). Run hourly by installTextReminders().
+// Status "active": sent to every active aide on days 1, 3, 5 and 7 of the run (4 texts) at the row's Time, then the row changes to "done".
+// Time (optional, e.g. 9:00 AM): rows with no Time get 9 am, 12 pm and 4 pm in order (by row). Times are kept between 8 am and 8 pm.
 // Status "inactive" (or anything else) stops it and clears Started/Sends, so setting it back to active starts a fresh run.
+function notifHour_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') { const tz = Session.getScriptTimeZone(); return Number(Utilities.formatDate(v, tz, 'H')) + (Number(Utilities.formatDate(v, tz, 'm')) >= 30 ? 1 : 0); }
+  const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*([ap]m?)?\s*$/i.exec(String(v == null ? '' : v)); if (!m) return null;
+  let h = Number(m[1]); const ap = (m[3] || '').toLowerCase();
+  if (ap) { if (h < 1 || h > 12) return null; if (ap.charAt(0) === 'p' && h < 12) h += 12; if (ap.charAt(0) === 'a' && h === 12) h = 0; } else if (h > 23) return null;
+  return h;
+}
 function notificationTexts() {
   if (!tzOk_()) return 0;
-  const hr = now_().getHours(); if (hr < 6 || hr >= 21) return 0;
+  const hr = now_().getHours(); if (hr < 8 || hr >= 21) return 0;
   return withLock_(function () {
-    const sh = tab_('Notifications', ['Text', 'Status', 'Started', 'Sends']), v = sh.getDataRange().getValues(); if (v.length < 2) return 0;
-    const users = usersAll_(), trk = trkMap_(), idx = smsIndex_(), today = today_(), TOTAL = 4; let total = 0, recips = null;
+    const sh = tab_('Notifications', ['Text', 'Status', 'Started', 'Sends', 'Time']), v = sh.getDataRange().getValues(); if (v.length < 2) return 0;
+    const users = usersAll_(), trk = trkMap_(), idx = smsIndex_(), today = today_(), TOTAL = 4, DEF = [9, 12, 16]; let total = 0, recips = null, blank = 0;
     function recipients() {
       if (recips) return recips; recips = [];
       Object.keys(users).forEach(function (e) { if (users[e].roles.indexOf('aide') < 0) return; const o = trk[e]; if (o && o.phone && o.smsOk) recips.push({ email: e, phone: o.phone }); });
@@ -1543,15 +1583,19 @@ function notificationTexts() {
     for (let i = 1; i < v.length; i++) {
       const row = i + 1, text = String(v[i][0] || '').replace(/\s+/g, ' ').trim(), st = String(v[i][1] || '').trim().toLowerCase(), started = iso_(v[i][2]), sends = String(v[i][3] || '');
       if (!text && !st) continue;
+      let hour = text ? notifHour_(v[i][4]) : null; if (text && hour == null) hour = DEF[blank++ % DEF.length];
+      hour = Math.max(8, Math.min(20, hour == null ? 9 : hour));
       if (st !== 'active') { if ((v[i][2] || v[i][3]) && st !== 'done' && st !== 'too long') sh.getRange(row, 3, 1, 2).setValues([['', '']]); continue; }
       if (!text) continue;
-      if (text.length > 300) { sh.getRange(row, 2).setValue('too long'); continue; }
+      const body = 'Comfort Hands: ' + text + smsTail_();
+      if (body.length > SMS_MAX_) { sh.getRange(row, 2).setValue('too long'); continue; }
+      if (hr < hour) continue;
       let start = started, offset = 0;
       if (!start || /^done/.test(sends)) { start = today; sh.getRange(row, 3, 1, 2).setValues([[start, '']]); }
       else offset = -daysUntil_(start);
       if (offset > 6) { sh.getRange(row, 2, 1, 3).setValues([['done', start, 'done (' + (sends.match(/^\d+/) || ['0'])[0] + ' of ' + TOTAL + ')']]); continue; }
       if (offset % 2 !== 0) continue;
-      const n = offset / 2 + 1, body = 'Comfort Hands: ' + text + smsTail_(); let sent = 0;
+      const n = offset / 2 + 1; let sent = 0;
       recipients().forEach(function (r) { const s2 = sendSms_(r.phone, body, 'notif|' + row + '|' + start + '|' + offset + '|' + r.email, 'notification', r.email, idx); if (s2 === 'sent' || s2 === 'dry-run') sent++; });
       total += sent;
       if (n >= TOTAL) sh.getRange(row, 2, 1, 3).setValues([['done', start, 'done (' + n + ' of ' + TOTAL + ')']]);
@@ -1567,14 +1611,21 @@ function officeSummaryText_(h) {
   const c = h.counts, body = 'Comfort Hands weekly: ' + (c.trkOver || 0) + ' aide(s) with overdue compliance items, ' + (c.trkSoon || 0) + ' due within 60 days, ' + (c.pcaDue || 0) + ' PCA authorization(s) ending within 45 days. Open the staff portal for details.';
   const idx = smsIndex_(); ph.forEach(function (p, i) { sendSms_(p, body, 'office|' + today_() + '|' + i, 'office-summary', '', idx); });
 }
+// Creates the Motivation tab (Clock in, Clock out) with a few starter lines if it does not exist. Paste your own list over it.
+function motivationTab_() {
+  const ss = db_(); if (ss.getSheetByName('Motivation')) return;
+  const sh = ss.insertSheet('Motivation'), a = MOTIVE_FALLBACK_.inn, b = MOTIVE_FALLBACK_.out, rows = [['Clock in', 'Clock out']];
+  for (let i = 0; i < a.length; i++) rows.push([a[i], b[i] || '']);
+  sh.getRange(1, 1, rows.length, 2).setValues(rows);
+}
 // Run ONCE after texting is set up (and again if you ever change it).
 function installTextReminders() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (['shiftReminders', 'complianceTexts', 'notificationTexts'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('shiftReminders').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('complianceTexts').timeBased().everyDays(1).atHour(9).create();
-  ScriptApp.newTrigger('notificationTexts').timeBased().everyDays(1).atHour(9).create();
-  schedTab_(); textLogTab_(); tab_('Notifications', ['Text', 'Status', 'Started', 'Sends']);
-  Logger.log('Installed: shift reminders every 5 minutes, compliance texts and Notifications-tab texts daily at 9 am (script time zone ' + Session.getScriptTimeZone() + '). Texting is ' + (smsLive_() ? 'LIVE.' : 'OFF: set CONFIG.SMS and ENABLED to true. Until then texts are only recorded in the TextLog tab as dry-run.'));
+  ScriptApp.newTrigger('notificationTexts').timeBased().everyHours(1).create();
+  schedTab_(); textLogTab_(); tab_('Notifications', ['Text', 'Status', 'Started', 'Sends', 'Time']); motivationTab_();
+  Logger.log('Installed: shift reminders every 5 minutes, compliance texts daily at 9 am, Notifications-tab texts hourly (script time zone ' + Session.getScriptTimeZone() + '). Texting is ' + (smsLive_() ? 'LIVE.' : 'OFF: set CONFIG.SMS and ENABLED to true. Until then texts are only recorded in the TextLog tab as dry-run.'));
 }
 // Sends one real text to CONFIG.SMS.TEST_TO to prove the Twilio details work.
 function sendTestText() {
