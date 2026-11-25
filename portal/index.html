@@ -525,7 +525,7 @@ body:not(.print-sheet) .card{background:var(--lilac)}
 .listbar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:0 0 12px}
 .listbar label{font-weight:700;font-size:13px;color:#4b2a47;display:flex;flex-direction:column;gap:4px}
 .listbar select{padding:9px 12px;border:1.5px solid #e6d5ee;border-radius:12px;font:inherit;font-size:14px;min-width:190px}
-.listbar input{flex:1;min-width:220px;max-width:440px;padding:10px 14px;border:1.5px solid #e6d5ee;border-radius:999px;font:inherit;font-size:14px}
+.listbar input:not([type=checkbox]){flex:1;min-width:220px;max-width:440px;padding:10px 14px;border:1.5px solid #e6d5ee;border-radius:999px;font:inherit;font-size:14px}
 .morebar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 4px 4px;flex-wrap:wrap}
 .pno{font-size:18px;font-weight:700;color:var(--nurse)}
 @media(max-width:1600px){
@@ -540,7 +540,15 @@ body:not(.print-sheet) .card{background:var(--lilac)}
  #homeList .ct.pt td:nth-child(5) br{display:none}
  #homeList .ct.pt td:last-child{grid-column:1/3;margin-top:10px}
 }
-@media(max-width:700px){.listbar select,.listbar input{width:100%;max-width:none}.listbar label{width:100%}}
+input[type=checkbox]{width:auto}.listbar input[type=checkbox],#outList input[type=checkbox],#outMsg input[type=checkbox],#outEdit input[type=checkbox]{width:auto;min-width:0;flex:none;margin:0}
+#outList .ct tr{display:grid!important;grid-template-columns:auto 1fr auto;column-gap:10px}#outList .ct td{grid-column:2!important}#outList .ct td:first-child{grid-column:1!important;grid-row:1/4}#outList .ct td:last-child{grid-column:3!important;grid-row:1}
+@media(max-width:700px){.listbar select,.listbar input:not([type=checkbox]){width:100%;max-width:none}.listbar label{width:100%}}
+
+.outgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px}
+@media(max-width:1100px){.outgrid{grid-template-columns:1fr}}
+.outh{font-size:14px;margin:0 0 8px;text-transform:uppercase;text-decoration:underline;text-underline-offset:5px;text-decoration-thickness:2px;letter-spacing:.04em}
+.outl{display:block;font-weight:700;font-size:13px;color:#4b2a47;margin:8px 0 4px}
+.outsig{white-space:pre-wrap;font:12px/1.5 inherit;background:#fefdfe;border:1px solid #e6d5ee;border-radius:10px;padding:10px;margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -2421,6 +2429,7 @@ function drawHome(){
   const navItems=[['overview','▦','Overview',0,'',HOME_TAB==='patients'&&!HOME_FILTER],['aides','♥','Aides',0,'',HOME_TAB==='aides'&&!HOME_FILTER],['pcaDue','✎','PCA authorizations',c.pcaDue||0,'',HOME_FILTER==='pcaDue'],['trkOver','✔','Compliance',(c.trkOver||0)+(c.trkSoon||0),(c.trkOver?'r':''),/^trk/.test(HOME_FILTER)],['sheets','▤','Activity sheets',c.sheets||0,'',HOME_TAB==='sheets'],['drafts','✉','Drafts',c.drafts||0,'',HOME_TAB==='drafts']];
   if(isA) navItems.push(['onb','＋','New hires',c.onboarding||0,'',HOME_TAB==='admin']);
   if(isA) navItems.push(['plans','▤','Activity sheets',0,'',HOME_TAB==='plans']);
+  if(isA) navItems.push(['outreach','✉','Outreach',0,'',HOME_TAB==='outreach']);
   navItems.push(['ids','#','Agency IDs',0,'',HOME_TAB==='ids']);
   const sn=document.getElementById('sideNav'); if(sn) sn.innerHTML=navItems.map(n=>'<a class="'+(n[5]?'on':'')+'" onclick="navGo(\''+n[0]+'\')"><i>'+n[1]+'</i>'+n[2]+(n[3]?'<span class="b '+n[4]+'">'+n[3]+'</span>':'')+'</a>').join('');
   /* top bar */
@@ -2446,19 +2455,20 @@ function drawHome(){
   const weekHtml='<div class="dcard"><h2>This week</h2>'+
     '<div class="att" onclick="navGo(\'sheets\')"><div class="dot" style="background:'+(c.sheets?'#b7791f':'#15803d')+'"></div><div>Activity sheets not submitted<small>'+(c.sheets?c.sheets+' still to come in':'All submitted')+'</small></div></div>'+
     '<div class="att" style="cursor:default"><div class="dot" style="background:'+(wk.failed?'var(--danger)':(wk.live?'#15803d':'#9a9a9a'))+'"></div><div>Text messages (last 7 days)<small>'+(wk.live?wk.sent+' sent · '+wk.failed+' failed':(wk.sent?wk.sent+' recorded, not sent (texting is not switched on)':'Texting is not switched on yet'))+'</small></div></div></div>';
-  t+='<div class="dash"><div class="dash-main"><div class="htabs"><button class="htab '+(HOME_TAB==='patients'?'on':'')+'" onclick="setHomeTab(\'patients\')">Patients</button><button class="htab '+(HOME_TAB==='aides'?'on':'')+'" onclick="setHomeTab(\'aides\')">Aides</button>'+(isA?'<button class="htab '+(HOME_TAB==='admin'?'on':'')+'" onclick="setHomeTab(\'admin\')">Admin tasks</button><button class="htab '+(HOME_TAB==='plans'?'on':'')+'" onclick="setHomeTab(\'plans\')">Activity sheets</button>':'')+
+  t+='<div class="dash"><div class="dash-main"><div class="htabs"><button class="htab '+(HOME_TAB==='patients'?'on':'')+'" onclick="setHomeTab(\'patients\')">Patients</button><button class="htab '+(HOME_TAB==='aides'?'on':'')+'" onclick="setHomeTab(\'aides\')">Aides</button>'+(isA?'<button class="htab '+(HOME_TAB==='admin'?'on':'')+'" onclick="setHomeTab(\'admin\')">Admin tasks</button><button class="htab '+(HOME_TAB==='plans'?'on':'')+'" onclick="setHomeTab(\'plans\')">Activity sheets</button><button class="htab '+(HOME_TAB==='outreach'?'on':'')+'" onclick="setHomeTab(\'outreach\')">Outreach</button>':'')+
     (HOME_FILTER?'<button class="mini" onclick="setHomeFilter(\'\')">Clear filter ✕</button>':'')+
     (HOME_TAB==='patients'?'<span style="flex:1"></span><button class="btn btn-nurse" style="padding:8px 16px" onclick="newPatient()">＋ New patient admission</button>':'')+'</div><div id="homeList"></div></div>'+
     '<div class="dash-side">'+attHtml+weekHtml+'</div></div>';
   box.innerHTML=t; drawList();
 }
-function setHomeFilter(k){ resetPaging(); HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(HOME_FILTER==='plans'){ HOME_TAB='plans'; } else if(HOME_FILTER==='ids'){ HOME_TAB='ids'; } else if(/^(eval|trk|aideOver)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
+function setHomeFilter(k){ resetPaging(); HOME_FILTER=(HOME_FILTER===k?'':k); if(HOME_FILTER==='sheets'){ HOME_TAB='sheets'; } else if(HOME_FILTER==='drafts'){ HOME_TAB='drafts'; } else if(HOME_FILTER==='onb'){ HOME_TAB='admin'; } else if(HOME_FILTER==='plans'){ HOME_TAB='plans'; } else if(HOME_FILTER==='ids'){ HOME_TAB='ids'; } else if(HOME_FILTER==='outreach'){ HOME_TAB='outreach'; } else if(/^(eval|trk|aideOver)/.test(HOME_FILTER)) HOME_TAB='aides'; else if(HOME_FILTER) HOME_TAB='patients'; drawHome(); }
 function setHomeTab(t){ resetPaging(); HOME_TAB=t; HOME_FILTER=''; ONB=null; PLANS=null; drawHome(); }
 function newPatient(){ if(!confirm('Start a new admission? The current admission on this device is already saved to the office system.')) return; try{ sessionStorage.setItem('chhc_open',AUTH.roles.includes('admin')?'admin':'nurse'); }catch(e){} clearAllData(); }
 function drawList(){
   const h=HOME, box=document.getElementById('homeList'); if(!box) return; const q=HOME_Q.trim().toLowerCase();
   const hasA=AUTH.roles.includes('admin'), hasN=AUTH.roles.includes('nurse');
   if(HOME_TAB==='ids'){ drawIds(box); return; }
+  if(HOME_TAB==='outreach'){ drawOutreach(box); return; }
   if(HOME_TAB==='admin'){ drawAdmin(box); return; }
   if(HOME_TAB==='plans'){ drawPlans(box); return; }
   if(HOME_TAB==='drafts'){
@@ -2784,6 +2794,60 @@ const ADMIN_LINKS=[['Homebase (payroll)','https://app.joinhomebase.com/'],['HHAe
 let ONB=null;
 const isAdminNow=()=>isStaffNow()&&AUTH.roles.includes('admin');
 /* ---------- Agency IDs: quick reference with copy buttons (for calls to the insurers) ---------- */
+
+// ── Outreach: capacity updates to case managers (admin only) ──
+let OUT=null, OUT_SEL={}, OUT_Q='', OUT_INS='', OUT_SHOW=10, OUT_EDIT=null, OUT_BUSY=false;
+const OUT_TPL={ subject:'Comfort Hands is accepting new clients', body:'We currently have capacity for new clients in [counties or areas]. Please call me at 609-277-3032 with any referrals.', text:'Comfort Hands Home Healthcare (Linwood, NJ): We now have capacity for new clients in [areas]. Questions? Call Abigail, 609-277-3032. This number sends updates only.' };
+async function drawOutreach(box){
+  if(!OUT){ box.innerHTML='<p class="tmuted">Loading case managers…</p>'; try{ const j=await api('cmList'); if(!j.ok){ box.innerHTML='<p class="tmuted">'+escAct(j.error||'Could not load.')+'</p>'; return; } OUT=j; OUT.msg=Object.assign({},OUT_TPL,{email:true,textOn:false}); OUT.managers.forEach(m=>{ if(m.status==='Active') OUT_SEL[m.id]=true; }); }catch(e){ box.innerHTML='<p class="tmuted">'+escAct(e.message||'Could not load.')+'</p>'; return; } }
+  if(!document.getElementById('outRoot')){ box.innerHTML='<div id="outRoot" class="outgrid"><div><h3 class="outh">Case managers</h3><div class="dcard" id="outList"></div></div><div><h3 class="outh">New message</h3><div class="dcard" id="outMsg"></div></div></div><div id="outEdit"></div>'; }
+  drawOutList(); drawOutMsg();
+}
+function outRows(){ const q=OUT_Q.trim().toLowerCase(); let r=OUT.managers.slice(); if(OUT_INS) r=r.filter(m=>m.insurance===OUT_INS); if(q) r=r.filter(m=>(m.name+' '+m.phone+' '+m.email+' '+m.insurance).toLowerCase().includes(q)); const last=n=>{const t=String(n||'').trim().split(/\s+/);return (t[t.length-1]||'').toUpperCase();}; r.sort((a,b)=>{const x=last(a.name),y=last(b.name);return x<y?-1:x>y?1:a.name.localeCompare(b.name);}); return r; }
+function drawOutList(){
+  const el=document.getElementById('outList'); if(!el) return; const rows=outRows(), shown=rows.slice(0,OUT_SHOW);
+  const ins=[...new Set(OUT.managers.map(m=>m.insurance).filter(Boolean))].sort();
+  el.innerHTML='<div class="listbar" style="margin-bottom:8px"><select onchange="OUT_INS=this.value;OUT_SHOW=10;drawOutList();drawOutMsg()"><option value="">All insurance companies</option>'+ins.map(i=>'<option '+(OUT_INS===i?'selected':'')+' value="'+escAct(i)+'">'+escAct(i)+'</option>').join('')+'</select><input type="text" placeholder="Search name, phone or email" value="'+escAct(OUT_Q)+'" oninput="OUT_Q=this.value;OUT_SHOW=10;drawOutList()"></div>'+
+   (rows.length?'<table class="htbl ct"><thead><tr><th><input type="checkbox" onchange="outAll(this.checked)" title="Select everyone shown"></th><th>Name</th><th>Contact</th><th>Insurance</th><th>Last sent</th><th></th></tr></thead><tbody>'+shown.map(m=>'<tr><td><input type="checkbox" '+(m.status!=='Active'?'disabled':(OUT_SEL[m.id]?'checked':''))+' onchange="outPick(\''+m.id+'\',this.checked)"></td><td><strong>'+escAct(m.name)+'</strong><br><span class="pill '+(m.status==='Active'?'ok':'')+'">'+(m.status==='Active'?'Active':'Do not contact')+'</span></td><td>'+escAct(m.phone||'—')+'<br><span class="tmuted">'+escAct(m.email||'no email')+'</span>'+(m.phone&&!m.textOk?'<br><span class="tmuted">Text: off</span>':'')+'</td><td>'+escAct(m.insurance||'—')+'</td><td>'+(m.last?usDate(m.last):'never')+'</td><td><button class="mini" onclick="outEdit(\''+m.id+'\')">Edit</button></td></tr>').join('')+'</tbody></table>':'<p class="tmuted">No case managers yet. Use Add case manager.</p>')+
+   '<div class="morebar"><span class="tmuted">Showing '+shown.length+' of '+rows.length+' case managers, A to Z by last name</span><span>'+(shown.length<rows.length?'<button class="mini" onclick="OUT_SHOW+=10;drawOutList()">Show 10 more</button> ':'')+'<button class="mini" onclick="outEdit(\'\')">＋ Add case manager</button></span></div>';
+}
+function outAll(on){ outRows().slice(0,OUT_SHOW).forEach(m=>{ if(m.status==='Active') OUT_SEL[m.id]=on; }); drawOutList(); drawOutMsg(); }
+function outPick(id,on){ OUT_SEL[id]=on; drawOutMsg(); }
+function outTargets(){ const sel=OUT.managers.filter(m=>OUT_SEL[m.id]&&m.status==='Active'); const em=OUT.msg.email?sel.filter(m=>m.email):[]; const tx=(OUT.msg.textOn&&OUT.textsReady)?sel.filter(m=>m.textOk&&m.phone):[]; return {sel:sel,em:em,tx:tx}; }
+function drawOutMsg(){
+  const el=document.getElementById('outMsg'); if(!el) return; const m=OUT.msg, t=outTargets(), len=(m.text||'').length+(/stop/i.test(m.text||'')?0:' Reply STOP to opt out.'.length);
+  el.innerHTML='<div class="listbar" style="margin-bottom:8px"><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" '+(m.email?'checked':'')+' onchange="OUT.msg.email=this.checked;drawOutMsg()"> Email</label><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" '+(m.textOn?'checked':'')+' '+(OUT.textsReady?'':'disabled')+' onchange="OUT.msg.textOn=this.checked;drawOutMsg()"> Text</label>'+(OUT.textsReady?'':'<span class="tmuted">Texts are off until the outreach number is set up.</span>')+'</div>'+
+   '<label class="outl">Subject</label><input type="text" id="outSub" value="'+escAct(m.subject)+'" oninput="OUT.msg.subject=this.value" style="width:100%;margin-bottom:8px">'+
+   '<label class="outl">Message <span class="tmuted">(starts with “Hi first name,” and ends with your signature)</span></label><textarea id="outBody" rows="5" oninput="OUT.msg.body=this.value" style="width:100%;margin-bottom:8px">'+escAct(m.body)+'</textarea>'+
+   '<details style="margin-bottom:8px"><summary class="tmuted" style="cursor:pointer">Signature added to every email</summary><pre class="outsig">'+escAct(OUT.signature)+'</pre></details>'+
+   (OUT.textsReady?'<label class="outl">Text <span class="tmuted" id="outLen">'+len+' of 300 characters</span></label><textarea id="outText" rows="3" oninput="OUT.msg.text=this.value;outLenUpd()" style="width:100%;margin-bottom:8px">'+escAct(m.text)+'</textarea>':'')+
+   '<div style="margin:6px 0 10px"><strong>Ready to send:</strong> '+t.em.length+' emails, '+t.tx.length+' texts. '+(t.sel.length<OUT.managers.filter(x=>OUT_SEL[x.id]).length?'':'')+'<span class="tmuted">'+(OUT.sentToday?OUT.sentToday+' emails sent today of '+OUT.cap+'.':'Daily limit '+OUT.cap+' emails.')+'</span></div>'+
+   '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="mini" '+(OUT_BUSY?'disabled':'')+' onclick="outSend(true)">Send me a test first</button><button class="btn btn-nurse" style="padding:9px 18px" '+(OUT_BUSY?'disabled':'')+' onclick="outSend(false)">Review and send</button></div><div id="outStatus" class="tmuted" style="margin-top:8px"></div>';
+}
+function outLenUpd(){ const e=document.getElementById('outLen'); if(!e) return; const t=OUT.msg.text||'', n=t.length+(/stop/i.test(t)?0:' Reply STOP to opt out.'.length); e.textContent=n+' of 300 characters'; e.style.color=n>300?'#b91c1c':''; }
+async function outSend(test){
+  if(OUT_BUSY) return; const m=OUT.msg, t=outTargets(); const st=document.getElementById('outStatus');
+  if(!m.email&&!m.textOn){ st.textContent='Choose email, text, or both.'; return; }
+  if(!test){ if(!t.sel.length){ st.textContent='Choose at least one active case manager.'; return; } if(!t.em.length&&!t.tx.length){ st.textContent='None of the selected people can receive this. Check email addresses and Text settings.'; return; }
+    if(/\[[^\]]+\]/.test((m.body||'')+(m.text||'')+(m.subject||''))&&!confirm('The message still contains a [bracketed] placeholder. Send anyway?')) return;
+    if(!confirm('Send to '+t.sel.length+' case manager'+(t.sel.length===1?'':'s')+'?\n\n'+t.em.length+' emails and '+t.tx.length+' texts.\n\nThis cannot be undone.')) return; }
+  OUT_BUSY=true; drawOutMsg(); const st2=document.getElementById('outStatus'); st2.textContent=test?'Sending a test to you…':'Sending…';
+  try{ const j=await api('cmSend',{test:!!test,ids:t.sel.map(x=>x.id),email:!!m.email,textOn:!!m.textOn,subject:m.subject,body:m.body,text:m.text}); OUT_BUSY=false; if(!j.ok){ drawOutMsg(); document.getElementById('outStatus').textContent=j.error||'Could not send.'; return; }
+    if(test){ drawOutMsg(); document.getElementById('outStatus').textContent='Test sent to '+(AUTH.email||'your email')+(OUT.textsReady&&m.textOn?' and the test mobile':'')+'. Nothing was recorded.'; return; }
+    OUT=Object.assign(j.list,{msg:m}); const r=j.result; drawOutList(); drawOutMsg(); document.getElementById('outStatus').textContent='Sent: '+r.emails+' emails, '+r.texts+' texts'+(r.failed?'. '+r.failed+' could not be sent':'')+(r.skipped?'. '+r.skipped+' skipped (Do not contact)':'')+'.'; }
+  catch(e){ OUT_BUSY=false; drawOutMsg(); document.getElementById('outStatus').textContent=e.message||'Could not send.'; }
+}
+function outEdit(id){
+  const m=id?OUT.managers.find(x=>x.id===id):{id:'',name:'',phone:'',email:'',insurance:'',status:'Active',textOk:true,notes:''}; OUT_EDIT=m; const el=document.getElementById('outEdit');
+  el.innerHTML='<div class="dcard" style="margin-top:12px;max-width:520px"><h3 class="outh">'+(id?'Edit case manager':'Add case manager')+'</h3><label class="outl">Name</label><input type="text" id="ceN" value="'+escAct(m.name)+'" style="width:100%"><label class="outl">Phone</label><input type="text" id="ceP" value="'+escAct(m.phone)+'" style="width:100%"><label class="outl">Email</label><input type="text" id="ceE" value="'+escAct(m.email)+'" style="width:100%"><label class="outl">Insurance company</label><input type="text" id="ceI" value="'+escAct(m.insurance)+'" style="width:100%"><div style="display:flex;gap:16px;margin:10px 0"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="ceT" '+(m.textOk?'checked':'')+'> Text OK</label><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="ceD" '+(m.status!=='Active'?'checked':'')+'> Do not contact</label></div><div id="ceMsg" class="tmuted"></div><div style="display:flex;gap:8px"><button class="btn btn-nurse" style="padding:9px 18px" onclick="outSave()">Save</button><button class="mini" onclick="document.getElementById(\'outEdit\').innerHTML=\'\'">Cancel</button></div></div>';
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+async function outSave(){
+  const g=i=>document.getElementById(i), msg=g('ceMsg'); msg.textContent='Saving…';
+  try{ const j=await api('cmSave',{id:OUT_EDIT.id,name:g('ceN').value,phone:g('ceP').value,email:g('ceE').value,insurance:g('ceI').value,textOk:g('ceT').checked,status:g('ceD').checked?'Do not contact':'Active'}); if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; }
+    const msgState=OUT.msg; OUT=Object.assign(j,{msg:msgState}); OUT.managers.forEach(m=>{ if(m.status!=='Active') OUT_SEL[m.id]=false; else if(OUT_SEL[m.id]===undefined) OUT_SEL[m.id]=true; }); document.getElementById('outEdit').innerHTML=''; drawOutList(); drawOutMsg(); }
+  catch(e){ msg.textContent=e.message||'Could not save.'; }
+}
 async function drawIds(box){
   box.innerHTML='<p class="tmuted">Loading…</p>';
   let a; try{ const j=await api('agencyIds'); if(!j.ok) throw new Error(j.error||'error'); a=j.agency||{}; }

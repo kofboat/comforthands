@@ -263,3 +263,9 @@ Patients are found by first + last name (and DOB when you give one). A blank cel
 - **Staff home line**: add column C "Staff home" to the Motivation tab (one line per row). One line shows under the date each day; built-in lines are used if the column is empty.
 - Lists show 10 at a time, A to Z by last name. Status filter defaults to Active; the search box finds name, Patient # or Insurance ID.
 - Lilac theme applied to all pages (upload every page folder).
+
+## Case manager outreach (admin only)
+- New tab **Case Managers** is created automatically (ID, Name, Phone, Email, Insurance company, Status, Text OK, Last contacted, Notes). You can add rows in the sheet or with **Add case manager** in the portal. Status "Do not contact" is always skipped. A blank Text OK means no texts.
+- Portal: **Outreach** (side menu and tab). Pick people, choose email and/or text, **Send me a test first**, then **Review and send**. Emails start with "Hi first name," and end with the signature stored in `OUTREACH_SIGNATURE_` in Code.gs. Replies go to the office email. Daily limit 50 emails.
+- Texts stay off until you set `CONFIG.SMS.OUTREACH_FROM` to a separate Twilio number (register it for A2P 10DLC first). Texts need ENABLED true and are kept to 300 characters with "Reply STOP to opt out" added if missing.
+- Re-deploy Code.gs as a **new version** and upload the new `portal/index.html`.

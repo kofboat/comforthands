@@ -48,6 +48,7 @@ const CONFIG = {
     CLOCK_URL: '',                              // link aides open to clock in/out (Homebase or HHAeXchange)
     LEAD_MIN: 15,                               // clock-in reminder this many minutes before the shift
     TEST_TO: '',                                // your own mobile number, for sendTestText()
+    OUTREACH_FROM: '',                          // separate Twilio number (+1...) for case manager outreach texts. Leave blank to keep outreach to email only
     OFFICE_PHONES: []                           // optional: numbers that get the weekly counts-only text
   },
   ONBOARDING_NOTE: '',          // optional extra line added to the applicant email
@@ -547,7 +548,7 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ACTIONS_ = ['cmList', 'cmSave', 'cmSend', 'home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId', 'patientNo', 'insId', 'insurer'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18, PNO: 19, INSID: 20, INSURER: 21 };
@@ -580,6 +581,72 @@ function tab_(name, header) {
   if (!sh) { try { sh = ss.insertSheet(name); sh.appendRow(header); } catch (e) { sh = ss.getSheetByName(name); if (!sh) throw e; } }
   else if (sh.getLastColumn() < header.length) sh.getRange(1, 1, 1, header.length).setValues([header]);
   return (TABS_[name] = sh);
+}
+
+// ---------- Case manager outreach (admin only) ----------
+// Sheet "Case Managers": ID, Name, Phone, Email, Insurance company, Status (Active / Do not contact), Text OK (Yes / No), Last contacted, Notes.
+const CM_HEAD_ = ['ID', 'Name', 'Phone', 'Email', 'Insurance company', 'Status', 'Text OK', 'Last contacted', 'Notes'];
+const OUTREACH_DAILY_CAP_ = 50;
+const OUTREACH_SIGNATURE_ = 'Thank you,\nAbigail\n\nAbigail Ayitiah, ARN MSN, A-GNP-C\nAdministrator\nadmin@comforthands.net\nP: 609-277-3032\nF: 609-479-5931\nPronouns (she/her/hers)\nComfort Hands Home Healthcare, LLC\n"Choose care that exceeds your expectation with Comfort Hands"';
+function cmSheet_() { return tab_('Case Managers', CM_HEAD_); }
+function cmRows_() {
+  const sh = cmSheet_(), n = sh.getLastRow(); if (n < 2) return [];
+  const v = sh.getRange(2, 1, n - 1, CM_HEAD_.length).getValues(), out = [];
+  for (let i = 0; i < v.length; i++) { const x = v[i]; if (!String(x[1] || '').trim() && !String(x[3] || '').trim() && !String(x[2] || '').trim()) continue;
+    out.push({ row: i + 2, id: String(x[0] || ''), name: String(x[1] || '').trim(), phone: String(x[2] || '').trim(), email: String(x[3] || '').trim(), insurance: String(x[4] || '').trim(),
+      status: /do not/i.test(String(x[5])) ? 'Do not contact' : 'Active', textOk: /^y/i.test(String(x[6] || '').trim()), last: iso_(x[7]), notes: String(x[8] || '') }); }
+  return out;
+}
+function cmList_() {
+  let rows = cmRows_();
+  if (rows.some(function (r) { return !r.id; })) { withLock_(function () { const sh = cmSheet_(); cmRows_().forEach(function (r) { if (!r.id) sh.getRange(r.row, 1).setValue('cm_' + Utilities.getUuid().slice(0, 8)); }); return true; }); rows = cmRows_(); }
+  const live = smsLive_() && !!String(smsCfg_().OUTREACH_FROM || '').trim();
+  return { ok: true, managers: rows.map(function (r) { return { id: r.id, name: r.name, phone: r.phone, email: r.email, insurance: r.insurance, status: r.status, textOk: r.textOk, last: r.last, notes: r.notes }; }),
+    textsReady: live, cap: OUTREACH_DAILY_CAP_, sentToday: outreachSentToday_(), signature: OUTREACH_SIGNATURE_, today: today_() };
+}
+function cmSave_(d, u) {
+  const sh = cmSheet_(), name = String(d.name || '').trim(), email = String(d.email || '').trim(), phone = String(d.phone || '').trim();
+  if (!name) return out_({ ok: false, error: 'Enter a name.' });
+  if (!email && !phone) return out_({ ok: false, error: 'Enter an email or a phone number.' });
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return out_({ ok: false, error: 'That email does not look right.' });
+  if (phone && !e164_(phone)) return out_({ ok: false, error: 'That phone number does not look right. Use 10 digits.' });
+  const status = /do not/i.test(String(d.status)) ? 'Do not contact' : 'Active', textOk = d.textOk ? 'Yes' : 'No';
+  let r = 0; if (d.id) { const rows = cmRows_(); for (let i = 0; i < rows.length; i++) if (rows[i].id === String(d.id)) r = rows[i].row; }
+  if (r) { sh.getRange(r, 2, 1, 6).setValues([[txt_(name), txt_(phone), txt_(email), txt_(String(d.insurance || '').trim()), status, textOk]]); if (d.notes != null) sh.getRange(r, 9).setValue(txt_(String(d.notes))); }
+  else sh.appendRow(['cm_' + Utilities.getUuid().slice(0, 8), txt_(name), txt_(phone), txt_(email), txt_(String(d.insurance || '').trim()), status, textOk, '', txt_(String(d.notes || ''))]);
+  audit_(u, 'CASE MANAGER ' + (r ? 'EDIT' : 'ADD'), name, status);
+  return out_(cmList_());
+}
+function outreachSentToday_() { const v = String(PropertiesService.getScriptProperties().getProperty('outDay') || '').split('|'); return v[0] === today_() ? Number(v[1]) || 0 : 0; }
+function outreachFirst_(name) { const t = String(name || '').trim().split(/\s+/)[0] || ''; return t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : 'there'; }
+// Sends the message to the selected case managers. d.test = true sends one copy to the signed-in admin (and the test mobile) and records nothing.
+function cmSend_(d, u) {
+  const subject = String(d.subject || '').trim(), body = String(d.body || '').trim(), sms0 = String(d.text || '').trim(), sms = sms0 && !/stop/i.test(sms0) ? sms0 + smsTail_() : sms0, wantE = !!d.email, wantT = !!d.textOn;
+  if (!wantE && !wantT) return out_({ ok: false, error: 'Choose email, text, or both.' });
+  if (wantE && (!subject || !body)) return out_({ ok: false, error: 'Enter a subject and a message for the email.' });
+  if (wantT && !sms) return out_({ ok: false, error: 'Enter the text message.' });
+  if (wantT && sms.length > SMS_MAX_) return out_({ ok: false, error: 'The text is ' + sms.length + ' characters. The limit is ' + SMS_MAX_ + '.' });
+  const reply = String(CONFIG.OFFICE_EMAIL).split(/[,;\s]+/)[0], opts = function (to) { return { to: to, replyTo: reply, name: 'Comfort Hands Home Healthcare', subject: subject }; };
+  const mk = function (first) { return 'Hi ' + first + ',\n\n' + body + '\n\n' + OUTREACH_SIGNATURE_; };
+  const c = smsCfg_(), from = String(c.OUTREACH_FROM || '').trim(), textsOn = smsLive_() && !!from;
+  if (d.test) {
+    const o = opts(u.email); o.body = mk(outreachFirst_(u.name)); let res = { email: false, text: 'off' };
+    if (wantE) { MailApp.sendEmail(o.to, o.subject, o.body, { replyTo: o.replyTo, name: o.name }); res.email = true; }
+    if (wantT && textsOn && c.TEST_TO) res.text = sendSms_(c.TEST_TO, sms, 'out-test|' + now_().getTime(), 'outreach-test', u.email, null, from);
+    audit_(u, 'OUTREACH TEST', subject, JSON.stringify(res)); return out_({ ok: true, test: res });
+  }
+  const ids = (d.ids || []).map(String), all = cmRows_(), pick = all.filter(function (r) { return ids.indexOf(r.id) >= 0; });
+  if (!pick.length) return out_({ ok: false, error: 'Choose at least one case manager.' });
+  const eligible = pick.filter(function (r) { return r.status === 'Active'; }), skipped = pick.length - eligible.length;
+  const emailTo = wantE ? eligible.filter(function (r) { return r.email; }) : [], textTo = wantT && textsOn ? eligible.filter(function (r) { return r.textOk && e164_(r.phone); }) : [];
+  const used = outreachSentToday_(); if (used + emailTo.length > OUTREACH_DAILY_CAP_) return out_({ ok: false, error: 'That would be ' + (used + emailTo.length) + ' emails today. The daily limit is ' + OUTREACH_DAILY_CAP_ + '. Pick fewer people or send the rest tomorrow.' });
+  const sh = cmSheet_(), stamp = today_(), res = { emails: 0, texts: 0, failed: 0, skipped: skipped, textsOff: wantT && !textsOn }, touched = {};
+  emailTo.forEach(function (r) { try { MailApp.sendEmail(r.email, subject, mk(outreachFirst_(r.name)), { replyTo: reply, name: 'Comfort Hands Home Healthcare' }); res.emails++; touched[r.row] = 1; } catch (e) { res.failed++; } });
+  textTo.forEach(function (r) { const st = sendSms_(r.phone, sms, 'out|' + r.id + '|' + now_().getTime(), 'outreach', u.email, null, from); if (st === 'sent') { res.texts++; touched[r.row] = 1; } else res.failed++; });
+  Object.keys(touched).forEach(function (row) { sh.getRange(Number(row), 8).setValue(stamp); });
+  PropertiesService.getScriptProperties().setProperty('outDay', stamp + '|' + (used + res.emails));
+  audit_(u, 'OUTREACH SEND', subject, res.emails + ' emails, ' + res.texts + ' texts, ' + res.failed + ' failed, ' + skipped + ' skipped');
+  return out_({ ok: true, result: res, list: cmList_() });
 }
 function ptSheet_() { return tab_('Patients', PT_COLS_); }
 // The patient list only needs the small columns. Reading the big form columns (up to 45,000 characters per patient) made every list load slow, so skip them.
@@ -933,6 +1000,10 @@ function home_() {
 // Reading never takes the lock. Each change takes it only for the moment it writes.
 function records_(act, d, u) {
   if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
+  if (/^cm/.test(act)) {
+    if (!hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' });
+    return act === 'cmList' ? out_(cmList_()) : withLock_(function () { return act === 'cmSave' ? cmSave_(d, u) : cmSend_(d, u); });
+  }
   if (act === 'agencyIds') return out_({ ok: true, agency: CONFIG.AGENCY || {} });
   if (/^onb/.test(act)) {
     if (!hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' });
@@ -1498,14 +1569,14 @@ function smsIndex_() {
 }
 function smsLast_(idx, prefix) { let best = ''; Object.keys(idx).forEach(function (k) { if (k.indexOf(prefix) === 0 && idx[k] > best) best = idx[k]; }); return best; }
 // Sends (or, in dry-run, only records) one text. Never throws. The log keeps the last 4 digits of the number and a status, never the message.
-function sendSms_(to, body, key, kind, email, idx) {
+function sendSms_(to, body, key, kind, email, idx, from) {
   const num = e164_(to); if (!num) return 'no-number';
   const live = smsLive_(); if (idx && idx[key]) return 'already';
   let status = live ? 'sent' : 'dry-run', detail = '';
   if (String(body).length > SMS_MAX_) { status = 'too long'; detail = 'over ' + SMS_MAX_ + ' characters'; }
   if (live && status === 'sent') {
     try {
-      const c = smsCfg_(), payload = { To: num, Body: body }; if (/^MG/.test(c.FROM)) payload.MessagingServiceSid = c.FROM; else payload.From = c.FROM;
+      const c = smsCfg_(), payload = { To: num, Body: body }, fr = from || c.FROM; if (/^MG/.test(fr)) payload.MessagingServiceSid = fr; else payload.From = fr;
       const res = UrlFetchApp.fetch('https://api.twilio.com/2010-04-01/Accounts/' + encodeURIComponent(c.TWILIO_SID) + '/Messages.json',
         { method: 'post', payload: payload, headers: { Authorization: 'Basic ' + Utilities.base64Encode(c.TWILIO_SID + ':' + c.TWILIO_TOKEN) }, muteHttpExceptions: true });
       const code = res.getResponseCode();
