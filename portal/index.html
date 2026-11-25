@@ -2803,19 +2803,21 @@ const isAdminNow=()=>isStaffNow()&&AUTH.roles.includes('admin');
 // ── Text and Email buttons (Google Voice window + mail draft) ──
 let QM_SEL='';
 function vToast(msg){ let t=document.getElementById('vtoast'); if(!t){ t=document.createElement('div'); t.id='vtoast'; document.body.appendChild(t); } t.textContent=msg; t.className='on'; clearTimeout(vToast._t); vToast._t=setTimeout(()=>{t.className='';},4500); }
+// Opens Voice with an ordinary link, so Chrome's own "open supported links in the app" setting decides which window it goes to.
+function vOpen(url){ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
 function vDigits(num){ const d=String(num||'').replace(/\D/g,''); if(d.length===10) return d; if(d.length===11&&d[0]==='1') return d.slice(1); return ''; }
 async function vText(num,name){
   const d=vDigits(num); if(!d){ vToast('No usable phone number on file for '+name+'.'); return; }
   const qm=(HOME&&HOME.quick||[]).find(m=>m.label===QM_SEL), what=qm?qm.text:'('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
   try{ await navigator.clipboard.writeText(what); }catch(e){}
-  window.open('https://voice.google.com/u/0/messages?itemId=t.%2B1'+d,'gvoice','popup=yes,width=440,height=780,left='+Math.max(0,screen.width-470)+',top=40');
+  vOpen('https://voice.google.com/u/0/messages?itemId=t.%2B1'+d);
   vToast((qm?'Message copied':'Number copied')+'. Opening '+name+' in Google Voice. '+(qm?'Paste it into the message box.':'If there is no thread yet, choose Send new message and paste the number.'));
 }
 function vCall(num,name){
   const d=vDigits(num); if(!d){ vToast('No usable phone number on file for '+name+'.'); return; }
   const shown='('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
   try{ navigator.clipboard.writeText(shown); }catch(e){}
-  window.open('https://voice.google.com/u/0/calls?a=nc,%2B1'+d,'gvoice','popup=yes,width=440,height=780,left='+Math.max(0,screen.width-470)+',top=40');
+  vOpen('https://voice.google.com/u/0/calls?a=nc,%2B1'+d);
   vToast('Opening the dialer for '+name+' in Google Voice. Press the call button there. The number is copied in case it is not filled in.');
 }
 async function phoneOfPatient(id){ const j=await api('ptGet',{id:id}); const f=j.form||{}, sh=j.shared||{}; return (f.cell&&typeof f.cell==='object'?f.cell.v:f.cell)||sh.cell||(f.phone&&f.phone.v)||''; }
