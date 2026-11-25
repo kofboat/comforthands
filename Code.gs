@@ -966,10 +966,13 @@ function staffLine_() {
 }
 // Quick messages for the Text buttons: tab "Quick Messages" (Label, Text). Created with three starters; edit the rows freely. Kept to 300 characters.
 const QM_SEED_ = [['Please call the office', 'Comfort Hands: Please call the office at 609-277-3032 when you have a moment. Thank you.'], ['Activity sheet reminder', 'Comfort Hands: Reminder to clock in and out on HHAeXchange and submit your activity sheet by Friday.'], ['Capacity update', 'Comfort Hands: We have capacity for new clients. Call Abigail, 609-277-3032.']];
+const QM_INTERVIEW_ = [['Schedule interview', 'Comfort Hands: Hi {first}, thank you for applying for {position}. Please call 609-277-3032 to schedule your interview.'], ['Interview reminder', 'Comfort Hands: Hi {first}, this is a reminder about your interview with us. Please call 609-277-3032 if you need to reschedule.']];
 function quickMessages_() {
   try {
     const ss = db_(); let sh = ss.getSheetByName('Quick Messages');
     if (!sh) { sh = ss.insertSheet('Quick Messages'); sh.appendRow(['Label', 'Text']); QM_SEED_.forEach(function (r) { sh.appendRow(r); }); }
+    const pr = PropertiesService.getScriptProperties();
+    if (pr.getProperty('qmInterview') !== '1') { const have = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(function (r) { return String(r[0]).trim().toLowerCase(); }) : []; QM_INTERVIEW_.forEach(function (r) { if (have.indexOf(r[0].toLowerCase()) < 0) sh.appendRow(r); }); pr.setProperty('qmInterview', '1'); }
     const n = sh.getLastRow(); if (n < 2) return [];
     return sh.getRange(2, 1, n - 1, 2).getValues().map(function (r) { return { label: String(r[0] || '').trim(), text: String(r[1] || '').trim().slice(0, SMS_MAX_) }; }).filter(function (m) { return m.label && m.text; });
   } catch (e) { return []; }
@@ -1853,7 +1856,7 @@ const ONB_COLS_ = ['id', 'name', 'email', 'phone', 'status', 'steps', 'formsSent
 const O_ = { ID: 0, NAME: 1, EMAIL: 2, PHONE: 3, STATUS: 4, STEPS: 5, SENT: 6, CREATED: 7, UPDATED: 8, BY: 9, POS: 10, APP: 11, FOLDER: 12, OFFER: 13, DOCS: 14 };
 const ONB_N_ = ONB_COLS_.length;
 // [key, label, who completes it]: "auto" steps tick themselves when the applicant does them (staff can still tick them by hand).
-const ONB_STEPS_ = [['app', 'Application received', 'auto'], ['appReview', 'Application review', 'admin'], ['offer', 'Provisional offer and contract sent', 'auto'],
+const ONB_STEPS_ = [['app', 'Application received', 'auto'], ['appReview', 'Application review', 'admin'], ['interview', 'Interview', 'admin'], ['offer', 'Provisional offer and contract sent', 'auto'],
   ['standards', 'Agreement of Standards signed', 'auto'], ['jobdesc', 'Job description signed', 'auto'], ['bgforms', 'Background investigation forms signed', 'auto'], ['crimatt', 'Criminal history attestation signed', 'auto'], ['policies', 'Policy acknowledgments signed', 'auto'], ['refrelease', 'Reference release signed', 'auto'],
   ['ids', 'ID documents uploaded', 'auto'], ['contract', 'Signed employment contract returned', 'auto'], ['w4', 'Form W-4 completed', 'admin'], ['i9', 'Form I-9 completed (Sections 1 and 2)', 'admin'],
   ['license', 'License / certification verification', 'admin'], ['refs', 'Reference check', 'admin'], ['bg', 'Background check', 'admin'], ['physical', 'Physical examination', 'admin'],
@@ -1900,7 +1903,10 @@ const REQ_LABELS_ = { details: 'Review and update your personal details', w4: 'F
 function reqItems_(x) { const q = onbApp_(x)._req; return q && Array.isArray(q.items) && q.items.length ? q.items : null; }
 function onbSheet_() { return tab_('Onboarding', ONB_COLS_); }
 function onbRow_(sh, r) { const x = sh.getRange(r, 1, 1, ONB_N_).getValues()[0]; while (x.length < ONB_N_) x.push(''); return x; }
-function onbSteps_(x) { let s = {}; try { s = JSON.parse(x[O_.STEPS] || '{}'); } catch (e) {} if (s.formsSent && !s.offer) s.offer = s.formsSent; delete s.formsSent; return s; }
+function onbSteps_(x) { let s = {}; try { s = JSON.parse(x[O_.STEPS] || '{}'); } catch (e) {} if (s.formsSent && !s.offer) s.offer = s.formsSent; delete s.formsSent;
+  // The Interview step was added later: anyone already past the offer stage counts as interviewed, so nobody drops back from hired.
+  if (s.offer && s.offer.done && !s.interview) s.interview = { done: true, date: s.offer.date || '', by: '', note: '' };
+  return s; }
 function onbDocs_(x) { try { const d = JSON.parse(x[O_.DOCS] || '[]'); return Array.isArray(d) ? d : []; } catch (e) { return []; } }
 function onbApp_(x) { try { return JSON.parse(x[O_.APP] || '{}') || {}; } catch (e) { return {}; } }
 function onbAllDone_(steps) { return ONB_STEPS_.every(function (s) { return steps[s[0]] && steps[s[0]].done; }); }

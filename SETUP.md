@@ -274,3 +274,7 @@ Patients are found by first + last name (and DOB when you give one). A blank cel
 - **Text** (aides, patients, case managers): opens that person's Google Voice conversation in a small window and copies their number, or the **Quick message** you picked, to the clipboard. The portal never reads Google Voice. Aide numbers come from the aide tracking sheet, patient numbers from the patient's Cell Phone, case managers from the Case Managers sheet. No number on file greys the button out.
 - **Email** (aides, case managers): opens a draft with your signature.
 - Quick messages live in the **Quick Messages** tab (Label, Text), created automatically with three starters. Edit or add rows freely; each is kept to 300 characters.
+
+## Hiring: Interview step
+- The hiring checklist now has **Interview** right after Application review. Use its note box for the date and time. Anyone already past the offer step counts as interviewed, so nobody drops back from hired.
+- New hire page and New hires list: **Text**, **Call** and (detail page) **Email** buttons. The detail page has a "Message for Text" menu, default "Schedule interview". `{first}` and `{position}` in a Quick Messages row fill in automatically. Two rows, Schedule interview and Interview reminder, are added once to the Quick Messages tab.

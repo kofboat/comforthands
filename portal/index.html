@@ -2806,9 +2806,11 @@ function vToast(msg){ let t=document.getElementById('vtoast'); if(!t){ t=documen
 // Opens Voice with an ordinary link, so Chrome's own "open supported links in the app" setting decides which window it goes to.
 function vOpen(url){ const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
 function vDigits(num){ const d=String(num||'').replace(/\D/g,''); if(d.length===10) return d; if(d.length===11&&d[0]==='1') return d.slice(1); return ''; }
-async function vText(num,name){
+function vFill(t,name,pos){ const f=String(name||'').trim().split(/\s+/)[0]||''; return String(t||'').replace(/\{first\}/g,f?f.charAt(0).toUpperCase()+f.slice(1).toLowerCase():'there').replace(/\{position\}/g,pos||'the open position'); }
+async function vText(num,name,opts){
+  opts=opts||{};
   const d=vDigits(num); if(!d){ vToast('No usable phone number on file for '+name+'.'); return; }
-  const qm=(HOME&&HOME.quick||[]).find(m=>m.label===QM_SEL), what=qm?qm.text:'('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  const qm=(HOME&&HOME.quick||[]).find(m=>m.label===(opts.qm!==undefined?opts.qm:QM_SEL)), what=qm?vFill(qm.text,name,opts.position):'('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
   try{ await navigator.clipboard.writeText(what); }catch(e){}
   vOpen('https://voice.google.com/u/0/messages?itemId=t.%2B1'+d);
   vToast((qm?'Message copied':'Number copied')+'. Opening '+name+' in Google Voice. '+(qm?'Paste it into the message box.':'If there is no thread yet, choose Send new message and paste the number.'));
@@ -2827,6 +2829,11 @@ async function vTextPatient(id,name){
   try{ const j=await api('ptGet',{id:id}); const f=j.form||{}, sh=j.shared||{}; const cell=(f.cell&&typeof f.cell==='object'?f.cell.v:f.cell)||sh.cell||(f.phone&&f.phone.v)||''; vText(cell,name); }
   catch(e){ vToast(e.message||'Could not look up the phone number.'); }
 }
+function onbVal(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
+function vTextOnb(){ const q=document.getElementById('ob_qm'); vText(onbVal('ob_phone'),onbVal('ob_name')||'the applicant',{qm:q?q.value:'',position:onbVal('ob_position')}); }
+function vCallOnb(){ vCall(onbVal('ob_phone'),onbVal('ob_name')||'the applicant'); }
+function vMailOnb(){ vMail(onbVal('ob_email'),onbVal('ob_name')||'the applicant'); }
+function onbQmSelect(){ const q=(HOME&&HOME.quick)||[]; const def=(q.find(m=>m.label==='Schedule interview')||{}).label||''; return '<div class="fgroup"><label class="lbl">Message for Text</label><select id="ob_qm"><option value="">Copy the number only</option>'+q.map(m=>'<option '+(m.label===def?'selected':'')+' value="'+escAct(m.label)+'">'+escAct(m.label)+'</option>').join('')+'</select><div class="tmuted" style="margin-top:4px">First name and position are filled in when you press Text.</div></div>'; }
 function vMail(email,name){
   if(!email){ vToast('No email address on file for '+name+'.'); return; }
   const first=String(name||'').trim().split(/\s+/)[0]||'there', sig=(HOME&&HOME.signature)||(OUT&&OUT.signature)||'';
@@ -2956,7 +2963,7 @@ async function drawAdmin(box){
   box.innerHTML=links+'<div class="htabs"><strong style="font-family:\'Playfair Display\',serif;font-size:16px">New aide onboarding</strong><span style="flex:1"></span><select id="pkPos" title="Which job description to include" style="padding:8px;border:1px solid #bbb;border-radius:8px;font-size:13px"><option value="">Packet: both job descriptions</option><option value="Companion">Packet: Companion only</option><option value="Certified Home Health Aide">Packet: CHHA / PCA only</option></select><button class="btn btn-outline" style="padding:8px 16px" onclick="printPacket()">🖨 Print application packet</button><button class="btn btn-nurse" style="padding:8px 16px" onclick="openOnboarding(\'\')">＋ New applicant</button><button class="btn btn-outline" style="padding:8px 16px" onclick="openImport()">＋ Add existing employee</button></div>'+
    (items.length?'<table class="htbl"><thead><tr><th>Applicant</th><th>Progress</th><th>Next step</th><th>Actions</th></tr></thead><tbody>'+items.map(o=>{
      const pill=o.status==='hired'?'<span class="pill ok">Hired</span>':o.status==='in progress'?'<span class="pill warn">'+o.done+' / '+o.total+' steps</span>':'<span class="pill">'+escAct(o.status)+'</span>';
-     return '<tr><td><strong>'+escAct(o.name)+'</strong><br><span class="tmuted">'+escAct(o.position||'')+(o.position?' · ':'')+escAct(o.email||'no email')+'</span></td><td>'+pill+'</td><td>'+(o.status==='in progress'?escAct(o.next):'—')+'</td><td><button class="mini" onclick="openOnboarding(\''+o.id+'\')">Open</button></td></tr>';
+     return '<tr><td><strong>'+escAct(o.name)+'</strong><br><span class="tmuted">'+escAct(o.position||'')+(o.position?' · ':'')+escAct(o.email||'no email')+'</span></td><td>'+pill+'</td><td>'+(o.status==='in progress'?escAct(o.next):'—')+'</td><td><button class="mini txtb" '+(vDigits(o.phone)?'':'disabled title="No phone number on file"')+' onclick="vText(\''+escAct(o.phone||'')+'\',\''+escAct(o.name).replace(/'/g,'')+'\',{qm:\'Schedule interview\',position:\''+escAct(o.position||'').replace(/'/g,'')+'\'})">Text</button><button class="mini callb" '+(vDigits(o.phone)?'':'disabled')+' onclick="vCall(\''+escAct(o.phone||'')+'\',\''+escAct(o.name).replace(/'/g,'')+'\')">Call</button><button class="mini" onclick="openOnboarding(\''+o.id+'\')">Open</button></td></tr>';
    }).join('')+'</tbody></table>':'<p class="tmuted">No applicants yet. They appear here when someone submits the Apply page.</p>');
 }
 /* ---------- Ask an employee for chosen items only; add existing employees from the tracker ---------- */
@@ -3022,6 +3029,7 @@ function openOnboarding(id){
    ((o.id&&(!su.contract||!su.applyUrl))?'<div class="info-box"><span class="ico">⚠️</span><p>Setup needed before an offer can be sent: '+[!su.contract?'CONTRACT_FILE_ID':'',!su.applyUrl?'APPLY_URL':''].filter(Boolean).join(' and ')+' in Code.gs (see SETUP.md).</p></div>':'')+
    '<div class="fg">'+RI('ob_name','Name',o.name)+RI('ob_email','Email',o.email,'email')+RI('ob_phone','Phone',o.phone,'tel')+'<div class="fgroup"><label class="lbl">Position</label><select id="ob_position"><option value="">— Select —</option>'+(ONB.positions||[]).map(x=>'<option'+(o.position===x?' selected':'')+'>'+escAct(x)+'</option>').join('')+'</select></div>'+
    '<div class="fgroup"><label class="lbl">Status</label><select id="ob_status">'+['in progress','hired','not hired','withdrawn'].map(x=>'<option'+(o.status===x?' selected':'')+'>'+x+'</option>').join('')+'</select></div></div>'+
+   '<div class="fg" style="margin-top:10px;align-items:end"><div class="fgroup"><label class="lbl">Contact</label><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="mini txtb" onclick="vTextOnb()">Text</button><button type="button" class="mini callb" onclick="vCallOnb()">Call</button><button type="button" class="mini" onclick="vMailOnb()">Email</button></div></div>'+onbQmSelect()+'</div>'+
    (Object.keys(app).filter(k=>k[0]!=='_').length?'<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Application answers</summary><table class="rate" style="margin-top:8px"><tbody>'+Object.keys(app).filter(k=>k[0]!=='_').map(k=>'<tr><td style="width:40%">'+escAct(k.replace(/([A-Z0-9])/g,' $1').replace(/^./,c=>c.toUpperCase()))+'</td><td>'+escAct(app[k])+'</td></tr>').join('')+'</tbody></table><p class="tmuted">The Social Security number is only in the application PDF.</p></details>':'')+
    (docs.length?'<div class="sh">Documents on file'+(o.folderUrl?' — <a href="'+escAct(o.folderUrl)+'" target="_blank" rel="noopener" style="font-family:inherit;font-size:12.5px">open Drive folder</a>':'')+'</div><ul class="hist" style="margin:0 0 0 18px">'+docs.map(d=>'<li><a href="'+escAct(d.url)+'" target="_blank" rel="noopener">'+escAct(d.label)+'</a> <span class="tmuted">'+usDate(d.at)+'</span></li>').join('')+'</ul>':'')+
    (o.id?detailsLog(o)+reqPanel(o):'')+(o.id?refSection(o):'')+'<div class="sh">Hiring checklist</div><table class="rate"><tbody>'+st+'</tbody></table>'+
