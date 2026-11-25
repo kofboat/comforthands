@@ -287,3 +287,9 @@ After you upload the new Code.gs and deploy it as a new version:
 2. **Sign-in lockout** is now 1 minute after 5 wrong tries, then 5 minutes, then 15 minutes. "Forgot password" always works as a way back in. The office email gets a notice when the same account is locked out 3 times in a day.
 3. **Job applications**: a phone number with area code is required, and the same phone or email can apply 3 times a day. The office email gets a notice if more than 30 applications arrive in an hour. Set the reCAPTCHA keys (`RECAPTCHA_SECRET` in Code.gs and the site key in `apply/index.html`) to block automated applications. Without them, a determined bot cannot be fully stopped.
 4. **Busy system**: sending outreach no longer holds everyone else up, and the home screen no longer waits when the system is busy.
+
+## Signed forms and the Interview Form (November 2026)
+
+1. **Signed forms** now use the same layout as the printed packet: Letter page, plum title banner with "Section n of 16", the blanks filled in where they sit on paper, and the signature on the signature line. Forms that were already signed are not changed.
+2. **Check the layout once.** After deploying Code.gs, open the editor, select `testFormPdf`, Run, and read the Execution log. It makes four sample PDFs in your Drive root. Open them next to the printed packet, then delete them. Google's PDF converter can ignore the page size or colors; if the samples look wrong, tell me what you see and I will adjust the margins.
+3. **Interview Form.** On a New hire page, the Interview step has an **Interview form** button. Tick the items, add comments, sign, and Sign and save: a PDF goes into the applicant's folder and the Interview step is marked done. **Print blank form** gives a paper copy. Admins and nurses can use it.

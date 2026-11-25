@@ -3026,7 +3026,7 @@ function openOnboarding(id){
   const app=o.app||{}, docs=o.docs||[], su=ONB.setup||{};
   REP=null; showOnly('repScreen'); document.getElementById('repTitle').textContent=o.id?'Onboarding — '+o.name:'New applicant';
   const st=ONB.steps.map(s=>{ const c=o.steps[s.k]||{}; const auto=(s.k==='formsSent'||s.k==='portal');
-    return '<tr><td style="width:34px"><input type="checkbox" id="ob_'+s.k+'" '+(c.done?'checked':'')+'></td><td><strong>'+escAct(s.l)+'</strong>'+(s.auto?' <span class="pill">applicant</span>':'')+(c.done&&c.date?'<br><span class="tmuted">Done '+usDate(c.date)+(c.by?' by '+escAct(c.by):'')+'</span>':'')+'</td><td><input type="text" id="obn_'+s.k+'" value="'+escAct(c.note||'')+'" placeholder="Note" maxlength="300" style="width:100%;padding:7px 9px;border:1.5px solid var(--border);border-radius:8px"></td></tr>'; }).join('');
+    return '<tr><td style="width:34px"><input type="checkbox" id="ob_'+s.k+'" '+(c.done?'checked':'')+'></td><td><strong>'+escAct(s.l)+'</strong>'+(s.auto?' <span class="pill">applicant</span>':'')+(s.k==='interview'&&o.id?' <button type="button" class="mini" onclick="openInterview(\''+o.id+'\')">Interview form</button>':'')+(c.done&&c.date?'<br><span class="tmuted">Done '+usDate(c.date)+(c.by?' by '+escAct(c.by):'')+'</span>':'')+'</td><td><input type="text" id="obn_'+s.k+'" value="'+escAct(c.note||'')+'" placeholder="Note" maxlength="300" style="width:100%;padding:7px 9px;border:1.5px solid var(--border);border-radius:8px"></td></tr>'; }).join('');
   document.getElementById('repBody').innerHTML='<div class="card"><div class="card-header"><div class="card-icon">🧑‍⚕️</div><div class="card-title"><h2>'+(o.id?escAct(o.name):'New applicant')+'</h2><p>Applications arrive from the Apply page. Review, send the provisional offer, then track the hiring steps. Steps tagged “applicant” tick themselves.</p></div></div>'+
    ((o.id&&(!su.contract||!su.applyUrl))?'<div class="info-box"><span class="ico">⚠️</span><p>Setup needed before an offer can be sent: '+[!su.contract?'CONTRACT_FILE_ID':'',!su.applyUrl?'APPLY_URL':''].filter(Boolean).join(' and ')+' in Code.gs (see SETUP.md).</p></div>':'')+
    '<div class="fg">'+RI('ob_name','Name',o.name)+RI('ob_email','Email',o.email,'email')+RI('ob_phone','Phone',o.phone,'tel')+'<div class="fgroup"><label class="lbl">Position</label><select id="ob_position"><option value="">— Select —</option>'+(ONB.positions||[]).map(x=>'<option'+(o.position===x?' selected':'')+'>'+escAct(x)+'</option>').join('')+'</select></div>'+
@@ -3041,11 +3041,11 @@ function openOnboarding(id){
    '<button class="btn btn-outline" onclick="closeOnb()">Close</button></div>'+(o.formsSentAt?'<p class="tmuted" style="margin-top:8px">Offer last sent '+usDate(o.formsSentAt)+'.</p>':'')+'</div>';
 }
 /* Printable application packet for applicants without internet: sections come from the office system, the W-4 and I-9 are page images */
-function buildPacketHtml(secs, img, esc) {
+function buildPacketHtml(secs, img, esc, css0) {
   esc = esc || function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   const list = [];
   secs.forEach(function (s) { list.push({ title: s.title, html: s.html }); if (s.title === 'Provisional Employment Agreement') { list.push({ title: 'Form W-4, Employee’s Withholding Certificate', img: img.w4 }); list.push({ title: 'Form I-9, Employment Eligibility Verification', img: img.i9 }); } });
-  const n = list.length + 1, css = '@page{size:Letter;margin:.55in .6in .6in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111;margin:0}' +
+  const n = list.length + 1, css = css0 || ('@page{size:Letter;margin:.55in .6in .6in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111;margin:0}' +
     'table.pgt{width:100%;border-collapse:collapse}table.pgt>thead{display:table-header-group}table.pgt>tbody>tr>td,table.pgt>thead>tr>td{padding:0;border:0;font-size:inherit}.pg{break-before:page;page-break-before:always}.pg:first-child{break-before:auto;page-break-before:auto}' +
     '.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #34182d;padding-bottom:5px;margin-bottom:8px}.top b{font-size:12px;color:#34182d}.top span{font-size:9.5px;color:#444}' +
     '.sh{background:#34182d;color:#fff;padding:9px 12px;margin:0 0 10px;border-radius:3px}.sh small{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#e6c8f2}.sh h1{margin:2px 0 0;font-size:17px;font-weight:700}' +
@@ -3055,7 +3055,7 @@ function buildPacketHtml(secs, img, esc) {
     '.sg{display:grid;grid-template-columns:2fr 1.5fr 1fr;gap:16px;margin-top:26px;break-inside:avoid}.sg i{display:block;border-bottom:1px solid #333;height:22px}.sg .lb{margin:2px 0 0}' +
     'table.gx{width:100%;border-collapse:collapse;margin-top:8px}table.gx td{border:1px solid #777;padding:7px 8px;font-size:10.5px}.eeo{font-size:9.5px;color:#333;margin-top:14px}' +
     '.im{display:block;width:100%;max-height:8.1in;object-fit:contain;margin:0 auto}.chk li{list-style:none;margin-left:-18px}' +
-    '@media screen{body{background:#eee}.pg{background:#fff;max-width:8.5in;margin:14px auto;padding:.5in .6in;box-shadow:0 1px 6px rgba(0,0,0,.25)}}';
+    '@media screen{body{background:#eee}.pg{background:#fff;max-width:8.5in;margin:14px auto;padding:.5in .6in;box-shadow:0 1px 6px rgba(0,0,0,.25)}}');
   const top = '<div class="top"><b>Comfort Hands Home Healthcare, LLC</b><span>Applicant name: ____________________________________ &nbsp; Date: ______________</span></div>';
   let h = '<div class="pg cv">' + top + '<div class="sh"><small>Aide application packet</small><h1>Welcome. Please complete this packet.</h1></div>' +
     '<p>Complete every section in ink, sign where indicated, and return the whole packet to our office. If you are unsure about a question, leave it blank and ask us. Do not leave the Social Security number or signature lines empty.</p>' +
@@ -3067,6 +3067,39 @@ function buildPacketHtml(secs, img, esc) {
   });
   return '<!doctype html><html><head><meta charset="utf-8"><title>Aide Application Packet</title><style>' + css + '</style></head><body>' + h + '</body></html>';
 }
+/* Interview Form: ticked and signed in the portal, saved as a PDF in the applicant's folder; the Interview step is marked done */
+function openInterview(id){
+  const o=ONB.items.find(x=>x.id===id); if(!o) return;
+  const items=ONB.interviewItems||[];
+  REP=null; showOnly('repScreen'); document.getElementById('repTitle').textContent='Interview form — '+o.name;
+  document.getElementById('repBody').innerHTML='<div class="card"><div class="card-header"><div class="card-icon">📝</div><div class="card-title"><h2>Interview Form</h2><p>'+escAct(o.name)+(o.position?' · '+escAct(o.position):'')+'</p></div></div>'+
+   '<div class="fg"><div class="fgroup"><label class="lbl">Date of interview</label><input type="date" id="iv_date" value="'+todayISO()+'"></div><div class="fgroup"><label class="lbl">Interviewer name</label><input type="text" id="iv_name" value="'+escAct(AUTH.name||'')+'" maxlength="80"></div><div class="fgroup"><label class="lbl">Title</label><input type="text" id="iv_title" maxlength="80" placeholder="e.g. Administrator"></div></div>'+
+   '<div class="sh">Interview checklist</div><table class="rate"><thead><tr><th>Item</th><th style="width:90px;text-align:center">Check off</th></tr></thead><tbody>'+items.map((t,i)=>'<tr><td>'+escAct(t)+'</td><td style="text-align:center"><input type="checkbox" id="iv_c'+i+'"></td></tr>').join('')+'</tbody></table>'+
+   '<div class="fgroup" style="margin-top:12px"><label class="lbl">Comments</label><textarea id="iv_comments" rows="5" maxlength="2000" style="width:100%;min-height:110px"></textarea></div>'+
+   sigBox('iv_sig','Interviewer signature')+
+   '<div id="repMsg"></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-nurse" id="ivSave" onclick="saveInterview(\''+o.id+'\')">Sign and save</button><button class="btn btn-outline" onclick="printInterviewBlank(\''+o.id+'\')">Print blank form</button><button class="btn btn-outline" onclick="openOnboarding(\''+o.id+'\')">Back</button></div></div>';
+  bindSig('iv_sig');
+}
+async function saveInterview(id){
+  const msg=document.getElementById('repMsg'), btn=document.getElementById('ivSave'), v=x=>{ const e=document.getElementById(x); return e?e.value:''; };
+  const sig=sigData('iv_sig'); if(!sig){ msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>Please sign the form.</p></div>'; return; }
+  const items=(ONB.interviewItems||[]).map((t,i)=>!!(document.getElementById('iv_c'+i)||{}).checked);
+  btn.disabled=true; msg.innerHTML='<div class="info-box"><span class="ico">⏳</span><p>Saving the PDF…</p></div>';
+  try{
+    const j=await api('onbInterview',{id:id,date:v('iv_date'),iname:v('iv_name'),ititle:v('iv_title'),items:items,comments:v('iv_comments'),sig:sig});
+    if(!j.ok){ msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>'+escAct(j.error||'Could not save.')+'</p></div>'; btn.disabled=false; return; }
+    const i=ONB.items.findIndex(x=>x.id===id); if(i>=0) ONB.items[i]=j.item;
+    openOnboarding(id); try{ vToast('Interview form saved. The Interview step is marked done.'); }catch(e){}
+  }catch(e){ msg.innerHTML='<div class="info-box"><span class="ico">⚠️</span><p>'+escAct(e.message||'Could not save.')+'</p></div>'; btn.disabled=false; }
+}
+async function printInterviewBlank(id){
+  const w=window.open('','_blank'); if(!w){ alert('Allow pop-ups for this site, then press Print blank form again.'); return; }
+  w.document.write('<p style="font:14px Arial;padding:24px">Preparing the form…</p>'); w.document.close();
+  try{
+    const j=await api('onbInterviewBlank',{id:id}); if(!j.ok) throw new Error(j.error||'error');
+    w.document.open(); w.document.write(j.html); w.document.close(); setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} },400);
+  }catch(e){ try{ w.close(); }catch(_){} alert('Could not prepare the form: '+(e.message||'error')); }
+}
 async function printPacket(){
   const sel=document.getElementById('pkPos'), position=sel?sel.value:'';
   const w=window.open('','_blank'); if(!w){ alert('Allow pop-ups for this site, then press Print application packet again.'); return; }
@@ -3075,7 +3108,7 @@ async function printPacket(){
     const j=await api('onbPacket',{position:position}); if(!j.ok) throw new Error(j.error||'error');
     const base=new URL('hr-pdf/',location.href).href, asData=async u=>{ try{ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) return ''; const b=await r.blob(); return await new Promise(res=>{ const f=new FileReader(); f.onload=()=>res(f.result); f.onerror=()=>res(''); f.readAsDataURL(b); }); }catch(e){ return ''; } };
     const i9=await asData(base+'i9.jpg'), w4=await asData(base+'w4.jpg'); if(!i9||!w4) alert('The '+(!w4?'W-4':'')+(!w4&&!i9?' and ':'')+(!i9?'I-9':'')+' page image could not be loaded, so that page will print as a notice. Upload hr-pdf/w4.jpg and hr-pdf/i9.jpg, then print again.');
-    const html=buildPacketHtml(j.sections,{i9:i9,w4:w4},escAct);
+    const html=buildPacketHtml(j.sections,{i9:i9,w4:w4},escAct,j.css);
     w.document.open(); w.document.write(html); w.document.close();
     const ready=()=>Array.prototype.every.call(w.document.images,im=>im.complete); let n=0;
     const t=setInterval(()=>{ if(ready()||++n>40){ clearInterval(t); try{ w.focus(); w.print(); }catch(e){} } },250);

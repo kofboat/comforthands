@@ -571,7 +571,7 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['cmList', 'cmSave', 'cmSend', 'home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbActivate'];
+const REC_ACTIONS_ = ['cmList', 'cmSave', 'cmSend', 'home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbInterview', 'onbInterviewBlank', 'onbActivate'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
 const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId', 'patientNo', 'insId', 'insurer'];
 const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18, PNO: 19, INSID: 20, INSURER: 21 };
@@ -1072,7 +1072,7 @@ function records_(act, d, u) {
   }
   if (act === 'agencyIds') return out_({ ok: true, agency: CONFIG.AGENCY || {} });
   if (/^onb/.test(act)) {
-    if (!hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' });
+    if (!hasRole_(u, ['admin']) && !(/^onbInterview/.test(act) && hasRole_(u, ['nurse']))) return out_({ ok: false, error: 'forbidden' });
     return act === 'onbList' ? onb_(act, d, u) : withLock_(function () { return onb_(act, d, u); });
   }
   const psh = ptSheet_(), who = u.name || u.email;
@@ -1235,6 +1235,69 @@ const PDF_CSS_ = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;l
   'h2{font-size:14px;margin:8px 0 5px;color:#34182d}h3{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d}' +
   '.psl{color:#555;font-weight:bold;font-size:9px}.psv{margin-bottom:6px}ul,ol{padding-left:18px}p{margin:0 0 7px}table{border-collapse:collapse}';
 function usdate_(v) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '')); return m ? m[2] + '/' + m[3] + '/' + m[1] : String(v || ''); }
+/* ───────── signed forms and the interview form: the same layout as the printed packet ───────── */
+// PK_CSS_ is a copy of the packet stylesheet the portal uses; onbPacket sends it to the portal so the paper packet and the PDFs share one source.
+const PK_CSS_ = "@page{size:Letter;margin:.55in .6in .6in}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.42;color:#111;margin:0}table.pgt{width:100%;border-collapse:collapse}table.pgt>thead{display:table-header-group}table.pgt>tbody>tr>td,table.pgt>thead>tr>td{padding:0;border:0;font-size:inherit}.pg{break-before:page;page-break-before:always}.pg:first-child{break-before:auto;page-break-before:auto}.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #34182d;padding-bottom:5px;margin-bottom:8px}.top b{font-size:12px;color:#34182d}.top span{font-size:9.5px;color:#444}.sh{background:#34182d;color:#fff;padding:9px 12px;margin:0 0 10px;border-radius:3px}.sh small{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#e6c8f2}.sh h1{margin:2px 0 0;font-size:17px;font-weight:700}h2{font-size:14px;text-align:center;margin:6px 0}h3{font-size:11px;margin:12px 0 5px;padding:3px 7px;background:#f3e6f7;color:#34182d;break-after:avoid}p{margin:0 0 7px}ul{margin:0 0 7px 18px;padding:0}li{margin-bottom:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px}.f{break-inside:avoid}.f.w{grid-column:1/3}.lb{display:block;font-size:9px;color:#444;margin-bottom:11px}.f i{display:block;border-bottom:1px solid #333;height:15px}.f i+i{margin-top:2px}.f .lb{margin-bottom:0;order:2}.f{display:flex;flex-direction:column-reverse}.op{display:flex;flex-wrap:wrap;gap:3px 14px;margin:1px 0}.op span{font-size:10.5px}.sg{display:grid;grid-template-columns:2fr 1.5fr 1fr;gap:16px;margin-top:26px;break-inside:avoid}.sg i{display:block;border-bottom:1px solid #333;height:22px}.sg .lb{margin:2px 0 0}table.gx{width:100%;border-collapse:collapse;margin-top:8px}table.gx td{border:1px solid #777;padding:7px 8px;font-size:10.5px}.eeo{font-size:9.5px;color:#333;margin-top:14px}.im{display:block;width:100%;max-height:8.1in;object-fit:contain;margin:0 auto}.chk li{list-style:none;margin-left:-18px}@media screen{body{background:#eee}.pg{background:#fff;max-width:8.5in;margin:14px auto;padding:.5in .6in;box-shadow:0 1px 6px rgba(0,0,0,.25)}}";
+const PK_PDF_EXTRA_ = '@media screen{body{background:#fff}}.sh,.sh h1,.sh small,h3,td.sh{-webkit-print-color-adjust:exact;print-color-adjust:exact}table.hd{width:100%;border-collapse:collapse;margin:0 0 10px}td.sh{background:#34182d;color:#fff;padding:9px 12px}' +
+  '.f i.v{height:auto;min-height:15px;font-style:normal;font-size:10.5px;line-height:15px;padding:0 2px 1px;border-bottom:1px solid #333}.sg i.sv{height:auto;min-height:24px;font-style:normal;font-size:10.5px;border-bottom:1px solid #333;display:block}.sg img{height:40px;display:block}' +
+  '.cmt{border:1px solid #777;min-height:80px;padding:6px 8px;white-space:pre-wrap;font-size:10.5px}table.gx td.ck{width:22%;text-align:center;font-size:13px}.esg{font-size:8.5px;color:#555;margin-top:6px}' +
+  'table.g{width:100%;border-collapse:collapse}table.g td,table.g th{border:1px solid #888;padding:4px 5px;vertical-align:top;font-size:10px}table.g th{background:#eee;text-align:left}';
+const INTERVIEW_ITEMS_ = ['Review of job description', 'Review of requirements', 'Review of application', 'Review of education and experience', 'Review of Skills Checklist', 'Review of required testing', 'Availability: days, times, and service area', 'Interview conducted face-to-face'];
+function formHead_(label, title, name, date) {
+  const u = function (v, w) { return v ? '<u>&nbsp;' + esc_(v) + '&nbsp;</u>' : '<span style="display:inline-block;border-bottom:1px solid #444;width:' + w + 'px">&nbsp;</span>'; };
+  return '<table style="width:100%;border-collapse:collapse;border-bottom:2px solid #34182d;margin:0 0 8px"><tr><td style="font-size:12px;font-weight:bold;color:#34182d;padding:0 0 5px;border:0">Comfort Hands Home Healthcare, LLC</td>' +
+    '<td style="text-align:right;font-size:9.5px;color:#444;padding:0 0 5px;border:0">Applicant name: ' + u(name, 150) + ' &nbsp; Date: ' + u(usdate_(date), 70) + '</td></tr></table>' +
+    '<table class="hd"><tr><td class="sh" bgcolor="#34182d" style="background:#34182d;color:#fff;padding:9px 12px"><small style="display:block;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#e6c8f2">' + esc_(label) + '</small><h1 style="margin:2px 0 0;font-size:17px;font-weight:bold;color:#fff">' + esc_(title) + '</h1></td></tr></table>';
+}
+function formPdfHtml_(label, title, name, date, inner) {
+  return '<html><head><meta charset="utf-8"><style>' + PK_CSS_ + PK_PDF_EXTRA_ + '</style></head><body><table class="pgt"><thead><tr><td>' + formHead_(label, title, name, date) + '</td></tr></thead><tbody><tr><td>' + safeHtml_(inner) + '</td></tr></tbody></table></body></html>';
+}
+// "Section 2 of 16" like the master packet (the one printed with no position chosen, which has both job descriptions). The W-4 and I-9 pages the browser adds after the agreement count toward the total.
+function formSecLabel_(position, title) {
+  try {
+    const t = packetSections_('').map(function (q) { return q.title; }), i = t.indexOf(title), c = t.indexOf('Provisional Employment Agreement');
+    if (i >= 0) return 'Section ' + (i + 1 + (i > c ? 2 : 0)) + ' of ' + (t.length + 2);
+  } catch (e) {}
+  return 'Staff document';
+}
+function pkFilled_(fields, vals) {
+  return '<div class="g2">' + fields.map(function (q) {
+    const v = vals[q.id];
+    if (q.type === 'check') return '<div class="f w"><span class="op"><span>' + (v === true ? '☑' : '☐') + ' ' + esc_(q.label) + '</span></span></div>';
+    if (q.type === 'yn') return '<div class="f w"><span class="lb">' + esc_(q.label) + '</span><div class="op"><span>' + (v === 'Yes' ? '☑' : '☐') + ' Yes</span><span>' + (v === 'No' ? '☑' : '☐') + ' No</span></div></div>';
+    return '<div class="f' + (String(q.label).length > 38 ? ' w' : '') + '"><span class="lb">' + esc_(q.label) + '</span><i class="v">' + esc_(v == null ? '' : v) + '</i></div>';
+  }).join('') + '</div>';
+}
+function pkSignFilled_(sig, name, date, labels) {
+  labels = labels || ['Employee signature', 'Printed name', 'Date'];
+  return '<div class="sg"><div><i class="sv">' + (sig ? '<img src="' + sig + '">' : '&nbsp;') + '</i><span class="lb">' + esc_(labels[0]) + '</span></div><div><i class="sv">' + esc_(name) + '</i><span class="lb">' + esc_(labels[1]) + '</span></div><div class="d"><i class="sv">' + esc_(usdate_(date)) + '</i><span class="lb">' + esc_(labels[2]) + '</span></div></div>';
+}
+// The Interview Form. v = null prints a blank; otherwise v holds the answers.
+function interviewHtml_(v) {
+  const f = function (label, val, w) { return '<div class="f' + (w ? ' w' : '') + '"><span class="lb">' + esc_(label) + '</span>' + (v ? '<i class="v">' + esc_(val) + '</i>' : '<i></i>') + '</div>'; };
+  const rows = INTERVIEW_ITEMS_.map(function (t, i) { return '<tr><td>' + esc_(t) + '</td><td class="ck">' + (v && v.items[i] ? '☑' : '☐') + '</td></tr>'; }).join('');
+  const inner = '<div class="g2">' + f('Name of applicant', v ? v.name : '', true) + f('Position being applied for', v ? v.position : '') + f('Date', v ? usdate_(v.date) : '') + '</div>' +
+    '<h3>Interview checklist</h3><table class="gx"><tr><td><b>Item</b></td><td class="ck" style="font-size:10.5px"><b>Check off</b></td></tr>' + rows + '</table>' +
+    '<h3>Comments</h3><div class="cmt">' + (v ? esc_(v.comments) : '') + '</div>' +
+    (v ? pkSignFilled_(v.sig, v.iname + (v.ititle ? ', ' + v.ititle : ''), v.date, ['Signature of interviewer', 'Name and title', 'Date']) + '<div class="esg">Signed electronically in the Comfort Hands portal</div>'
+       : '<div class="sg"><div><i></i><span class="lb">Signature of interviewer</span></div><div><i></i><span class="lb">Name and title</span></div><div class="d"><i></i><span class="lb">Date</span></div></div>');
+  return formPdfHtml_('Office form', 'Interview Form', v ? v.name : '', v ? v.date : '', inner);
+}
+/** Run from the editor to make sample signed forms in your Drive root, then open them and compare with the printed packet. Delete them afterward. */
+function testFormPdf() {
+  const x = []; for (let i = 0; i < ONB_N_; i++) x.push(''); x[O_.NAME] = 'Sample Applicant'; x[O_.POS] = 'Companion';
+  const sig = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQQAAABGCAYAAAAq7+rZAAACkElEQVR42u3dSU4DQQxA0U6UW3AEJO5/jkg5Qs4RVkiIRtBDTXa9v2NHWfZP1+S6vF6vBQCWZVmuQgCAEAAQAgBCAEAIAAgBACEAIAQAhACAEAAQAgBCAEAIAAgBACEAIAQAhACAEAAQAgBCABCQmxCs+Xh7X3WevT8fF5FBdi66Lv8tgt8gBxACEZADCGE2AfxX4KYTIIQJZLCnqEkBhGCxsLhYAEJItHNACsfXZcSIENJuI5pCnF+gJQhCSHWmYHYpnNmpIQdC6JaoNZNtxinEGRFukQg5rGNWMyaphdBSBrN9LdQao+lX36lXWiH0TqxeMhrx7AYptJ92HY1bSiGMklBZpNBjKjSTFI4cmd8rj62xSyeEkRIpQ1L3HEPLrxLTroRCGLEAI0uBXHOMZc9CZBohjJwwEZM5ilwJdum3y1B7yyNzoKNIIULRRRJDNIltFsL3gY1ebKMGe3QpKDRfM5uEMHLBRVvJH1UKUefoo/3f0dc6Dn0hSGJJLJ45Fz1TCSF6Evc+PBU5kXuNJdt5id2LiqOuONuCcvCnlRwy31nZve04ghSyJXOPfekZTgGWKtyZejscOofQWwrZ7gm0KtKZG7qUvieQNWanheDSUAwp6O5URgzZ43Wb/TbYSNyfj8vPMX79fSYRXSlej9sbHIWPLrf+pXb77dh4yQBdhFAz0dyP3yYHHYjQtWNSr4UwvQrNezFoC7XWC2HaaZEA6l04LHL9udWbB5I8zoUz25NL84XSoZqs1n4VScIrsIgFNnUb9hKFTAYKDIneZSjdp7/HdqYCAyEoMGB6bq1O3ClSwFNui2OiACG4YAMQAoDIXIUAACEAIAQAhACAEAAQAgBCAEAIAAgBACEAqMYntTS1qiZifhEAAAAASUVORK5CYII=', out = [];
+  ['standards', 'bg1', 'refrelease'].forEach(function (k) {
+    const f = hrForms_(x).filter(function (q) { return q.k === k; })[0]; if (!f) return;
+    const vals = {}; f.fields.forEach(function (q) { vals[q.id] = q.type === 'check' ? true : q.type === 'yn' ? 'Yes' : (q.value || 'Sample answer'); });
+    const printable = f.fields.filter(function (q) { return q.id !== 'print' || f.k === 'standards'; });
+    const inner = '<div>' + f.html + pkFilled_(printable, vals) + pkSignFilled_(sig, x[O_.NAME], today_()) + (f.post || '') + '</div>';
+    out.push(DriveApp.createFile(Utilities.newBlob(formPdfHtml_(formSecLabel_(x[O_.POS], f.title), f.title, x[O_.NAME], today_(), inner), 'text/html', 's.html').getAs('application/pdf').setName('SAMPLE signed form - ' + k + '.pdf')).getUrl());
+  });
+  const iv = { name: 'Sample Applicant', position: 'Companion', date: today_(), items: [true, true, true, true, false, true, true, true], comments: 'Sample comment text for checking the layout.', sig: sig, iname: 'Sample Interviewer', ititle: 'Administrator' };
+  out.push(DriveApp.createFile(Utilities.newBlob(interviewHtml_(iv), 'text/html', 'i.html').getAs('application/pdf').setName('SAMPLE interview form.pdf')).getUrl());
+  Logger.log('Sample files made in your Drive. Open each and compare with the printed packet, then delete them:\n' + out.join('\n'));
+}
 function repHtml_(title, sub, body, kind, label) {
   const css = 'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.42}h1{font-size:17px;margin:0;color:#34182d}h2{font-size:14px;margin:8px 0;text-align:center}' +
     'h3{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d}table{width:100%;border-collapse:collapse}' +
@@ -2127,16 +2190,17 @@ function hr_(d) {
     const f = hrForms_(x).filter(function (q) { return q.k === d.form; })[0]; if (!f) return out_({ ok: false, error: 'unknown form' });
     if (onbDocs_(x).some(function (q) { return q.k === f.k; })) return out_({ ok: false, error: 'This form is already signed.' });
     const sig = sig_(d.sig); if (!sig) return out_({ ok: false, error: 'Please sign the form.' });
-    const vals = d.fields || {}, rows = [];
+    const vals = d.fields || {}, clean = {};
     for (let i = 0; i < f.fields.length; i++) {
       const q = f.fields[i], v = q.type === 'check' ? (vals[q.id] === true ? 'Yes' : 'No') : String(vals[q.id] == null ? '' : vals[q.id]).trim().slice(0, 300);
       if (q.type === 'yn' && v !== 'Yes' && v !== 'No') return out_({ ok: false, error: 'Please answer Yes or No: ' + q.label.slice(0, 80) + '…' });
       if (q.req && !v) return out_({ ok: false, error: 'Please fill in: ' + q.label });
-      rows.push('<tr><td style="width:42%"><b>' + esc_(q.label) + '</b></td><td>' + esc_(v) + '</td></tr>');
+      clean[q.id] = q.type === 'check' ? v === 'Yes' : v;
     }
-    const body = '<h2>' + esc_(f.title) + '</h2>' + f.html + '<table class="g" style="margin-top:8px">' + rows.join('') + '</table>' +
-      '<table class="sig" style="margin-top:12px"><tr><td><div class="k">Signature</div><img src="' + sig + '"><div>' + esc_(x[O_.NAME]) + '</div></td><td><div class="k">Date signed</div>' + today_() + '<div class="k" style="margin-top:6px">Signed electronically through the Comfort Hands new-hire page</div></td></tr></table>' + (f.post || '');
-    const pdf = Utilities.newBlob(repHtml_(f.title, x[O_.NAME] + ' · ' + today_(), body), 'text/html', 'f.html').getAs('application/pdf').setName(f.title.replace(/[:\/]/g, ' -') + ' - ' + clean_(x[O_.NAME]) + ' - ' + today_() + '.pdf');
+    // Same layout as the printed packet: the document, then the blanks filled in, then the signature line.
+    const printable = f.fields.filter(function (q) { return q.id !== 'print' || f.k === 'standards'; }), small = f.k.indexOf('bg') === 0 && f.k !== 'bgnj';
+    const inner = (small ? '<div style="font-size:9px;line-height:1.28">' : '<div>') + f.html + pkFilled_(printable, clean) + pkSignFilled_(sig, x[O_.NAME], today_()) + '<div class="esg">Signed electronically through the Comfort Hands new-hire page</div>' + (f.post || '') + '</div>';
+    const pdf = Utilities.newBlob(formPdfHtml_(formSecLabel_(x[O_.POS], f.title), f.title, x[O_.NAME], today_(), inner), 'text/html', 'f.html').getAs('application/pdf').setName(f.title.replace(/[:\/]/g, ' -') + ' - ' + clean_(x[O_.NAME]) + ' - ' + today_() + '.pdf');
     const folder = onbFolder_(x), file = folder.createFile(pdf);
     x = onbUpdate_(id, who, function (y, steps, docs, tick) {
       if (!y[O_.FOLDER]) y[O_.FOLDER] = folder.getId();
@@ -2205,7 +2269,7 @@ function applySubmit_(d) {
   html += '</table><p>Submitted online ' + today_() + '.</p>';
   const x = []; for (let i = 0; i < ONB_N_; i++) x.push('');
   x[O_.ID] = id; x[O_.NAME] = name; const folder = onbFolder_(x);
-  const pdf = Utilities.newBlob(repHtml_('Job Application', name + ' · ' + today_(), html), 'text/html', 'a.html').getAs('application/pdf').setName('Application - ' + clean_(app.lastName) + ', ' + clean_(app.firstName) + ' - ' + today_() + '.pdf');
+  const pdf = Utilities.newBlob(formPdfHtml_(formSecLabel_(app.position, 'Application for Employment'), 'Application for Employment', name, today_(), html.replace(/^<h2>[^<]*<\/h2>/, '')), 'text/html', 'a.html').getAs('application/pdf').setName('Application - ' + clean_(app.lastName) + ', ' + clean_(app.firstName) + ' - ' + today_() + '.pdf');
   const docs = [{ k: 'application', label: 'Application', url: folder.createFile(pdf).getUrl(), at: today_() }];
   if (resume) docs.push({ k: 'resume', label: 'Resume', url: folder.createFile(resume).getUrl(), at: today_() });
   const keep = {}; Object.keys(app).forEach(function (k) { if (k !== 'ssn' && app[k]) keep[k] = app[k]; });
@@ -2223,9 +2287,10 @@ function applySubmit_(d) {
 // Staff actions (admin only; called through records_ under the lock, except onbList).
 function onb_(act, d, u) {
   const sh = onbSheet_(), who = u.name || u.email, now = new Date().toISOString();
-  if (act === 'onbList') return out_({ ok: true, items: onbAll_(), steps: ONB_STEPS_.map(function (s) { return { k: s[0], l: s[1], auto: s[2] === 'auto' }; }), positions: HR_POSITIONS_, reqItems: REQ_LABELS_,
+  if (act === 'onbList') return out_({ ok: true, items: onbAll_(), steps: ONB_STEPS_.map(function (s) { return { k: s[0], l: s[1], auto: s[2] === 'auto' }; }), positions: HR_POSITIONS_, reqItems: REQ_LABELS_, interviewItems: INTERVIEW_ITEMS_,
     setup: { contract: true, applyUrl: !!CONFIG.APPLY_URL, fcra: !!CONFIG.FCRA_SUMMARY_URL } });
-  if (act === 'onbPacket') return out_({ ok: true, sections: packetSections_(d.position) });
+  if (act === 'onbPacket') return out_({ ok: true, sections: packetSections_(d.position), css: PK_CSS_ });
+  if (act === 'onbInterviewBlank') { let nm = '', pos = ''; const ox = d.id ? findRow_(sh, 0, keyOf_(d.id)) : 0; if (ox) { const y = onbRow_(sh, ox); nm = String(y[O_.NAME] || ''); pos = String(y[O_.POS] || ''); } return out_({ ok: true, html: interviewHtml_(null), name: nm, position: pos }); }
   // Ask an employee (new, or an existing aide added from the tracker) for chosen items only, and email a link that lists just those.
   if (act === 'onbRequest') {
     let id = keyOf_(d.id), r = id ? findRow_(sh, 0, id) : 0, x, seen = {};
@@ -2282,6 +2347,22 @@ function onb_(act, d, u) {
   const id = keyOf_(d.id), r = findRow_(sh, 0, id); if (!r) return out_({ ok: false, error: 'not found' });
   const x = onbRow_(sh, r), steps = onbSteps_(x);
   const mark = function (k) { steps[k] = { done: true, date: today_(), by: who, note: (steps[k] && steps[k].note) || '' }; x[O_.STEPS] = JSON.stringify(steps); x[O_.UPDATED] = now; x[O_.BY] = who; };
+  if (act === 'onbInterview') {
+    const sig = sig_(d.sig); if (!sig) return out_({ ok: false, error: 'Please sign the form.' });
+    const day = String(d.date || ''); if (!validDay_(day)) return out_({ ok: false, error: 'Enter a valid interview date.' });
+    const items = Array.isArray(d.items) ? d.items : [], iname = String(d.iname || u.name || '').trim().slice(0, 80);
+    if (!iname) return out_({ ok: false, error: 'Enter the interviewer name.' });
+    const v = { name: String(x[O_.NAME] || ''), position: String(x[O_.POS] || ''), date: day, items: INTERVIEW_ITEMS_.map(function (t, i) { return items[i] === true; }), comments: String(d.comments || '').slice(0, 2000), sig: sig, iname: iname, ititle: String(d.ititle || '').trim().slice(0, 80) };
+    const pdf = Utilities.newBlob(interviewHtml_(v), 'text/html', 'i.html').getAs('application/pdf').setName('Interview Form - ' + clean_(v.name) + ' - ' + day + '.pdf');
+    const folder = onbFolder_(x), file = folder.createFile(pdf);
+    const nx = onbUpdate_(id, who, function (y, st, docs, tick) {
+      if (!y[O_.FOLDER]) y[O_.FOLDER] = folder.getId();
+      for (let i = docs.length - 1; i >= 0; i--) if (docs[i].k === 'interview') docs.splice(i, 1);
+      docs.push({ k: 'interview', label: 'Interview Form', url: file.getUrl(), at: today_() });
+      tick('interview', 'Interview form signed ' + day);
+    });
+    audit_(u, 'INTERVIEW FORM', id, day); return out_({ ok: true, item: onbObj_(nx) });
+  }
   if (act === 'onbOffer' || act === 'onbSendForms') {
     if (!(steps.appReview && steps.appReview.done)) return out_({ ok: false, error: 'Mark the application review complete first.' });
     if (!/^\S+@\S+\.\S+$/.test(String(x[O_.EMAIL]))) return out_({ ok: false, error: 'Add the applicant’s email first.' });
@@ -2365,7 +2446,7 @@ function contractBody_(nameH, posH, payH, note) {
 }
 function contractPdf_(name, pos, rate) {
   const body = contractBody_(esc_(name), esc_(pos), '$' + Number(rate).toFixed(2) + ' per hour', ' (the position selected on the online application)');
-  return Utilities.newBlob(repHtml_('Employment Agreement', name + ' · ' + today_(), body), 'text/html', 'c.html').getAs('application/pdf').setName('Provisional Employment Agreement - ' + clean_(name) + '.pdf');
+  return Utilities.newBlob(formPdfHtml_(formSecLabel_(pos, 'Provisional Employment Agreement'), 'Provisional Employment Agreement', name, today_(), body.replace(/^<h2>[^<]*<\/h2>/, '')), 'text/html', 'c.html').getAs('application/pdf').setName('Provisional Employment Agreement - ' + clean_(name) + '.pdf');
 }
 
 /* ───────── printable paper packet (for applicants without internet) ───────── */
