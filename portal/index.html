@@ -456,6 +456,12 @@ body.print-sheet #actSheet{border:2px solid #000;max-width:100%;margin:0 auto;pa
 .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;background:#eee;color:#555}
 .pill.bad{background:#fde8e6;color:var(--danger)}.pill.warn{background:#fff3d6;color:#8a5a00}.pill.ok{background:#e4f6ea;color:#1c6b3a}
 .mini{padding:5px 10px;border-radius:7px;border:1.5px solid var(--border);background:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin:2px 3px 2px 0}
+.acts2{display:flex;flex-wrap:wrap;align-items:center;gap:4px}.acts2 .mini{margin:0}.mini.pri{background:var(--nurse);color:#fff;border-color:var(--nurse);font-weight:700}.mini.pri[disabled]{background:#f1f1f1;color:#aaa;border-color:var(--border)}
+.mini.ibtn{width:34px;padding:5px 0;text-align:center;font-size:14px;line-height:1.1}
+#mmenu{position:fixed;z-index:9990;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:6px;min-width:230px;max-height:70vh;overflow:auto}
+#mmenu .mg{padding:6px 10px 2px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em}
+#mmenu button{display:block;width:100%;text-align:left;background:none;border:0;padding:9px 10px;border-radius:8px;font:inherit;font-size:13.5px;cursor:pointer;color:inherit}
+#mmenu button:hover{background:var(--teal-light)}#mmenu button[disabled]{color:#aaa;cursor:default;background:none}#mmenu button.dng{color:#b42318}#mmenu hr{border:0;border-top:1px solid var(--border);margin:4px 0}
 .mini:hover{border-color:var(--teal);color:var(--teal)}.mini[disabled]{opacity:.4;cursor:default}
 .rate{border-collapse:collapse;width:100%}.rate td,.rate th{border:1px solid var(--border);padding:7px 9px;font-size:13px;vertical-align:top}.rate th{background:var(--teal-light);text-align:left;font-size:11px;text-transform:uppercase}
 .rate select{width:100%}
@@ -2120,7 +2126,7 @@ function nurseSteps(){return[
         <li>✍️ One signature, with nurse witness</li>
       </ul>
     </div>
-    <button class="btn btn-nurse" style="margin:0 auto" onclick="switchRole()">← Return to Role Select</button>
+    <button class="btn btn-nurse" style="margin:0 auto" onclick="handoffDone()">← Return to Role Select</button>
   </div>
 </div>`}
 ];}
@@ -2424,7 +2430,7 @@ function attentionItems(h){
   (h.patients||[]).forEach(p=>{ if(p.status==='discharged'||p.purged) return;
     if(p.daysToNote!==null&&p.daysToNote<0) it.push({sev:2,d:p.daysToNote,who:p.name,txt:'60-day note overdue',sub:'Overdue '+plural(-p.daysToNote),k:'noteOver'});
     else if(p.status==='active'&&p.daysToNote!==null&&p.daysToNote<=10) it.push({sev:1,d:p.daysToNote,who:p.name,txt:'60-day note due soon',sub:'Due in '+plural(p.daysToNote),k:'noteSoon'});
-    const pc=p.pca; if(pc&&pc.daysToPca!==null&&pc.daysToPca<=45&&pc.pcaStatus!=='renewal sent') it.push({sev:pc.daysToPca<0?2:1,d:pc.daysToPca,who:p.name,txt:pc.daysToPca<0?'PCA authorization has ended':'PCA ends in '+plural(pc.daysToPca),sub:'Renewal request not sent',k:'pcaDue'}); });
+    const pc=p.pca; if(isAdminNow()&&pc&&pc.daysToPca!==null&&pc.daysToPca<=45&&pc.pcaStatus!=='renewal sent') it.push({sev:pc.daysToPca<0?2:1,d:pc.daysToPca,who:p.name,txt:pc.daysToPca<0?'PCA authorization has ended':'PCA ends in '+plural(pc.daysToPca),sub:'Renewal request not sent',k:'pcaDue'}); });
   (h.aides||[]).forEach(a=>{ ((a.trk&&a.trk.items)||[]).forEach(i=>{ if(i.status==='over') it.push({sev:2,d:i.days,who:a.name,txt:i.label+' overdue',sub:'Due '+usDate(i.due),k:'trkOver'}); else if(i.status==='soon') it.push({sev:1,d:i.days,who:a.name,txt:i.label+' due in '+plural(i.days),sub:'Due '+usDate(i.due),k:'trkSoon'}); });
     if(a.daysToEval!==null&&a.daysToEval<0) it.push({sev:2,d:a.daysToEval,who:a.name,txt:'evaluation overdue',sub:'Overdue '+plural(-a.daysToEval),k:'evalOver'}); });
   it.sort((x,y)=>y.sev-x.sev||x.d-y.d); return it;
@@ -2433,6 +2439,7 @@ function drawHome(){
   const h=HOME, c=h.counts, box=document.getElementById('homeBody'), isA=isAdminNow();
   /* sidebar */
   const navItems=[['overview','▦','Overview',0,'',HOME_TAB==='patients'&&!HOME_FILTER],['aides','♥','Aides',0,'',HOME_TAB==='aides'&&!HOME_FILTER],['pcaDue','✎','PCA authorizations',c.pcaDue||0,'',HOME_FILTER==='pcaDue'],['trkOver','✔','Compliance',(c.trkOver||0)+(c.trkSoon||0),(c.trkOver?'r':''),/^trk/.test(HOME_FILTER)],['sheets','▤','Activity sheets',c.sheets||0,'',HOME_TAB==='sheets'],['drafts','✉','Drafts',c.drafts||0,'',HOME_TAB==='drafts']];
+  if(!isA){ const pi=navItems.findIndex(x=>x[0]==='pcaDue'); if(pi>=0) navItems.splice(pi,1); }
   if(isA) navItems.push(['onb','＋','New hires',c.onboarding||0,'',HOME_TAB==='admin']);
   if(isA) navItems.push(['plans','▤','Activity sheets',0,'',HOME_TAB==='plans']);
   if(isA) navItems.push(['outreach','✉','Outreach',0,'',HOME_TAB==='outreach']);
@@ -2444,13 +2451,14 @@ function drawHome(){
     '<div class="topact"><button class="adm" onclick="closeHome()">✎ Admissions</button><button onclick="renderHome()">↻</button><button onclick="signOut()">Log out</button></div>'+
     '<div class="srch"><input type="text" id="homeQ" placeholder="Search patients or aides" value="'+escAct(HOME_Q)+'" oninput="HOME_Q=this.value;resetPaging();drawList()"></div>'+
     '<div class="who"><div class="av">'+escAct(ini)+'</div>'+escAct(nm)+' · '+escAct((AUTH.roles||[]).map(r=>r[0].toUpperCase()+r.slice(1)).join(' / '))+'</div>';
-  const TILE_IC={aideOver:'♥',adm:'✎',noteOver:'▤',noteSoon:'▤',pcaDue:'✔',trkOver:'♥',trkSoon:'♥',evalOver:'☆',evalSoon:'☆',sheets:'✉',drafts:'✎',onb:'＋'};
+  const TILE_IC={aideOver:'♥',adm:'✎',sig:'✍',noteOver:'▤',noteSoon:'▤',pcaDue:'✔',trkOver:'♥',trkSoon:'♥',evalOver:'☆',evalSoon:'☆',sheets:'✉',drafts:'✎',onb:'＋'};
   const tile=(key,n,label,cls)=>'<button class="tile '+(n?cls:'zero')+(HOME_FILTER===key?' on':'')+'" onclick="setHomeFilter(\''+key+'\')"><div class="ic">'+(TILE_IC[key]||'•')+'</div><div class="n">'+n+'</div><div class="t">'+label+'</div><div class="go">View →</div></button>';
   let t='<div class="tiles">'+
     tile('adm',c.admissions,'Admissions in progress','warn')+
+    tile('sig',c.sigMissing||0,'Signatures missing','warn')+
     tile('noteOver',c.notesOver,'60-day notes overdue','bad')+
     tile('noteSoon',c.notesSoon,'60-day notes due in 10 days','warn')+
-    tile('pcaDue',c.pcaDue||0,'PCA authorizations ending in 45 days','warn')+
+    (isA?tile('pcaDue',c.pcaDue||0,'PCA authorizations ending in 45 days','warn'):'')+
     tile('aideOver',(c.trkOver||0)+(c.evalsOver||0),'Aide compliance and evaluations overdue','bad')+
     tile('trkSoon',c.trkSoon||0,'Aide compliance due in 60 days','warn')+
     tile('evalSoon',c.evalsSoon,'Aide evaluations due in 10 days','warn')+
@@ -2491,6 +2499,7 @@ function drawList(){
     let rows=h.patients.slice();
     if(!HOME_FILTER) rows=rows.filter(p=>PT_STATUS==='all'||p.status===PT_STATUS); else rows=rows.filter(p=>p.status!=='discharged');
     if(HOME_FILTER==='adm') rows=rows.filter(p=>p.status==='admission');
+    if(HOME_FILTER==='sig') rows=rows.filter(p=>p.sigMissing>0);
     if(HOME_FILTER==='pcaDue') rows=rows.filter(p=>p.status!=='discharged'&&!p.purged&&p.pca&&p.pca.daysToPca!==null&&p.pca.daysToPca<=45&&p.pca.pcaStatus!=='renewal sent');
     if(HOME_FILTER==='noteOver') rows=rows.filter(p=>p.daysToNote!==null&&p.daysToNote<0);
     if(HOME_FILTER==='noteSoon') rows=rows.filter(p=>p.daysToNote!==null&&p.daysToNote>=0&&p.daysToNote<=10);
@@ -2500,14 +2509,7 @@ function drawList(){
     out.innerHTML=(total?'<table class="htbl ct pt"><thead><tr><th>Patient #</th><th>Patient</th><th>Insurance ID</th><th>Status</th><th>Next 60-day re-assessment</th><th>Actions</th></tr></thead><tbody>'+shown.map(p=>{
       const st=p.status==='admission'?'<span class="pill warn">Admission in progress</span>':p.status==='active'?'<span class="pill ok">Active</span>':'<span class="pill">Discharged '+usDate(p.dischargedAt)+'</span>';
       const dis=p.status==='discharged'||p.purged; const dr=(h.drafts||[]).filter(x=>x.patientId===p.id).map(x=>'<br><span class="pill warn">Draft: '+escAct(x.label)+'</span>').join('');
-      return '<tr><td class="pno">'+escAct(p.pn||'')+'</td><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">DOB '+usDate(p.dob)+(p.start?' · SOC '+usDate(p.start):'')+'</span></td><td>'+(p.ins||p.insurer?'<strong>'+escAct(p.ins||'')+'</strong><br><span class="tmuted">'+escAct(p.insurer||'')+'</span>':'<span class="tmuted">not entered</span>')+'</td><td>'+st+dr+(dis?'':pcaBadge(p.pca))+'</td><td>'+(p.status==='active'?dueBadge(p.daysToNote)+'<br><span class="tmuted">'+(p.lastNote?'last '+usDate(p.lastNote):'none yet')+'</span>':'—')+'</td><td class="acts">'+
-        (hasN?'<button class="mini" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\'nurse\')">Open as Nurse</button>':'')+
-        (hasA?'<button class="mini" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\'admin\')">Open as Admin</button>':'')+
-        '<button class="mini" style="background:#6b21a8;color:#fff;border-color:#6b21a8;font-weight:700" '+(p.status!=='active'?'disabled':'')+' onclick="openReport(\'ra\',\''+p.id+'\')">60-day Re-Assessment</button>'+'<button class="mini" '+(p.status!=='active'?'disabled':'')+' onclick="openReport(\'pn\',\''+p.id+'\')">Progress note</button>'+
-        '<button class="mini" '+(dis?'disabled':'')+' onclick="openReport(\'dc\',\''+p.id+'\')">Discharge</button>'+
-        (p.status==='admission'?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'active\')">Mark active</button>':'')+
-        ((p.status==='discharged'&&!p.purged&&hasA)?'<button class="mini" onclick="ptStatus(\''+p.id+'\',\'reopen\')">Reopen</button>':'')+
-        '<button class="mini txtb" '+(p.status==='discharged'?'disabled':'')+' onclick="vTextPatient(\''+p.id+'\',\''+jsq(p.name)+'\')">Text</button>'+'<button class="mini callb" '+(p.status==='discharged'?'disabled':'')+' onclick="vCallPatient(\''+p.id+'\',\''+jsq(p.name)+'\')">Call</button>'+'<button class="mini" onclick="openPcaHub(\''+p.id+'\')" '+(dis?'disabled':'')+'>PCA</button>'+'<button class="mini" onclick="openReport(\'hist\',\''+p.id+'\')">History</button></td></tr>';
+      return '<tr><td class="pno">'+escAct(p.pn||'')+'</td><td><strong>'+escAct(p.name)+'</strong><br><span class="tmuted">DOB '+usDate(p.dob)+(p.start?' · SOC '+usDate(p.start):'')+'</span></td><td>'+(p.ins||p.insurer?'<strong>'+escAct(p.ins||'')+'</strong><br><span class="tmuted">'+escAct(p.insurer||'')+'</span>':'<span class="tmuted">not entered</span>')+'</td><td>'+st+dr+sigFlag(p)+((dis||!hasA)?'':pcaBadge(p.pca))+'</td><td>'+(p.status==='active'?dueBadge(p.daysToNote)+'<br><span class="tmuted">'+(p.lastNote?'last '+usDate(p.lastNote):'none yet')+'</span>':'—')+'</td><td class="acts">'+ptActions(p,hasA,hasN)+'</td></tr>';
     }).join('')+'</tbody></table>'+moreBar(shown.length,total,what,'PT_SHOW'):'<p class="tmuted">No patients match.</p>');
     return;
   }
@@ -2525,9 +2527,149 @@ function drawList(){
   const atotal=rows.length; rows=rows.slice(0,AD_SHOW);
   aout.innerHTML=rows.length?'<table class="htbl ct"><thead><tr><th>Aide</th><th>Patients served</th><th>Next evaluation</th><th>Compliance</th><th>Actions</th></tr></thead><tbody>'+rows.map(a=>
     '<tr><td><strong>'+escAct(a.name)+'</strong><br><span class="tmuted">'+escAct(a.email)+'</span></td><td>'+(a.patients.length?a.patients.map(escAct).join(', '):'<span class="tmuted">none assigned</span>')+'</td><td>'+(a.nextEvalDue?dueBadge(a.daysToEval)+'<br><span class="tmuted">'+(a.lastEval?'last '+usDate(a.lastEval)+' ('+escAct(a.lastType||'')+')':'first case '+usDate(a.firstCase))+'</span>':'<span class="tmuted">no first case yet</span>')+'</td><td>'+trkPills(a.trk)+'</td><td>'+
-    '<button class="mini txtb" '+(vDigits(a.trk&&a.trk.phone)?'':'disabled title="No phone number on file"')+' onclick="vText(\''+jsq((a.trk&&a.trk.phone)||'')+'\',\''+jsq(a.name)+'\')">Text</button><button class="mini callb" '+(vDigits(a.trk&&a.trk.phone)?'':'disabled title="No phone number on file"')+' onclick="vCall(\''+jsq((a.trk&&a.trk.phone)||'')+'\',\''+jsq(a.name)+'\')">Call</button><button class="mini" onclick="vMail(\''+jsq(a.email)+'\',\''+jsq(a.name)+'\')">Email</button><button class="mini" onclick="openTrk(\''+jsq(a.email)+'\')">Compliance</button><button class="mini" onclick="openReport(\'chha\',\''+jsq(a.email)+'\')">Evaluate</button><button class="mini" onclick="openReport(\'hist\',\'\',\''+jsq(a.email)+'\')">History</button></td></tr>').join('')+'</tbody></table>'+moreBar(rows.length,atotal,'aides','AD_SHOW'):'<p class="tmuted">No aides match. Aides appear here once they have the aide role in the Users tab.</p>';
+    aideActions(a)+'</td></tr>').join('')+'</tbody></table>'+moreBar(rows.length,atotal,'aides','AD_SHOW'):'<p class="tmuted">No aides match. Aides appear here once they have the aide role in the Users tab.</p>';
 }
 function moreBar(shown,total,what,v){ return '<div class="morebar"><span class="tmuted">Showing '+shown+' of '+total+' '+what+', A to Z by last name</span>'+(shown<total?'<button class="btn btn-nurse" style="padding:9px 18px" onclick="'+v+'+=10;drawList()">Show 10 more</button>':'')+'</div>'; }
+
+// ── tidy row actions: one main button, two icons, a More menu ──
+let MM_FN=[], PCA_DIRTY=false;
+function mmClose(){ const m=document.getElementById('mmenu'); if(m) m.remove(); }
+document.addEventListener('click',e=>{ if(!e.target.closest('#mmenu')&&!e.target.closest('[data-mm]')) mmClose(); });
+let MM_AT=0; window.addEventListener('resize',mmClose); document.addEventListener('scroll',e=>{ if(Date.now()-MM_AT<500) return; const m=document.getElementById('mmenu'); if(m&&e.target&&e.target.nodeType===1&&m.contains(e.target)) return; mmClose(); },true);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') mmClose(); });
+function mmShow(btn,groups){
+  const was=document.getElementById('mmenu'); const same=was&&was.dataset.for===(btn.dataset.id||''); mmClose(); if(same) return;
+  const m=document.createElement('div'); m.id='mmenu'; m.setAttribute('role','menu'); m.dataset.for=btn.dataset.id||'';
+  m.innerHTML=groups.map((g,gi)=>(gi?'<hr>':'')+(g.h?'<div class="mg">'+g.h+'</div>':'')+g.items.map(i=>'<button role="menuitem" '+(i.dis?'disabled':'')+(i.dng?' class="dng"':'')+' data-i="'+i.i+'">'+i.t+'</button>').join('')).join('');
+  m.addEventListener('click',e=>{ const b=e.target.closest('button[data-i]'); if(!b||b.disabled) return; const fn=MM_FN[+b.dataset.i]; mmClose(); if(fn) fn(); });
+  document.body.appendChild(m); MM_AT=Date.now();
+  const r=btn.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight;
+  let left=Math.max(8,Math.min(r.right-w,window.innerWidth-w-8)), top=r.bottom+4; if(top+h>window.innerHeight-8) top=Math.max(8,r.top-h-4);
+  m.style.left=left+'px'; m.style.top=top+'px';
+}
+function mmItem(t,fn,o){ MM_FN.push(fn); return Object.assign({t:t,i:MM_FN.length-1},o||{}); }
+function ptActions(p,hasA,hasN){
+  const dis=p.status==='discharged'||p.purged, adm=p.status==='admission', role=hasA?'admin':'nurse';
+  let h=(p.status==='discharged'&&!p.purged&&hasA)?'<button class="mini pri" onclick="ptStatus(\''+p.id+'\',\'reopen\')">Reopen</button>'
+    :'<button class="mini pri" '+(dis?'disabled':'')+' onclick="openPatient(\''+p.id+'\',\''+role+'\')">Open</button>';
+  if(adm) h+='<button class="mini" onclick="ptStatus(\''+p.id+'\',\'active\')">Mark active</button>';
+  const nd=p.status==='discharged'?'disabled':'';
+  h+='<button class="mini ibtn txtb" title="Text" aria-label="Text patient" '+nd+' onclick="vTextPatient(\''+p.id+'\',\''+jsq(p.name)+'\')">💬</button>'+
+     '<button class="mini ibtn callb" title="Call" aria-label="Call patient" '+nd+' onclick="vCallPatient(\''+p.id+'\',\''+jsq(p.name)+'\')">📞</button>'+
+     '<button class="mini" data-mm="1" data-id="'+p.id+'" aria-haspopup="menu" onclick="ptMenu(this,\''+p.id+'\')">More ▾</button>';
+  return '<div class="acts2">'+h+'</div>';
+}
+function ptMenu(btn,id){
+  const p=((HOME&&HOME.patients)||[]).find(x=>x.id===id); if(!p) return;
+  const hasA=AUTH.roles.includes('admin'), hasN=AUTH.roles.includes('nurse'), dis=p.status==='discharged'||p.purged, act=p.status==='active'; MM_FN=[];
+  const G=[], cl=[];
+  if(hasA&&hasN&&!dis) cl.push(mmItem('Open as nurse',()=>openPatient(id,'nurse')));
+  if(hasN&&act){ cl.push(mmItem('60-day re-assessment',()=>openReport('ra',id))); cl.push(mmItem('Progress note',()=>openReport('pn',id))); }
+  if(hasN&&!dis) cl.push(mmItem('Discharge',()=>openReport('dc',id),{dng:1}));
+  if(cl.length) G.push({h:'Clinical',items:cl});
+  const of=[];
+  if(hasA){ of.push(mmItem('PCA authorization',()=>openPcaHub(id),{dis:dis})); of.push(mmItem('Send documents to sign',()=>openSignSend(id,'row'),{dis:dis})); }
+  of.push(mmItem('History',()=>openReport('hist',id)));
+  G.push({h:hasA?'Office':'',items:of});
+  if(hasA&&!hasN&&!dis) G.push({h:'',items:[mmItem('Discharge',()=>openReport('dc',id),{dng:1})]});
+  mmShow(btn,G);
+}
+function aideActions(a){
+  const ph=(a.trk&&a.trk.phone)||'', no=vDigits(ph)?'':'disabled title="No phone number on file"';
+  return '<div class="acts2"><button class="mini pri" onclick="openReport(\'chha\',\''+jsq(a.email)+'\')">Evaluate</button>'+
+    '<button class="mini ibtn txtb" aria-label="Text aide" '+no+' onclick="vText(\''+jsq(ph)+'\',\''+jsq(a.name)+'\')">💬</button>'+
+    '<button class="mini ibtn callb" aria-label="Call aide" '+no+' onclick="vCall(\''+jsq(ph)+'\',\''+jsq(a.name)+'\')">📞</button>'+
+    '<button class="mini ibtn" title="Email" aria-label="Email aide" onclick="vMail(\''+jsq(a.email)+'\',\''+jsq(a.name)+'\')">✉</button>'+
+    '<button class="mini" data-mm="1" data-id="'+escAct(a.email)+'" aria-haspopup="menu" onclick="aideMenu(this,\''+jsq(a.email)+'\')">More ▾</button></div>';
+}
+function aideMenu(btn,email){ MM_FN=[]; mmShow(btn,[{h:'',items:[mmItem('Compliance',()=>openTrk(email)),mmItem('History',()=>openReport('hist','',email))]}]); }
+// ── signatures: the flag on a patient in admission ──
+const SIGN_DOCS=[['consents','Consents & Rights'],['service','Client Service Agreement'],['careplan','Care Plan Agreement']];
+function sigFlag(p){
+  if(p.status!=='admission'||p.submittedAt) return '';
+  const sg=p.sign||{signed:[],link:null}, n=(sg.signed||[]).length, l=sg.link;
+  if(n>=SIGN_DOCS.length) return '<br><span class="pill ok">Signed '+usDate(sg.signedAt)+'</span>';
+  if(!(p.sigMissing>0)) return '';
+  let sub=p.assess?'Assessment saved '+usDate(p.assess)+'. ':'';
+  if(!l) sub+='No link sent yet.';
+  else if(l.status==='open') sub+='Link sent '+usDate(l.sentAt)+' · expires '+usDate(l.expiresAt)+(l.reminderAt?' · reminder sent '+usDate(l.reminderAt):'');
+  else if(l.status==='expired') sub+='Link expired '+usDate(l.expiresAt)+'. Send a new one.';
+  else if(l.status==='locked') sub+='Link locked after wrong birth dates. Send a new one.';
+  else sub+='No link sent yet.';
+  return '<br><span class="pill warn">Signatures missing: '+p.sigMissing+' of '+SIGN_DOCS.length+'</span><br><span class="tmuted">'+escAct(sub)+'</span>';
+}
+// ── PCA pop-out: say whose it is, and do not reload the page when nothing changed ──
+function pcaWho(){ const p=((HOME&&HOME.patients)||[]).find(x=>PCAH&&x.id===PCAH.id); return p?(p.name+(p.pn?' #'+p.pn:'')):''; }
+function pcaHubClose(){ const m=document.getElementById('pcaHub'); if(m) m.remove(); if(PCA_DIRTY){ PCA_DIRTY=false; renderHome(); } }
+function pcaReqClose(){ const m=document.getElementById('pcaModal'); if(m) m.remove(); if(PCA_DIRTY){ PCA_DIRTY=false; renderHome(); } }
+// ── send documents to sign by text ──
+let SGN=null;
+function signDocsHtml(sh,fm){ // the three documents as the patient would see them, filled from the record, as plain HTML
+  const oS=SHARED,oF=FORM,out={};
+  try{
+    SHARED=sh||{}; FORM=fm||{};
+    const steps=patientSteps();
+    [['consents','Consents &amp; Rights'],['service','Service Agreement'],['careplan','Care Plan Agreement']].forEach(a=>{
+      const st=steps.find(x=>x.label===a[1]); if(!st) return;
+      const d=document.createElement('div'); d.innerHTML=st.html; restoreInto(d); staticize(d); out[a[0]]=d.innerHTML;
+    });
+  } finally { SHARED=oS; FORM=oF; }
+  return out;
+}
+async function openSignSend(id,ctx){
+  if(!SUBMIT_URL){ alert('Sending documents needs the office connection, which is not available in this preview.'); return; }
+  if(ctx==='visit'){ try{ await ptSyncNow(); }catch(e){} }
+  let st,pj=null; try{ st=await api('signState',{patientId:id}); if(ctx!=='visit') pj=await api('ptGet',{id:id}); }catch(e){ alert(e.message||'Could not open.'); return; }
+  if(!st||!st.ok||(ctx!=='visit'&&(!pj||!pj.ok))){ alert('Could not open this ('+(((st&&st.error)||(pj&&pj.error))||'error')+').'); return; }
+  const sh=ctx==='visit'?SHARED:(pj.shared||{}), fm=ctx==='visit'?FORM:(pj.form||{});
+  const name=ctx==='visit'?[SHARED.firstName,SHARED.lastName].filter(Boolean).join(' '):((pj.patient&&pj.patient.name)||''), pn=ctx==='visit'?'':((pj.patient&&pj.patient.pn)||'');
+  SGN={id:id,ctx:ctx,sh:sh,fm:fm,name:name,pn:pn,signed:st.signed||[],textOk:!!st.textOk,link:st.link,phone:String(sh.cell||'')};
+  drawSignSend();
+}
+function drawSignSend(){
+  const old=document.getElementById('sgnModal'); if(old) old.remove();
+  const S=SGN, esc=escAct;
+  const rows=SIGN_DOCS.map(a=>{ const sd=S.signed.includes(a[0]); return '<label class="chk-item" style="padding:9px 12px;display:flex;gap:10px;align-items:center'+(sd?';opacity:.75':'')+'"><input type="checkbox" class="sgk" value="'+a[0]+'" '+(sd?'disabled':'checked')+' onchange="sgnUpd()"><div class="chk-label">'+esc(a[1])+(sd?' <span class="pill ok">Signed</span>':'')+'</div></label>'; }).join('');
+  const l=S.link, last=l&&l.status==='open'?'<p class="tmuted" style="margin:8px 0 0">A link was sent '+usDate(l.sentAt)+' and expires '+usDate(l.expiresAt)+'. Sending a new one cancels it.</p>':'';
+  const m=document.createElement('div'); m.id='sgnModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;padding:20px';
+  m.innerHTML='<div style="background:#fff;max-width:560px;margin:0 auto;border-radius:12px;padding:20px 22px"><h3 style="margin:0 0 4px">Send documents to sign'+(S.name?' · '+esc(S.name)+(S.pn?' #'+esc(S.pn):''):'')+'</h3>'+
+   '<p class="tmuted" style="margin:0 0 10px">The patient gets a text with a link. They enter their date of birth, read each document and sign with a finger.</p>'+rows+last+
+   '<div class="fgroup" style="margin-top:12px"><label class="lbl">Mobile number to text</label><input type="text" id="sgn_ph" value="'+esc(S.phone)+'" inputmode="tel" oninput="sgnUpd()"><div class="tmuted" style="margin-top:3px">From the patient record. Change it if the patient uses another phone.</div></div>'+
+   (S.textOk?'<p class="tmuted" style="margin:6px 0">✔ The patient has agreed to receive texts.</p>':'<label class="chk-item" style="padding:9px 12px;display:flex;gap:10px;align-items:center"><input type="checkbox" id="sgn_ok" onchange="sgnUpd()"><div class="chk-label">The patient agreed to receive text messages from Comfort Hands.</div></label>')+
+   '<div style="background:#f6f2f8;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px"><div class="tmuted" style="margin-bottom:3px">The text will say</div>Comfort Hands: Please sign your documents here: [link] This link expires in 7 days. Questions? Call 609-277-3032.<div class="tmuted" style="margin-top:6px">No name or health details are in the text.</div></div>'+
+   '<p id="sgnMsg" class="tmuted"></p><div style="display:flex;gap:8px;justify-content:flex-end"><button class="mini" onclick="sgnClose(false)">Cancel</button><button class="mini pri" id="sgnBtn" onclick="sgnSend()" disabled>Send text</button></div></div>';
+  document.body.appendChild(m); sgnUpd();
+}
+function sgnUpd(){
+  const keys=document.querySelectorAll('.sgk:checked').length, ph=vDigits((document.getElementById('sgn_ph')||{}).value||''), okc=SGN.textOk||!!(document.getElementById('sgn_ok')||{}).checked, b=document.getElementById('sgnBtn');
+  if(b) b.disabled=!(keys&&ph&&okc);
+}
+function sgnClose(refresh){ const m=document.getElementById('sgnModal'); if(m) m.remove(); if(refresh&&document.getElementById('homeBody')&&document.getElementById('homeScreen')&&document.getElementById('homeScreen').style.display!=='none') renderHome(); }
+async function sgnSend(){
+  const keys=[...document.querySelectorAll('.sgk:checked')].map(x=>x.value), ph=document.getElementById('sgn_ph').value.trim(), okc=SGN.textOk||!!(document.getElementById('sgn_ok')||{}).checked;
+  const msg=document.getElementById('sgnMsg'), btn=document.getElementById('sgnBtn'); btn.disabled=true; msg.textContent='Sending…';
+  let docs={}; try{ if(SGN.ctx==='visit'){ try{ snapshotForm(); }catch(e){} try{ snapshotNurse(); }catch(e){} } const all=signDocsHtml(SGN.sh,SGN.fm); keys.forEach(k=>{ docs[k]=all[k]||''; }); }
+  catch(e){ msg.textContent='Could not prepare the documents ('+(e.message||'error')+').'; btn.disabled=false; return; }
+  let j; try{ j=await api('signSend',{patientId:SGN.id,keys:keys,to:ph,consent:okc,docs:docs}); }catch(e){ msg.textContent=e.message||'Could not send.'; btn.disabled=false; return; }
+  if(!j||!j.ok){ msg.textContent=(j&&j.error)||'Could not send.'; btn.disabled=false; return; }
+  const box=document.getElementById('sgnModal').firstChild, tail=vDigits(ph).slice(-4);
+  box.innerHTML='<h3 style="margin:0 0 8px">'+(j.status==='sent'?'Text sent':'Link ready')+'</h3><div class="info-box"><span class="ico">'+(j.status==='sent'?'✅':'ℹ️')+'</span><p>'+(j.status==='sent'?'The text went to the number ending '+escAct(tail)+'. The link expires '+usDate(j.expiresAt)+'. The row shows when the patient has signed.':'Texting is not switched on, so nothing was sent. For testing, open this link yourself:')+'</p></div>'+
+    (j.link?'<input type="text" readonly style="width:100%;margin-top:8px" value="'+escAct(j.link)+'" onclick="this.select()">':'')+
+    '<div style="text-align:right;margin-top:12px"><button class="mini pri" onclick="sgnClose(true)">Close</button></div>';
+}
+// ── end of the visit: nobody leaves without knowing the signatures are missing ──
+async function handoffDone(){
+  if(!SUBMIT_URL||!PT_ID||!AUTH.token){ switchRole(); return; }
+  try{ await ptSyncNow(); }catch(e){}
+  let st=null; try{ st=await api('signState',{patientId:PT_ID}); }catch(e){}
+  if(!st||!st.ok||(st.signed||[]).length>=SIGN_DOCS.length){ switchRole(); return; }
+  const left=SIGN_DOCS.filter(a=>!(st.signed||[]).includes(a[0])).map(a=>'<li>'+escAct(a[1])+'</li>').join('');
+  const m=document.createElement('div'); m.id='hdModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;padding:20px';
+  m.innerHTML='<div style="background:#fff;max-width:460px;margin:8vh auto 0;border-radius:12px;padding:20px 22px"><h3 style="margin:0 0 6px">Signatures are missing</h3><p class="tmuted" style="margin:0 0 6px">The assessment is saved, but the patient has not signed:</p><ul style="margin:0 0 12px 18px">'+left+'</ul>'+
+   '<div style="display:flex;flex-direction:column;gap:8px"><button class="mini pri" style="padding:10px" onclick="document.getElementById(\'hdModal\').remove();switchRole()">Collect signatures now</button><button class="mini" style="padding:10px" onclick="document.getElementById(\'hdModal\').remove();openSignSend(PT_ID,\'visit\')">Text patient a link</button><button class="mini" style="padding:10px;color:#777" onclick="document.getElementById(\'hdModal\').remove();switchRole()">Finish anyway</button></div>'+
+   '<p class="tmuted" style="margin:10px 0 0">Collect now: choose Patient on the next screen and hand over the phone. The text goes to the number on the patient record.</p></div>';
+  document.body.appendChild(m);
+}
 
 async function ptStatus(id,to){
   if(!confirm(to==='active'?'Mark this admission as finished and the patient as active?\n\nUse this when the packet was signed on paper, or on a device that could not connect.':'Reopen this discharged patient?\n\nThe discharge PDF stays on file. Publish the care plan again afterwards so the aides can see the activity sheet.')) return;
@@ -3178,11 +3320,11 @@ function drawPcaHub(){
     (r.status==='approved'?'<span class="pill ok">Approved</span><br><span class="tmuted">#'+esc(r.authNo)+'<br>'+usDate(r.authFrom)+' – '+usDate(r.authTo)+(r.units?'<br>'+esc(r.units)+' units':'')+(r.icd10?'<br>ICD-10 '+esc(r.icd10):'')+'</span>':r.status==='denied'?'<span class="pill bad">Denied</span>':'<span class="pill warn">Sent – no answer yet</span>')+
     '</td><td><button class="mini" onclick="pcaEdit(\''+r.id+'\')">'+(r.status==='requested'?'Record insurer answer':'Edit')+'</button></td></tr>').join('');
   const m=document.createElement('div'); m.id='pcaHub'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;padding:20px';
-  m.innerHTML='<div style="background:#fff;max-width:780px;margin:0 auto;border-radius:12px;padding:20px 22px"><h3 style="margin:0 0 4px">PCA authorization</h3>'+
+  m.innerHTML='<div style="background:#fff;max-width:780px;margin:0 auto;border-radius:12px;padding:20px 22px"><h3 style="margin:0 0 4px">PCA authorization'+(pcaWho()?' · '+escAct(pcaWho()):'')+'</h3>'+
    '<p class="tmuted" style="margin:0 0 10px">'+(st.pcaStatus==='none'?'No request recorded yet. Start one at admission: fill the insurer\'s form and it is logged as sent.':'Current: '+esc(st.pcaStatus)+(st.pcaEnd?' · authorization ends '+usDate(st.pcaEnd)+' ('+st.daysToPca+' days)':''))+'</p>'+
    '<div style="margin-bottom:10px"><button class="mini" style="background:#1a5d4a;color:#fff" onclick="pcaNew()">＋ '+(st.pcaStatus==='approved'||st.pcaStatus==='renewal sent'?'Renewal request':'New request')+' (fills the insurer\'s form)</button> <button class="mini" onclick="pcaExisting()">＋ Add existing authorization</button></div>'+
    (rows.length?'<table class="htbl"><thead><tr><th>Sent</th><th>Insurer</th><th>Insurer answer</th><th></th></tr></thead><tbody>'+tr+'</tbody></table>':'')+
-   '<div id="pcaEdit"></div><div style="margin-top:12px;text-align:right"><button class="mini" onclick="document.getElementById(\'pcaHub\').remove();HOME=null;renderHome()">Close</button></div></div>';
+   '<div id="pcaEdit"></div><div style="margin-top:12px;text-align:right"><button class="mini" onclick="pcaHubClose()">Close</button></div></div>';
   document.body.appendChild(m);
 }
 
@@ -3198,7 +3340,7 @@ async function pcaExistingSave(){
   const g=k=>document.getElementById('pae_'+k).value.trim(), msg=document.getElementById('paeMsg');
   if(!g('authNo')||!g('authFrom')||!g('authTo')){ msg.textContent='Enter the authorization number, start date and end date.'; return; }
   try{ const j=await api('pcaAddExisting',{patientId:PCAH.id,insurer:g('insurer'),authNo:g('authNo'),authFrom:g('authFrom'),authTo:g('authTo'),units:g('units'),hoursWeek:g('hoursWeek'),icd10:g('icd10')});
-    if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; } PCAH.rows=j.rows; PCAH.state=j.state; drawPcaHub();
+    if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; } PCAH.rows=j.rows; PCAH.state=j.state; PCA_DIRTY=true; drawPcaHub();
   }catch(e){ msg.textContent=e.message||'Could not save.'; }
 }
 function pcaNew(){ const id=PCAH.id, last=PCAH.rows.filter(r=>r.status==='approved').sort((a,b)=>a.authTo<b.authTo?1:-1)[0]; const rows=PCAH.rows, agy=PCAH.agency; document.getElementById('pcaHub').remove(); openPca(id,last,rows,agy); }
@@ -3212,7 +3354,7 @@ function pcaEdit(rid){
 async function pcaSaveAns(rid){
   const r=PCAH.rows.find(x=>x.id===rid), g=k=>document.getElementById('pah_'+k).value.trim(), msg=document.getElementById('pahMsg');
   try{ const j=await api('pcaSave',{id:rid,patientId:PCAH.id,insurer:r.insurer,type:r.type,sentAt:r.sentAt,hoursDay:r.hoursDay,daysWeek:r.daysWeek,hoursWeek:r.hoursWeek,reqFrom:r.reqFrom,reqTo:r.reqTo,status:g('status'),approvedAt:g('approvedAt'),authNo:g('authNo'),units:g('units'),authFrom:g('authFrom'),authTo:g('authTo'),icd10:g('icd10'),note:g('note')});
-    if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; } PCAH.rows=j.rows; PCAH.state=j.state; drawPcaHub();
+    if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; } PCAH.rows=j.rows; PCAH.state=j.state; PCA_DIRTY=true; drawPcaHub();
   }catch(e){ msg.textContent=e.message||'Could not save.'; }
 }
 
@@ -3250,7 +3392,7 @@ function trkBody(){ const g=k=>(document.getElementById('trk_'+k)||{}).value||''
 async function trkSend(extra){
   const msg=document.getElementById('trkMsg'); msg.textContent='Saving…';
   try{ const j=await api('trkSave',Object.assign(trkBody(),extra||{})); if(!j.ok){ msg.textContent=j.error||'Could not save.'; return; }
-    const a=HOME.aides.find(x=>x.email===TRKM.email); if(a) a.trk=j.trk; document.getElementById('trkModal').remove(); HOME=null; renderHome(); }catch(e){ msg.textContent=e.message||'Could not save.'; }
+    const a=HOME.aides.find(x=>x.email===TRKM.email); if(a) a.trk=j.trk; document.getElementById('trkModal').remove(); renderHome(); }catch(e){ msg.textContent=e.message||'Could not save.'; }
 }
 function trkSave(){ trkSend(); }
 function trkCeu(w){ trkSend({ceu:w}); }
@@ -3289,7 +3431,7 @@ async function openPca(id,last,hist,agy){
    row('ag_name','Agency name',agy.name||ag.name||'Comfort Hands Home Healthcare LLC')+row('ag_addr','Street',agy.addr||ag.addr||'505 Hamilton Ave Ste 200')+row('ag_city','City',agy.city||ag.city||'Linwood')+row('ag_state','State',agy.state||ag.state||'NJ')+row('ag_zip','ZIP',agy.zip||ag.zip||'08221')+
    row('ag_phone','Phone',agy.phone||ag.phone||'609-277-3032')+row('ag_fax','Fax',agy.fax||ag.fax||'609-479-5931')+ags('contact','Contact person')+'</div><p class="tmuted" style="margin:6px 0 0">'+(agy.npi?'NPI, TIN and each insurer\'s provider ID are filled in automatically.':'The agency NPI, TIN and provider IDs are not set up yet (add them in the script settings).')+'</p>'+
    '<label class="rbtn" style="margin-top:10px"><input type="checkbox" id="pca_log" checked> Record this request as sent on the date above, so renewals are tracked</label><p id="pcaMsg" class="tmuted" style="margin:10px 0 0"></p>'+
-   '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="mini" onclick="document.getElementById(\'pcaModal\').remove()">Cancel</button><button class="mini" style="background:#1a5d4a;color:#fff" onclick="makePca()">Download filled form</button><button class="mini" id="pcaFaxBtn" style="background:#2b1a2e;color:#fff" onclick="makePca(true)">📠 Fax via MetroFax</button></div></div>';
+   '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end"><button class="mini" onclick="pcaReqClose()">Cancel</button><button class="mini" style="background:#1a5d4a;color:#fff" onclick="makePca()">Download filled form</button><button class="mini" id="pcaFaxBtn" style="background:#2b1a2e;color:#fff" onclick="makePca(true)">📠 Fax via MetroFax</button></div></div>';
   document.body.appendChild(m);
 }
 let _pcaFaxArm=null;
@@ -3330,7 +3472,7 @@ async function makePca(fax){
       faxedAt=localDay();
     } else saveBytes(bytes,'PCA request '+ins+' - '+String(f.lastName||'')+' '+String(f.firstName||'')+'.pdf');
     let logged='';
-    if(c('log')){ try{ const j=await api('pcaSave',{patientId:PCA.id,insurer:ins,type:d.type,sentAt:d.today,hoursDay:d.hoursDay,daysWeek:d.daysWeek,hoursWeek:d.hoursWeek,reqFrom:d.authFrom,reqTo:d.authTo,status:'requested',faxedAt:faxedAt}); logged=j.ok?' It is logged as sent; record the insurer\'s answer under PCA when it comes back.':' (Could not log it: '+(j.error||'error')+')'; }catch(e){ logged=' (Could not log it.)'; } }
+    if(c('log')){ try{ const j=await api('pcaSave',{patientId:PCA.id,insurer:ins,type:d.type,sentAt:d.today,hoursDay:d.hoursDay,daysWeek:d.daysWeek,hoursWeek:d.hoursWeek,reqFrom:d.authFrom,reqTo:d.authTo,status:'requested',faxedAt:faxedAt}); PCA_DIRTY=PCA_DIRTY||!!j.ok; logged=j.ok?' It is logged as sent; record the insurer\'s answer under PCA when it comes back.':' (Could not log it: '+(j.error||'error')+')'; }catch(e){ logged=' (Could not log it.)'; } }
     msg.textContent=fax===true?'Fax submitted to MetroFax for '+ins+' ('+pcaFaxPretty(pcaFaxNum(ins))+') and a copy was saved to Drive. Check MetroFax for the delivery confirmation.'+logged:'Downloaded. Open it, check every field, then print or fax it to the insurer.'+logged; HOME=null;
   }catch(e){ msg.textContent='Could not prepare the form ('+(e.message||'error')+'). Make sure the hr-pdf/pca folder is uploaded.'; }
 }

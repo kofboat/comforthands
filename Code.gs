@@ -54,6 +54,7 @@ const CONFIG = {
   ONBOARDING_NOTE: '',          // optional extra line added to the applicant email
   STAFF_PORTAL_URL: '',         // optional: the employee portal address, included in the new-aide login email
   APPLY_URL: '',                // web address of the Apply page on your site, e.g. https://comforthands.net/apply/
+  SIGN_URL: '',                 // web address of the patient signing page on your site, e.g. https://comforthands.net/sign/
   FCRA_SUMMARY_URL: '',         // link to "A Summary of Your Rights Under the Fair Credit Reporting Act" (ask your screening company for their copy)
   WELCOME_LETTER_FILE_ID: '',   // Drive file ID of Welcome_Letter_Comfort_Hands.pdf; attached to the welcome email
   // PDFs attached to the patient's pre-visit email. Upload each to Drive and paste its file ID.
@@ -250,7 +251,7 @@ function audit_(u, action, subject, result) {
   try { auditSheet_().appendRow([new Date().toISOString(), (u && u.email) || '', action, txt_(String(subject || '').slice(0, 120)), txt_(String(result || '').slice(0, 200))]); } catch (e) {}
 }
 function subjectOf_(d) { if (!d) return ''; return d.id || d.patientId || d.key || d.aideEmail || [d.patientLast, d.patientFirst].filter(Boolean).join(', ') || ''; }
-const QUIET_ = ['applySubmit', 'applicantCode', 'applicantLogin', 'applicantGet', 'applicantSign', 'applicantUpload', 'home', 'plans', 'save', 'ptSave', 'draftSave', 'draftGet', 'onbList', 'resetRequest'];
+const QUIET_ = ['applySubmit', 'applicantCode', 'applicantLogin', 'applicantGet', 'applicantSign', 'applicantUpload', 'home', 'plans', 'save', 'ptSave', 'draftSave', 'draftGet', 'onbList', 'resetRequest', 'signInfo', 'signOpen', 'signSubmit', 'signSend', 'signState'];
 function logCall_(d, user, res) {
   const a = d.action || 'packet'; if (QUIET_.indexOf(a) >= 0) return;
   if (!user) { user = findUser_(d.email); if (!user) return; } // sign-in attempts are logged only for real accounts
@@ -528,6 +529,7 @@ function route_(d, setUser) {
   if (d.action === 'resetRequest') return resetRequest_(d);
   if (d.action === 'resetConfirm') return resetConfirm_(d);
   if (d.action === 'applySubmit' || /^applicant/.test(String(d.action))) return hr_(d);
+  if (/^sign(Info|Open|Submit)$/.test(String(d.action))) return signPage_(d); // the patient's link page: no sign-in, the link and date of birth are the key
   const user = userFromToken_(d.token);
   if (!user) return out_({ ok: false, error: 'unauthorized' });
   setUser(user);
@@ -571,10 +573,10 @@ function packet_(d) {
 // ═════════════════════════════════════════════════════════════
 // Aide evaluations: 60 days after the first case, then 90 days after the first case, then yearly.
 const REC_ = { PN_DAYS: 60, EVAL_FIRST_DAYS: 60, EVAL_SECOND_DAYS: 90, EVAL_REPEAT_DAYS: 365, WARN_DAYS: 10, PURGE_DAYS: 30, PCA_WARN_DAYS: 45, TRK_WARN_DAYS: 60 };
-const REC_ACTIONS_ = ['cmList', 'cmSave', 'cmSend', 'home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbInterview', 'onbInterviewBlank', 'onbActivate'];
+const REC_ACTIONS_ = ['cmList', 'cmSave', 'cmSend', 'home', 'agencyIds', 'ptGet', 'ptSave', 'ptStatus', 'pcaList', 'pcaSave', 'pcaAddExisting', 'pcaFax', 'trkSave', 'aideWeeks', 'reports', 'reportSave', 'draftSave', 'draftGet', 'draftDelete', 'onbList', 'onbSave', 'onbSendForms', 'onbRequest', 'onbOffer', 'onbRef', 'onbPacket', 'onbInterview', 'onbInterviewBlank', 'onbActivate', 'signSend', 'signState'];
 // Patients tab columns. Use P_.<NAME> (0-based) instead of bare numbers. New columns are only ever added at the end.
-const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId', 'patientNo', 'insId', 'insurer'];
-const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18, PNO: 19, INSID: 20, INSURER: 21 };
+const PT_COLS_ = ['id', 'name', 'dob', 'startOfCare', 'status', 'shared', 'form', 'createdAt', 'updatedAt', 'updatedBy', 'dischargedAt', 'lastNoteAt', 'purged', 'submittedAt', 'ver', 'dcFiledAt', 'form2', 'form3', 'folderId', 'patientNo', 'insId', 'insurer', 'assessAt'];
+const P_ = { ID: 0, NAME: 1, DOB: 2, START: 3, STATUS: 4, SHARED: 5, FORM: 6, CREATED: 7, UPDATED: 8, BY: 9, DISCHARGED: 10, LASTNOTE: 11, PURGED: 12, SUBMITTED: 13, VER: 14, DCFILED: 15, FORM2: 16, FORM3: 17, FOLDER: 18, PNO: 19, INSID: 20, INSURER: 21, ASSESS: 22 };
 const PT_N_ = PT_COLS_.length;
 const CELL_MAX_ = 45000; // a Sheet cell holds 50,000 characters; stay under it
 let DB_ = null; const TABS_ = {};
@@ -685,8 +687,8 @@ function ptSheet_() { return tab_('Patients', PT_COLS_); }
 function ptLight_() {
   const sh = ptSheet_(), n = sh.getLastRow(); if (n < 2) return [new Array(PT_N_).fill('')];
   const a = sh.getRange(1, 1, n, 5).getValues(), b = sh.getRange(1, 8, n, 8).getValues(), out = [];
-  const c3 = sh.getLastColumn() >= 22 ? sh.getRange(1, 20, n, 3).getValues() : null;
-  for (let i = 0; i < n; i++) { const r = new Array(PT_N_).fill(''); for (let j = 0; j < 5; j++) r[j] = a[i][j]; for (let j = 0; j < 8; j++) r[7 + j] = b[i][j]; if (c3) for (let j = 0; j < 3; j++) r[19 + j] = c3[i][j]; out.push(r); }
+  const lc = sh.getLastColumn(), c3 = lc >= 22 ? sh.getRange(1, 20, n, Math.min(4, lc - 19)).getValues() : null;
+  for (let i = 0; i < n; i++) { const r = new Array(PT_N_).fill(''); for (let j = 0; j < 5; j++) r[j] = a[i][j]; for (let j = 0; j < 8; j++) r[7 + j] = b[i][j]; if (c3) for (let j = 0; j < c3[i].length; j++) r[19 + j] = c3[i][j]; out.push(r); }
   return out;
 }
 function repSheet_() { return tab_('Reports', ['id', 'kind', 'patientId', 'aideEmail', 'title', 'date', 'pdfUrl', 'by', 'createdAt', 'data']); }
@@ -913,7 +915,7 @@ function ptSummary_(x, aidesByKey, pcaBy) {
   const status = String(x[P_.STATUS] || 'admission');
   const anchor = iso_(x[P_.LASTNOTE]) || iso_(x[P_.START]) || iso_(x[P_.SUBMITTED]) || iso_(x[P_.CREATED]);
   const due = status === 'active' ? addDays_(anchor, REC_.PN_DAYS) : '';
-  return { id: x[P_.ID], pn: String(x[P_.PNO] || ''), ins: String(x[P_.INSID] || ''), insurer: String(x[P_.INSURER] || ''), last: lastNameOf_(x[P_.ID], x[P_.NAME]), name: x[P_.NAME], dob: iso_(x[P_.DOB]), start: iso_(x[P_.START]), status: status, lastNote: iso_(x[P_.LASTNOTE]), dischargedAt: iso_(x[P_.DISCHARGED]), submittedAt: iso_(x[P_.SUBMITTED]),
+  return { id: x[P_.ID], pn: String(x[P_.PNO] || ''), ins: String(x[P_.INSID] || ''), insurer: String(x[P_.INSURER] || ''), last: lastNameOf_(x[P_.ID], x[P_.NAME]), name: x[P_.NAME], dob: iso_(x[P_.DOB]), start: iso_(x[P_.START]), status: status, lastNote: iso_(x[P_.LASTNOTE]), dischargedAt: iso_(x[P_.DISCHARGED]), submittedAt: iso_(x[P_.SUBMITTED]), assess: iso_(x[P_.ASSESS]),
            updatedAt: String(x[P_.UPDATED] || ''), updatedBy: x[P_.BY] || '', ver: Number(x[P_.VER] || 0), purged: isTrue_(x[P_.PURGED]), nextNoteDue: due, daysToNote: due ? daysUntil_(due) : null, aides: (aidesByKey || {})[x[P_.ID]] || [], pca: pcaState_((pcaBy || {})[keyOf_(x[P_.ID])] || []) };
 }
 
@@ -1044,6 +1046,12 @@ function home_() {
     const subj = dv[i][1] === 'chha' ? ((users[String(dv[i][3]).toLowerCase()] || {}).name || dv[i][3]) : (names[dv[i][2]] || dv[i][2]);
     drafts.push({ kind: dv[i][1], label: LBL[dv[i][1]] || dv[i][1], patientId: dv[i][2], aideEmail: dv[i][3], subject: subj, updatedAt: String(dv[i][5] || ''), by: dv[i][6] });
   }
+  let sg = {}, cm = {}; try { sg = signMap_(); cm = consentMap_(); } catch (e) {}
+  patients.forEach(function (p) {
+    const s = sg[p.id] || null, n = s ? s.signed.length : 0;
+    p.sign = s ? { signed: s.signed, link: s.link, signedAt: s.signedAt } : { signed: [], link: null, signedAt: '' }; p.textOk = !!cm[p.id];
+    p.sigMissing = (p.status === 'admission' && !p.submittedAt && !p.purged && (p.assess || s) && n < SIGN_DOCS_.length) ? SIGN_DOCS_.length - n : 0;
+  });
   const soon = function (d) { return d !== null && d >= 0 && d <= REC_.WARN_DAYS; }, over = function (d) { return d !== null && d < 0; };
   const counts = {
     admissions: patients.filter(function (p) { return p.status === 'admission'; }).length,
@@ -1056,6 +1064,7 @@ function home_() {
     evalsOver: aides.filter(function (a) { return over(a.daysToEval); }).length,
     sheets: sheets.items.length,
     drafts: drafts.length,
+    sigMissing: patients.filter(function (p) { return p.sigMissing > 0; }).length,
     onboarding: onbAll_().filter(function (o) { return o.status === 'in progress' && !(o.app && o.app._imported); }).length
   };
   return { ok: true, positions: HR_POSITIONS_, patients: patients, aides: aides, sheets: sheets, drafts: drafts, counts: counts, week: weekTexts_(), today: today_(), motive: staffLine_(), quick: quickMessages_(), signature: OUTREACH_SIGNATURE_ };
@@ -1064,6 +1073,9 @@ function home_() {
 // Reading never takes the lock. Each change takes it only for the moment it writes.
 function records_(act, d, u) {
   if (!hasRole_(u, ['admin', 'nurse'])) return out_({ ok: false, error: 'forbidden' });
+  if (/^pca/.test(act) && !hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' }); // insurer authorizations are the office's job
+  if (act === 'signSend') return signSend_(d, u); // takes the lock itself, only for the moments it writes, never while the text goes out
+  if (act === 'signState') return out_(signState_(d));
   if (/^cm/.test(act)) {
     if (!hasRole_(u, ['admin'])) return out_({ ok: false, error: 'forbidden' });
     if (act === 'cmList') return out_(cmList_());
@@ -1146,13 +1158,14 @@ function records_(act, d, u) {
     const id = keyOf_(d.id); if (!id || !d.name) return out_({ ok: false, error: 'missing name' });
     const shared = JSON.stringify(stripSensitive_(d.shared)), form = JSON.stringify(stripSensitive_(d.form));
     if (shared.length > CELL_MAX_ || form.length > 3 * CELL_MAX_) return out_({ ok: false, error: 'record too large' });
+    const nsOk = !!(d.form && d.form.ns_name && String(d.form.ns_name.v || '').trim() && d.form.ns_date && String(d.form.ns_date.v || '').trim()); // the nurse's sign-off name and date are filled in
     return withLock_(function () {
       const now = new Date().toISOString(), r = ptRow_(psh, id);
       if (!r) {
         const x = []; for (let i = 0; i < PT_N_; i++) x.push('');
         x[P_.ID] = id; x[P_.NAME] = txt_(d.name); x[P_.DOB] = validDay_(d.dob) ? d.dob : ''; x[P_.START] = validDay_(d.start) ? d.start : ''; x[P_.STATUS] = 'admission';
         x[P_.SHARED] = shared; ptSetForm_(x, form); x[P_.CREATED] = now; x[P_.UPDATED] = now; x[P_.BY] = who; x[P_.PURGED] = false; x[P_.VER] = 1;
-        const iv = insFromBlob_({ shared: stripSensitive_(d.shared), form: stripSensitive_(d.form) }); x[P_.PNO] = nextPatientNo_(); x[P_.INSID] = iv.ins; x[P_.INSURER] = iv.insurer;
+        const iv = insFromBlob_({ shared: stripSensitive_(d.shared), form: stripSensitive_(d.form) }); x[P_.PNO] = nextPatientNo_(); x[P_.INSID] = iv.ins; x[P_.INSURER] = iv.insurer; if (nsOk) x[P_.ASSESS] = today_();
         psh.appendRow(x); return out_({ ok: true, id: id, ver: 1 });
       }
       const x = ptGetRow_(psh, r), ver = Number(x[P_.VER] || 0);
@@ -1161,7 +1174,7 @@ function records_(act, d, u) {
       if (d.ver === null || d.ver === undefined || Number(d.ver) !== ver) return out_({ ok: false, error: 'conflict', ver: ver, updatedBy: x[P_.BY], updatedAt: String(x[P_.UPDATED] || '') });
       x[P_.NAME] = txt_(d.name); if (validDay_(d.dob)) x[P_.DOB] = d.dob; if (validDay_(d.start)) x[P_.START] = d.start;
       x[P_.SHARED] = shared; ptSetForm_(x, form); x[P_.UPDATED] = now; x[P_.BY] = who; x[P_.VER] = ver + 1;
-      const iv2 = insFromBlob_({ shared: stripSensitive_(d.shared), form: stripSensitive_(d.form) }); x[P_.INSID] = iv2.ins; x[P_.INSURER] = iv2.insurer; if (!x[P_.PNO]) x[P_.PNO] = nextPatientNo_();
+      const iv2 = insFromBlob_({ shared: stripSensitive_(d.shared), form: stripSensitive_(d.form) }); x[P_.INSID] = iv2.ins; x[P_.INSURER] = iv2.insurer; if (!x[P_.PNO]) x[P_.PNO] = nextPatientNo_(); if (nsOk && !x[P_.ASSESS]) x[P_.ASSESS] = today_();
       psh.getRange(r, 1, 1, PT_N_).setValues([x]);
       return out_({ ok: true, id: id, ver: ver + 1 });
     });
@@ -1861,10 +1874,11 @@ function motivationTab_() {
 }
 // Run ONCE after texting is set up (and again if you ever change it).
 function installTextReminders() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (['shiftReminders', 'complianceTexts', 'notificationTexts'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (['shiftReminders', 'complianceTexts', 'notificationTexts', 'signReminders'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('shiftReminders').timeBased().everyMinutes(5).create();
   ScriptApp.newTrigger('complianceTexts').timeBased().everyDays(1).atHour(9).create();
   ScriptApp.newTrigger('notificationTexts').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('signReminders').timeBased().everyHours(1).create();
   schedTab_(); textLogTab_(); tab_('Notifications', ['Text', 'Status', 'Started', 'Sends', 'Time']); motivationTab_();
   Logger.log('Installed: shift reminders every 5 minutes, compliance texts daily at 9 am, Notifications-tab texts hourly (script time zone ' + Session.getScriptTimeZone() + '). Texting is ' + (smsLive_() ? 'LIVE.' : 'OFF: set CONFIG.SMS and ENABLED to true. Until then texts are only recorded in the TextLog tab as dry-run.'));
 }
@@ -2524,9 +2538,178 @@ function esc_(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function buildHtml_(d) {
-  const css =
-    'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.42}' +
+/* ───────── documents signed by a text link: the link, the patient's date of birth, then signed PDFs in the patient's folder ───────── */
+const SIGN_DOCS_ = [{ k: 'consents', t: 'Consents & Rights' }, { k: 'service', t: 'Service Agreement' }, { k: 'careplan', t: 'Care Plan Agreement' }];
+const SIGN_HEAD_ = ['id', 'patientId', 'createdAt', 'createdBy', 'expiresAt', 'status', 'keys', 'doc1', 'doc2', 'doc3', 'signed', 'tries', 'phone', 'reminderAt'];
+const SG_ = { ID: 0, PID: 1, CREATED: 2, BY: 3, EXP: 4, STATUS: 5, KEYS: 6, D1: 7, D2: 8, D3: 9, SIGNED: 10, TRIES: 11, PHONE: 12, REM: 13 };
+const SIGN_DAYS_ = 7, SIGN_TRIES_ = 5, SIGN_REMIND_DAYS_ = 2;
+function signSheet_() { return tab_('SignLinks', SIGN_HEAD_); }
+// The link carries a random id plus a code only this script can make, so nothing in the Sheet opens a link and a guessed id is useless.
+function signMac_(id) { return hex_(Utilities.computeHmacSha256Signature('sign|' + id, CONFIG.SHARED_SECRET)).slice(0, 32); }
+function signLink_(id) { return String(CONFIG.SIGN_URL || '').trim() + '?c=' + id + '.' + signMac_(id); }
+function signRow_(sh, r) { const x = sh.getRange(r, 1, 1, SIGN_HEAD_.length).getValues()[0]; while (x.length < SIGN_HEAD_.length) x.push(''); return x; }
+function signedMap_(x) { try { return JSON.parse(x[SG_.SIGNED] || '{}') || {}; } catch (e) { return {}; } }
+function signDay_(ms) { const d = new Date(Number(ms)); return isNaN(d.getTime()) || !ms ? '' : Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+// open: can be used now. Others: pending (text not yet confirmed), failed, replaced (a newer link was sent), locked (wrong date of birth too many times), signed, expired.
+function signLinkState_(x) {
+  const st = String(x[SG_.STATUS]);
+  if (st === 'sent') return Number(x[SG_.EXP]) < now_().getTime() ? 'expired' : 'open';
+  return st;
+}
+function signLight_() { // everything except the document text, which is large
+  const sh = db_().getSheetByName('SignLinks'); if (!sh) return [];
+  const n = sh.getLastRow(); if (n < 2) return [];
+  const a = sh.getRange(2, 1, n - 1, 7).getValues(), b = sh.getRange(2, 11, n - 1, 4).getValues(), out = [];
+  for (let i = 0; i < a.length; i++) out.push(a[i].concat(['', '', ''], b[i]));
+  return out;
+}
+function signMap_() {
+  const m = {}, at = {};
+  signLight_().forEach(function (r) {
+    const pid = String(r[SG_.PID] || ''); if (!pid) return;
+    const o = m[pid] || (m[pid] = { signed: [], link: null, signedAt: '' }), s = signedMap_(r);
+    Object.keys(s).forEach(function (k) { if (o.signed.indexOf(k) < 0) o.signed.push(k); const d = signDay_(s[k] && s[k].at); if (d > o.signedAt) o.signedAt = d; });
+    const st = signLinkState_(r); if (['pending', 'failed', 'replaced'].indexOf(st) >= 0) return;
+    if (!at[pid] || Number(r[SG_.CREATED]) >= at[pid]) { at[pid] = Number(r[SG_.CREATED]); o.link = { status: st, sentAt: signDay_(r[SG_.CREATED]), expiresAt: signDay_(r[SG_.EXP]), reminderAt: signDay_(r[SG_.REM]), keys: String(r[SG_.KEYS]).split(',').filter(Boolean) }; }
+  });
+  return m;
+}
+function consentMap_() {
+  const sh = db_().getSheetByName('TextConsent'), m = {}; if (!sh || sh.getLastRow() < 2) return m;
+  sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) { if (r[0]) m[String(r[0])] = true; });
+  return m;
+}
+function signState_(d) {
+  const pid = keyOf_(d.patientId), s = signMap_()[pid] || { signed: [], link: null, signedAt: '' };
+  return { ok: true, signed: s.signed, link: s.link, signedAt: s.signedAt, textOk: !!consentMap_()[pid] };
+}
+// Office: text a patient the link. The text names nobody and carries no health details; the page asks for the date of birth before it shows anything.
+function signSend_(d, u) {
+  const pid = keyOf_(d.patientId); if (!pid) return out_({ ok: false, error: 'missing patient' });
+  if (!/^https:\/\/[^\s?#]+$/.test(String(CONFIG.SIGN_URL || '').trim())) return out_({ ok: false, error: 'The signing page address is not set. Put it in SIGN_URL at the top of Code.gs and deploy a new version.' });
+  const want = Array.isArray(d.keys) ? d.keys.map(String) : [], keys = SIGN_DOCS_.map(function (q) { return q.k; }).filter(function (k) { return want.indexOf(k) >= 0; });
+  if (!keys.length) return out_({ ok: false, error: 'Choose at least one document.' });
+  const num = e164_(d.to); if (!num) return out_({ ok: false, error: 'Enter a mobile number with 10 digits.' });
+  const docs = [];
+  for (let i = 0; i < SIGN_DOCS_.length; i++) {
+    const q = SIGN_DOCS_[i]; if (keys.indexOf(q.k) < 0) { docs.push(''); continue; }
+    const h = safeHtml_(String((d.docs || {})[q.k] || ''));
+    if (h.replace(/<[^>]*>/g, '').trim().length < 50) return out_({ ok: false, error: 'The text of the ' + q.t + ' is missing. Reload the page and try again.' });
+    if (h.length > CELL_MAX_) return out_({ ok: false, error: 'The ' + q.t + ' is too large to send.' });
+    docs.push(h);
+  }
+  const psh = ptSheet_(), pr = ptRow_(psh, pid); if (!pr) return out_({ ok: false, error: 'not found' });
+  const pt = ptGetRow_(psh, pr);
+  if (pt[P_.STATUS] === 'discharged') return out_({ ok: false, error: 'This patient is discharged.' });
+  if (!validDay_(iso_(pt[P_.DOB]))) return out_({ ok: false, error: 'Add the patient\'s date of birth to the record first. The patient types it to open the link.' });
+  const had = !!consentMap_()[pid];
+  if (!had && d.consent !== true) return out_({ ok: false, error: 'Tick that the patient agreed to receive texts.' });
+  if (!throttle_('sg:send:' + pid, 6, 86400)) return out_({ ok: false, error: 'Six links have already gone to this patient today. Try again tomorrow.' });
+  const who = u.name || u.email, sh = signSheet_(), id = Utilities.getUuid().replace(/-/g, '').slice(0, 16), nowMs = now_().getTime(), exp = nowMs + SIGN_DAYS_ * 86400000;
+  withLock_(function () {
+    if (!had && !consentMap_()[pid]) tab_('TextConsent', ['patientId', 'agreedAt', 'by', 'phoneLast4']).appendRow([txt_(pid), new Date(nowMs).toISOString(), txt_(who), num.slice(-4)]);
+    sh.appendRow([id, txt_(pid), nowMs, txt_(who), exp, 'pending', keys.join(','), txt_(docs[0]), txt_(docs[1]), txt_(docs[2]), '{}', 0, num, '']);
+  });
+  const link = signLink_(id), res = sendSms_(num, 'Comfort Hands: Please sign your documents here: ' + link + ' This link expires in ' + SIGN_DAYS_ + ' days. Questions? Call 609-277-3032.', 'sign|' + id, 'sign', '', null);
+  const ok = res === 'sent' || res === 'dry-run';
+  withLock_(function () {
+    const r = findRow_(sh, 0, id); if (!r) return;
+    if (ok) { // the older open links for this patient stop working only once the new text is out
+      const v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+      for (let i = 0; i < v.length; i++) if (String(v[i][1]) === pid && String(v[i][0]) !== id && String(v[i][5]) === 'sent') sh.getRange(i + 2, SG_.STATUS + 1).setValue('replaced');
+      sh.getRange(r, SG_.STATUS + 1).setValue('sent');
+    } else sh.getRange(r, SG_.STATUS + 1).setValue('failed');
+  });
+  audit_(u, 'signSend', pid, keys.join(',') + ' ' + res);
+  if (!ok) return out_({ ok: false, error: res === 'too long' ? 'The text is too long.' : 'The text could not be sent (' + res + '). Check the number and try again.' });
+  return out_({ ok: true, status: res, expiresAt: signDay_(exp), link: res === 'dry-run' ? link : undefined }); // the link is shown only while texting is switched off, so it can be tested
+}
+// The patient's page. No sign-in: the link plus the date of birth open it. Answers say nothing about who the patient is until the date of birth is right.
+function signPage_(d) {
+  const act = d.action;
+  if (!throttle_('sg:all', 900, 3600)) return out_({ ok: false, error: 'busy' });
+  const m = /^([a-f0-9]{16})\.([a-f0-9]{32})$/.exec(String(d.c || ''));
+  if (!m || signMac_(m[1]) !== m[2]) return out_({ ok: false, error: 'invalid' });
+  const sh = signSheet_(), r = findRow_(sh, 0, m[1]); if (!r) return out_({ ok: false, error: 'invalid' });
+  const x = signRow_(sh, r), st = signLinkState_(x);
+  if (st !== 'open') return out_({ ok: false, error: st === 'signed' ? 'signed' : st === 'expired' ? 'expired' : st === 'locked' ? 'locked' : 'invalid' });
+  if (act === 'signInfo') return out_({ ok: true });
+  const psh = ptSheet_(), pr = ptRow_(psh, String(x[SG_.PID])); if (!pr) return out_({ ok: false, error: 'invalid' });
+  const pt = ptGetRow_(psh, pr); if (pt[P_.STATUS] === 'discharged') return out_({ ok: false, error: 'invalid' });
+  const dob = String(d.dob || '');
+  if (!validDay_(dob) || dob !== iso_(pt[P_.DOB])) {
+    const left = withLock_(function () {
+      const y = signRow_(sh, r), t = Number(y[SG_.TRIES] || 0) + 1; sh.getRange(r, SG_.TRIES + 1).setValue(t);
+      if (t >= SIGN_TRIES_ && String(y[SG_.STATUS]) === 'sent') sh.getRange(r, SG_.STATUS + 1).setValue('locked');
+      return Math.max(0, SIGN_TRIES_ - t);
+    });
+    return out_({ ok: false, error: left ? 'dob' : 'locked', left: left });
+  }
+  const keys = String(x[SG_.KEYS]).split(',').filter(Boolean), done = signedMap_(x);
+  if (act === 'signOpen') {
+    const docs = []; SIGN_DOCS_.forEach(function (q, i) { if (keys.indexOf(q.k) >= 0) docs.push({ k: q.k, title: q.t, html: String(x[SG_.D1 + i] || ''), signed: !!done[q.k] }); });
+    return out_({ ok: true, docs: docs, name: String(pt[P_.NAME] || ''), expires: signDay_(x[SG_.EXP]) });
+  }
+  // signSubmit
+  const name = String(d.name || '').replace(/\s+/g, ' ').trim().slice(0, 80), rel = String(d.rel || '').replace(/\s+/g, ' ').trim().slice(0, 40), sig = sig_(d.sig);
+  const pick = []; (Array.isArray(d.keys) ? d.keys.map(String) : []).forEach(function (k) { if (keys.indexOf(k) >= 0 && !done[k] && pick.indexOf(k) < 0) pick.push(k); });
+  if (name.length < 2) return out_({ ok: false, error: 'Enter the name of the person signing.' });
+  if (!sig) return out_({ ok: false, error: 'Draw your signature in the box.' });
+  if (!pick.length) return out_({ ok: false, error: 'Tick each document you agree to.' });
+  const b = ptBlob_(pt).shared, last = clean_(b.lastName) || 'Unknown', first = clean_(b.firstName) || 'Patient', ptName = (b.firstName && b.lastName) ? b.firstName + ' ' + b.lastName : String(pt[P_.NAME] || ''), day = today_();
+  const folder = ptFolder_(String(x[SG_.PID]), last + ', ' + first), files = {}, blobs = {};
+  pick.forEach(function (k) {
+    const q = SIGN_DOCS_.filter(function (z) { return z.k === k; })[0], i = SIGN_DOCS_.indexOf(q);
+    const pdf = Utilities.newBlob(signPdfHtml_(q.t, ptName, iso_(pt[P_.DOB]), day, String(x[SG_.D1 + i] || ''), sig, name, rel), 'text/html', 'doc.html').getAs('application/pdf').setName('Signed - ' + q.t.replace(/&/g, 'and') + ' - ' + last + ', ' + first + ' - ' + day + '.pdf');
+    const f = folder.createFile(pdf); files[k] = { id: f.getId(), url: f.getUrl() }; blobs[k] = pdf;
+  });
+  const res = withLock_(function () {
+    const y = signRow_(sh, r), cur = signedMap_(y), dup = [], stNow = String(y[SG_.STATUS]);
+    if (stNow !== 'sent') return { gone: true, dup: pick };
+    pick.forEach(function (k) { if (cur[k]) dup.push(k); else cur[k] = { at: now_().getTime(), by: name, rel: rel, url: files[k].url }; });
+    const all = keys.every(function (k) { return !!cur[k]; });
+    sh.getRange(r, SG_.SIGNED + 1).setValue(JSON.stringify(cur)); if (all) sh.getRange(r, SG_.STATUS + 1).setValue('signed');
+    return { dup: dup, left: keys.filter(function (k) { return !cur[k]; }).length };
+  });
+  res.dup.forEach(function (k) { try { DriveApp.getFileById(files[k].id).setTrashed(true); } catch (e) {} }); // a double tap or a second device: keep one copy
+  if (res.gone) return out_({ ok: false, error: 'invalid' });
+  const fresh = pick.filter(function (k) { return res.dup.indexOf(k) < 0; });
+  if (fresh.length) {
+    audit_({ email: 'signing link' }, 'signSubmit', String(x[SG_.PID]), fresh.join(','));
+    try {
+      MailApp.sendEmail({ to: CONFIG.OFFICE_EMAIL, subject: 'Documents signed by link — ' + ptName,
+        body: ptName + ' signed ' + fresh.map(function (k) { return SIGN_DOCS_.filter(function (z) { return z.k === k; })[0].t; }).join(', ') + ' by text link on ' + usdate_(day) + '. Signed by ' + name + (rel ? ' (' + rel + ')' : '') + '.' +
+          (res.left ? '\n\n' + res.left + ' document(s) on this link are still unsigned.' : '\n\nEvery document on this link is signed.') + '\n\nSaved to Drive: ' + folder.getUrl() + '\n\nThis message contains protected health information.',
+        attachments: fresh.map(function (k) { return blobs[k]; }) });
+    } catch (e) {}
+  }
+  return out_({ ok: true, signed: fresh, left: res.left });
+}
+function signPdfHtml_(title, name, dob, dateIso, docHtml, sig, by, rel) {
+  const body = pdfHdr_(title, 'patient', { name: name, dob: usdate_(dob), date: usdate_(dateIso) }) + '<div class="tag">Patient — Consents &amp; Agreements</div>' + safeHtml_(docHtml) +
+    '<table class="sig"><tr><td><div class="sk">Patient / Representative</div>' + (sig_(sig) ? '<img src="' + sig_(sig) + '" style="height:70px">' : '<i>missing</i>') + '<div>' + esc_(by) + (rel ? ' (' + esc_(rel) + ')' : '') + '</div></td></tr></table>' +
+    '<div>Signed: ' + esc_(usdate_(dateIso)) + ' &nbsp; Signed electronically from a secure text link (no nurse witness)</div>';
+  return '<html><head><meta charset="utf-8"><style>' + admCss_() + '</style></head><body>' + body + '</body></html>';
+}
+// One reminder, 2 days after a link went out and was not used. Same wording rules: no name, no health details. Hourly; sends only between 9 am and 7 pm.
+function signReminders() {
+  if (!tzOk_()) return 0;
+  const hr = Number(Utilities.formatDate(now_(), Session.getScriptTimeZone(), 'H')); if (hr < 9 || hr >= 19) return 0;
+  const rows = signLight_(), sh = db_().getSheetByName('SignLinks'); let sent = 0;
+  rows.forEach(function (x, i) {
+    if (signLinkState_(x) !== 'open' || x[SG_.REM] !== '' || !x[SG_.PHONE]) return;
+    const nowMs = now_().getTime(); if (nowMs - Number(x[SG_.CREATED]) < SIGN_REMIND_DAYS_ * 86400000) return;
+    const keys = String(x[SG_.KEYS]).split(',').filter(Boolean), done = signedMap_(x); if (keys.every(function (k) { return !!done[k]; })) return;
+    const psh = ptSheet_(), pr = ptRow_(psh, String(x[SG_.PID])); if (!pr || ptGetRow_(psh, pr)[P_.STATUS] === 'discharged') return;
+    const days = Math.max(1, Math.ceil((Number(x[SG_.EXP]) - nowMs) / 86400000));
+    const res = sendSms_(String(x[SG_.PHONE]), 'Comfort Hands: Reminder to sign your documents here: ' + signLink_(String(x[SG_.ID])) + ' This link expires in ' + days + (days === 1 ? ' day' : ' days') + '. Questions? Call 609-277-3032.', 'signrem|' + x[SG_.ID], 'sign', '', null);
+    if (res === 'sent' || res === 'dry-run') { withLock_(function () { sh.getRange(i + 2, SG_.REM + 1).setValue(nowMs); }); sent++; }
+  });
+  return sent;
+}
+
+function admCss_() {
+  return     'body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;line-height:1.42}' +
     'h1{font-size:17px;margin:0;color:#34182d}' +
     'h2{font-size:14px;margin:0 0 6px;padding:5px 7px;background:#34182d;color:#fff}' +
     'h3,.sh{font-size:11px;margin:10px 0 4px;padding:3px 6px;background:#f3e6f7;color:#34182d;font-weight:bold}' +
@@ -2547,6 +2730,9 @@ function buildHtml_(d) {
     '.act-card{border:1px solid #cfcfcf;padding:4px 6px;margin:4px 0}.act-num{font-weight:bold;margin-right:4px}' +
     'ul,ol{padding-left:16px;margin:3px 0}p{margin:3px 0}' +
     '.sig td{vertical-align:top;padding:6px;width:50%}.sk{color:#555;font-weight:bold;font-size:9px;text-transform:uppercase;margin-bottom:3px}';
+}
+function buildHtml_(d) {
+  const css = admCss_();
 
   let body = pdfHdr_('Signed Admission Packet', 'patient', { name: String(d.patientFirst || '') + ' ' + String(d.patientLast || ''), dob: d.dob || d.patientDob || '', date: d.signDate || '' });
 
